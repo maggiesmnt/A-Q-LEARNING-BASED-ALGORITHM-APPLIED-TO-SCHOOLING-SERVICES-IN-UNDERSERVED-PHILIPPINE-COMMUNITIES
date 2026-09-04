@@ -163,6 +163,7 @@ nav#tabs .bdg{position:absolute;transform:translate(14px,-6px);background:var(--
 .segs button.on{border-color:var(--bad);background:#2a1013;color:#ffc9c9}
 .btnrow{display:flex;gap:10px;margin-top:16px}
 .btn{flex:1;padding:14px;border-radius:14px;font-size:14px;font-weight:750;text-align:center}
+.btn:disabled{opacity:.45;cursor:default}
 .btn.p{background:linear-gradient(160deg,#ff9838,#f8722c);color:#fff}
 .btn.g{background:var(--ink3);border:1px solid var(--line);color:var(--dim)}
 .btn.k{background:var(--go);color:#05230f}
