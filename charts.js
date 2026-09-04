@@ -1,8 +1,12 @@
 /* ============================================================================
-   CHARTS.JS — small dependency-free SVG line-chart renderer, plus the
-   illustrative multi-episode training curves used on the SOP 2 tab.
+   CHARTS.JS -- small dependency-free SVG line-chart renderer, plus the
+   real multi-episode training curves used on the SOP 2 tab.
 
-   IMPORTANT: SIM below is generated from a real 1,200-episode training run via train_q_learning.py + make_sim_js.py — see /training folder.
+   SIM below is generated from a real 1,200-episode training run:
+     python3 training/train_q_learning.py   -> training/training_log.csv
+     python3 training/make_sim_js.py         -> this SIM block
+   See /training/README.md for hyperparameters, caveats, and how to
+   re-run once real DepEd data replaces the placeholder nodes/edges.
    ============================================================================ */
 
 function svgLine(series,opts){

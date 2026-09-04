@@ -24,7 +24,8 @@ function renderStops(){
       '<div class="mt"><span class="tag">'+n.learners+' learners</span>'+
       '<span class="tag'+(n.days>=20?' hot':'')+'">last served '+n.days+'d ago</span>'+
       '<span class="tag" style="color:'+b.col+'">worst segment A '+worst.toFixed(2)+' &middot; '+b.lab+'</span>'+
-      '<span class="tag">'+serviceMin(n)+' min on site</span></div>'+
+      '<span class="tag">'+serviceMin(n)+' min on site</span>'+
+      '<span class="tag" style="color:'+(s.usedPolicy?"#25d07a":"#8b95ab")+'">'+(s.usedPolicy?"trained policy":"fallback formula")+'</span></div>'+
       '<div class="k" style="margin-top:7px">via '+s.p.seq.map(function(x){return N[x].name.replace("Sitio ","")}).join(" \u2192 ")+'</div>'+
       '</div><div class="rt"><b>'+s.arrive+'</b>'+s.p.km.toFixed(1)+' km &middot; '+Math.round(s.p.min)+' min</div>';
     L2.appendChild(d);

@@ -7,6 +7,7 @@
 function nextStop(){return PLAN.stops[PROGRESS]||null}
 function renderDrive(){
   var s=nextStop();
+  var cb=document.getElementById("completeBtn");
   if(!s){
     document.getElementById("stopName").textContent="Return to Laiban ALS Hub";
     document.getElementById("stopTags").innerHTML='<span class="tag eq">deployment complete</span>';
@@ -14,6 +15,8 @@ function renderDrive(){
     document.getElementById("etaClock").textContent="min to hub";
     document.getElementById("turnText").textContent="All scheduled stops served";
     document.getElementById("turnSub").textContent="Head back via the returning corridor";
+    cb.textContent="Deployment complete";
+    cb.disabled=true;
   }else{
     var n=N[s.id], leg=s.p.legs[0], A=accA(leg), b=band(A);
     document.getElementById("stopName").textContent=n.name;
@@ -26,6 +29,8 @@ function renderDrive(){
     document.getElementById("turnText").textContent="Continue on "+N[leg.a].name.replace("Sitio ","")+"\u2013"+N[leg.b].name.replace("Sitio ","")+" road";
     document.getElementById("turnSub").innerHTML=leg.km.toFixed(1)+" km &middot; "+SURF[leg.surf].lab+
       ' &middot; <b style="color:'+b.col+'">A '+A.toFixed(2)+" "+b.lab+"</b>";
+    cb.textContent="Mark \u201c"+n.name+"\u201d as completed";
+    cb.disabled=false;
   }
   var strip=document.getElementById("routeStrip");strip.innerHTML="";
   PLAN.stops.forEach(function(st,i){
@@ -56,6 +61,21 @@ function alertShow(title,text){
   document.getElementById("alertBar").classList.add("show");
 }
 document.getElementById("alertClose").onclick=function(){document.getElementById("alertBar").classList.remove("show")};
+
+/* ============================ MARK STOP AS COMPLETED ============================
+   Advances PROGRESS by one, records the visit against that node's
+   visits30/days (so the NEXT replan's Jain's-fairness term reflects what
+   actually got served today, not just the static seed data), then
+   replans/repaints everything the same way a hazard report does. */
+document.getElementById("completeBtn").onclick=function(){
+  var s=nextStop();
+  if(!s) return;
+  var n=N[s.id];
+  n.visits30+=1;
+  n.days=0;
+  PROGRESS++;
+  refresh({t:"Stop completed",b:n.name+" marked as served. Visit history and fairness metrics updated for the next replan."});
+};
 
 /* replan + repaint everything (operational views + analysis tabs) */
 function refresh(msg){

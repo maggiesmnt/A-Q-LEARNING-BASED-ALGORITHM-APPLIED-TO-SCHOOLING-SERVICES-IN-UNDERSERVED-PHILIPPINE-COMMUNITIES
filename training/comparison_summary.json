@@ -1,0 +1,25 @@
+{
+  "episodes_trained": 1200,
+  "hyperparameters": {
+    "alpha": 0.1,
+    "gamma": 0.9,
+    "eps_start": 1.0,
+    "eps_min": 0.05,
+    "eps_decay": 0.995
+  },
+  "modql": {
+    "final_30ep_avg_reward": 12.401781806807048,
+    "rollout_avg_travel_min": 163.32000079003367,
+    "rollout_avg_fairness": 0.7336067503924647,
+    "rollout_avg_stops": 6.02,
+    "rollout_avg_deferred": 1.98
+  },
+  "standard": {
+    "final_30ep_avg_reward": 28.067096793292855,
+    "rollout_avg_travel_min": 164.6857743922415,
+    "rollout_avg_fairness": 0.7439272893772894,
+    "rollout_avg_stops": 6.24,
+    "rollout_avg_deferred": 1.76
+  },
+  "data_note": "Trained on placeholder node/edge data from engine.js (DepEd registry and OSM road data requested, not yet received). Re-run this script unchanged once real data is available -- only NODES/EDGES need to be replaced."
+}

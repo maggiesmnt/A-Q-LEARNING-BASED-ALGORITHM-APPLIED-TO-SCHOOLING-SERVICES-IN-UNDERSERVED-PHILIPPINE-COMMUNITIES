@@ -8,9 +8,16 @@
    Both planners search the SAME road graph with the SAME hazard-masking
    rule (see accA/neighbors/path below) — a road that's closed is closed
    for both algorithms equally. What differs is the SCORE each uses to pick
-   its next stop: Standard only minimizes travel time; MODQL maximizes
-   coverage x fairness x (1/cost). That one-line difference is Objective 1
-   of the underlying research (Chapter 1 / Section 3.2.1).
+   its next stop.
+
+   planRoute() now reads its score from the TRAINED Q1/Q2 tables in
+   trained_policy.js (the real output of training/train_q_learning.py,
+   1,200 episodes) whenever that (state, action) pair was seen during
+   training, and falls back to the live greedy formula — R = Coverage x
+   Jain's Fairness x (1/Travel Cost) — otherwise. See planRoute()'s own
+   comment block for why a fallback is necessary (the trained table only
+   covers ~318 of ~13,824 possible states) and how `usedPolicy` on each
+   stop reports which one fired.
 
    Node coordinates, learner counts and road geometry are simulation
    placeholders standing in for the OSM road-network extraction and DepEd
@@ -33,6 +40,11 @@ var NODES=[
  {id:"amp", name:"Sitio Mag-Ampon",     kind:"node",  lat:14.6018, lng:121.3548, learners:29, days:18, visits30:1, sitios:"Ridge cluster"}
 ];
 var N={};NODES.forEach(function(n){N[n.id]=n});
+
+/* bit position per node for the visited-mask, must match training's NODE_IDX */
+var BITIDX=(typeof TRAINED_POLICY!=="undefined"&&TRAINED_POLICY.node_bit_index)?TRAINED_POLICY.node_bit_index:(function(){
+  var idx={},i=0;NODES.forEach(function(n){if(n.kind==="node"){idx[n.id]=i;i++}});return idx;
+})();
 
 /* surface: concrete | gravel | dirt | ford  -> baseline ceiling for A */
 var SURF={concrete:{a:1.00,lab:"concrete provincial road"},gravel:{a:0.85,lab:"gravel barangay road"},
@@ -128,6 +140,28 @@ function neighbors(id){var out=[];EDGES.forEach(function(e){
   var A=accA(e); if(A<0.20) return;                     /* hard mask: closed, for either algorithm */
   if(e.a===id) out.push({to:e.b,e:e}); if(e.b===id) out.push({to:e.a,e:e});});return out}
 
+/* ---------- trained-policy lookup (Q1+Q2 from training/train_q_learning.py) ----------
+   State key must match the Python encoder exactly: current_node|visited_mask|time_bucket.
+   TRAINED_POLICY only has entries for the ~318 states actually visited during
+   training (out of ~13,824 possible) — a lookup miss is expected and normal,
+   not a bug. When it misses, planRoute() falls back to the live greedy
+   formula for that one decision, same as before. */
+var TRAINED_TIME_BUCKETS=6;
+function trainedTimeBucket(remaining){
+  var frac=Math.max(0,Math.min(1,remaining/SHIFT_MIN));
+  var b=Math.floor(frac*TRAINED_TIME_BUCKETS);
+  return Math.min(b,TRAINED_TIME_BUCKETS-1);
+}
+function trainedQValue(cur,mask,remaining,actionId){
+  if(typeof TRAINED_POLICY==="undefined") return null;   /* trained_policy.js not loaded */
+  var key=cur+"|"+mask+"|"+trainedTimeBucket(remaining);
+  var q1=TRAINED_POLICY.q1[key], q2=TRAINED_POLICY.q2[key];
+  var v1=q1&&(actionId in q1)?q1[actionId]:null;
+  var v2=q2&&(actionId in q2)?q2[actionId]:null;
+  if(v1===null&&v2===null) return null;                  /* genuine miss -> caller falls back */
+  return (v1||0)+(v2||0);
+}
+
 function path(from,to){
   var dist={},prev={},seen={},q=[from];dist[from]=0;
   while(q.length){
@@ -146,16 +180,22 @@ function path(from,to){
 }
 
 /* ======================================================================
-   PROPOSED ALGORITHM — MODQL, greedy policy replay
-   Score = Coverage x Jain's Fairness x (1 / Travel Cost).  Replays the
-   trained policy's decision rule at each stop: R = C x J x (1/TravelCost),
-   over the SAME A-masked action set every planner uses.
+   PROPOSED ALGORITHM — MODQL, trained-policy replay
+   Primary score = trained Q1(s,a) + Q2(s,a), read from trained_policy.js
+   (the real output of training/train_q_learning.py, 1,200 episodes).
+   When the trained table has no entry for a (state, action) pair — the
+   training run only ever visits ~318 of the ~13,824 possible states, so
+   this is expected — falls back to the same live greedy formula the
+   prototype always used: R = Coverage x Jain's Fairness x (1/Travel Cost).
+   Each stop below is tagged `usedPolicy:true/false` so the Stops/Analysis
+   views can show which decisions came from the trained table vs. the
+   fallback formula — worth surfacing honestly rather than hiding it.
    ====================================================================== */
 function planRoute(){
   var pending=NODES.filter(function(n){return n.kind==="node"}).map(function(n){return n.id});
   var visits={};pending.forEach(function(id){visits[id]=N[id].visits30});
   var maxL=Math.max.apply(null,pending.map(function(id){return N[id].learners}));
-  var cur="hub",left=SHIFT_MIN,stops=[],deferred=[],hh=CLOCK.h,mm=CLOCK.m;
+  var cur="hub",left=SHIFT_MIN,stops=[],deferred=[],hh=CLOCK.h,mm=CLOCK.m,mask=0;
 
   while(pending.length){
     var best=null;
@@ -167,14 +207,18 @@ function planRoute(){
       var trial=pending.concat([]).map(function(x){return visits[x]+(x===id?1:0)});
       NODES.forEach(function(n){if(n.kind==="node"&&pending.indexOf(n.id)<0)trial.push(visits[n.id])});
       var J=jain(trial);
-      var score=cov*J*(1/(p.min/60));      /* R = C x J x (1 / Travel Cost) */
-      if(!best||score>best.score) best={id:id,p:p,score:score,J:J,cov:cov};
+      var fallbackScore=cov*J*(1/(p.min/60));      /* R = C x J x (1 / Travel Cost) */
+      var trained=trainedQValue(cur,mask,left,id);
+      var usedPolicy=trained!==null;
+      var score=usedPolicy?trained:fallbackScore;
+      if(!best||score>best.score) best={id:id,p:p,score:score,J:J,cov:cov,usedPolicy:usedPolicy};
     });
     if(!best) break;
     var t0=hhmm(hh,mm+best.p.min);
-    stops.push({id:best.id,p:best.p,arrive:t0,score:best.score,J:best.J});
+    stops.push({id:best.id,p:best.p,arrive:t0,score:best.score,J:best.J,usedPolicy:best.usedPolicy});
     var adv=best.p.min+serviceMin(N[best.id]);
     mm+=adv; left-=adv; visits[best.id]++; cur=best.id;
+    mask|=(1<<BITIDX[best.id]);
     pending.splice(pending.indexOf(best.id),1);
   }
   pending.forEach(function(id){
