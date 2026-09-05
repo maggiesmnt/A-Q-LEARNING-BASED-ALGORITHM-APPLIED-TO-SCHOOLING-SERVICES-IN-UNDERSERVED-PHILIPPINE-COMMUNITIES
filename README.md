@@ -1,40 +1,41 @@
-# ALS Mobile Hub — Laiban Route Planning Prototype
+# Python prototype (offline, pygame)
 
-This repository contains the web prototype and training code for the thesis **Enhancing a Q-Learning Based Algorithm Applied to Schooling Services in Underserved Philippine Communities**.
+`simple_maze_demo.py` is the original standalone maze-navigation demo.
+It is **not** part of the live ALS Mobile Hub web app (that's pure
+HTML/CSS/JS — see the repo root). It's kept here for reference and for
+running the real trained agent locally, outside the browser.
 
-## Research algorithms
+## Status
 
-The Chapter 3 experiment compares:
+The live app now has its own **Maze Demo** tab (Research & Analysis →
+Algorithms → Maze Demo), built in `maze-demo.js` at the project root.
+It reproduces the same visual — a ball moving through a 10x10 grid
+from start to goal, walls, a dynamically-mutating maze — directly in
+the browser with plain Canvas, no Python/pygame required.
 
-- **Existing / control:** Standard Q-Learning — one Q-table, location-only state `S = L`, and a single-objective travel-efficiency reward.
-- **Proposed / experimental:** **MODQL (Multi-Objective Double Q-Learning)** — two Q-tables (`Q1`, `Q2`), enriched state `S = <L,D,T,H,A>`, and the reward `Coverage × Jain's Fairness × (1 / Travel Cost)`.
+## Missing pieces
 
-The corrected experiment is in `training/train_q_learning.py`. Current results use placeholder Laiban/Tanay data and are for implementation validation only, not final Chapter 4 evidence.
+This script imports three modules that were not included with it and
+do not exist anywhere else in this repository:
 
-## Maze Demo / Algorithm Comparison
+- `dynamic_maze_env.py` (`DynamicMazeEnv`)
+- `baseline_confidence_agent.py` (`BaselineConfidenceAgent`)
+- `reflection_agent.py` (`ReflectionAgent`)
 
-Open **Research & Analysis → Algorithms → Maze Demo** in the web app.
+Without them, this script cannot run as-is, and the in-browser tab
+currently substitutes a simple shortest-path search in their place
+(labeled "SIMULATED DATA" in the UI, consistent with the placeholder
+labeling already used elsewhere in the Analysis tab).
 
-The Maze Demo is now a controlled side-by-side comparison of:
+Add those three files here to:
 
-- Standard Q-Learning
-- Proposed MODQL
+1. Run this pygame script locally against the real trained policy.
+2. Port the same policy logic into `maze-demo.js` so the in-app tab
+   shows actual learned behavior instead of the placeholder.
 
-Both agents receive the **same 10×10 simulated environment**, community demand, and visit history. The demo is meant to make the algorithmic differences visible during the defense; it is not a substitute for the multi-episode statistical evaluation.
-
-## Python maze prototype
-
-`simple_maze_demo.py` is kept as the original standalone pygame prototype/reference. It is separate from the thesis-aligned Standard-Q vs MODQL comparison shown in the browser.
-
-## Training
+## Running locally
 
 ```bash
-cd training
-python train_q_learning.py
+pip install pygame numpy
+python simple_maze_demo.py
 ```
-
-The aligned trainer runs 1,200 episodes for each algorithm and evaluates the trained policies on held-out simulated scenarios. See `training/README.md` for the exact state/reward mapping and data-status notes.
-
-## Data status
-
-The current node coordinates, learner counts, and road geometry are simulation placeholders pending the official datasets described in Chapter 3. Do not present the current placeholder metrics as proof that MODQL outperforms Standard Q-Learning; the real-data experiment must determine that.
