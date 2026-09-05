@@ -1,28 +1,149 @@
 /* ============================================================================
-   MAZE DEMO / CONTROLLED ALGORITHM COMPARISON
-   Standard Q-Learning (control) vs MODQL (proposed)
+   MAZE DEMO — thesis comparison using the original full-size maze presentation
+   Standard Q-Learning vs Proposed MODQL
 
-   Thesis-aligned micro-routing sandbox. Both agents receive the SAME 10x10
-   obstacle layout and community demand/history. This demonstrates mechanics;
-   it is NOT final Chapter 4 performance evidence.
+   The UI intentionally keeps the earlier Maze Demo look: one large 10x10 maze,
+   information panel, red agent, green goal, yellow walls, and Play/Step/New
+   Episode controls. Use the algorithm switch to view each algorithm separately.
+
+   This is a controlled visualization of algorithm behaviour. It is not a
+   substitute for the Chapter 4 routing experiment on the Laiban road graph.
    ============================================================================ */
 (function(){
 'use strict';
-var SIZE=10,MAX_STEPS=100,TICK=650,MOVES=[[-1,0],[1,0],[0,-1],[0,1]];
-var HUB={id:'hub',r:0,c:0,demand:0,visits:0};
-var COMM=[{id:'A',r:1,c:8,demand:42,visits:2},{id:'B',r:4,c:5,demand:71,visits:0},{id:'C',r:8,c:2,demand:36,visits:1},{id:'D',r:8,c:8,demand:58,visits:3}];
-var ALL=[HUB].concat(COMM),BY={};ALL.forEach(function(n){BY[n.id]=n;});
-function key(r,c){return r+','+c;}function rng(seed){var s=seed>>>0;return function(){s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
-function jain(v){var s=0,q=0;v.forEach(function(x){s+=x;q+=x*x;});return q===0?1:(s*s)/(v.length*q);}function bucket(v,c){for(var i=0;i<c.length;i++)if(v<c[i])return i;return c.length;}
-function bfs(g,a,b){var q=[[a,[a]]],seen={};seen[key(a[0],a[1])]=1;while(q.length){var z=q.shift(),p=z[0],path=z[1];if(p[0]===b[0]&&p[1]===b[1])return path;for(var i=0;i<4;i++){var r=p[0]+MOVES[i][0],c=p[1]+MOVES[i][1],k=key(r,c);if(r<0||c<0||r>=SIZE||c>=SIZE||g[r][c]||seen[k])continue;seen[k]=1;q.push([[r,c],path.concat([[r,c]])]);}}return[];}
-function makeMaze(seed){var R=rng(seed),g=Array.from({length:SIZE},function(){return Array(SIZE).fill(0);}),fixed={};ALL.forEach(function(n){fixed[key(n.r,n.c)]=1;});var n=0;while(n<18){var r=Math.floor(R()*SIZE),c=Math.floor(R()*SIZE);if(fixed[key(r,c)]||g[r][c])continue;g[r][c]=1;n++;}COMM.forEach(function(x){var guard=0;while(!bfs(g,[0,0],[x.r,x.c]).length&&guard++<80){var obs=[];for(var r=0;r<SIZE;r++)for(var c=0;c<SIZE;c++)if(g[r][c])obs.push([r,c]);var p=obs[Math.floor(R()*obs.length)];g[p[0]][p[1]]=0;}});return g;}
-function World(seed){this.seed=seed;this.grid=makeMaze(seed);}World.prototype.route=function(a,b){return bfs(this.grid,[BY[a].r,BY[a].c],[BY[b].r,BY[b].c]);};World.prototype.access=function(id){var n=BY[id],open=0,total=0;for(var i=0;i<4;i++){var r=n.r+MOVES[i][0],c=n.c+MOVES[i][1];if(r<0||c<0||r>=SIZE||c>=SIZE)continue;total++;if(!this.grid[r][c])open++;}return total?open/total:0;};
-function Standard(){this.Q={};this.a=.1;this.g=.9;this.e=.2;}Standard.prototype.state=function(s){return s.current;};Standard.prototype.q=function(s,a){return this.Q[s]&&this.Q[s][a]||0;};Standard.prototype.choose=function(s,A){var st=this.state(s);if(Math.random()<this.e)return A[Math.floor(Math.random()*A.length)];var b=A[0],v=-1e99;A.forEach(function(a){var x=this.q(st,a);if(x>v){v=x;b=a;}},this);return b;};Standard.prototype.learn=function(s,a,r,ns,A){var nx=0;A.forEach(function(x){nx=Math.max(nx,this.q(ns,x));},this);if(!this.Q[s])this.Q[s]={};var o=this.q(s,a);this.Q[s][a]=o+this.a*(r+this.g*nx-o);};
-function MODQL(){this.Q1={};this.Q2={};this.a=.1;this.g=.9;this.e=.2;}MODQL.prototype.q=function(T,s,a){return T[s]&&T[s][a]||0;};MODQL.prototype.state=function(s){var pending=COMM.filter(function(n){return!s.served[n.id];}),mx=Math.max.apply(null,COMM.map(function(n){return n.demand;}));var pressure=pending.length?Math.max.apply(null,pending.map(function(n){return n.demand/mx;})):0,D=bucket(pressure,[.01,.45,.75]),T=bucket(s.remaining/MAX_STEPS,[.2,.4,.6,.8]),H=bucket(jain(COMM.map(function(n){return s.visits[n.id];})),[.55,.70,.85]),A=bucket(s.world.access(s.current),[.25,.5,.75]);return'L='+s.current+'|D='+D+'|T='+T+'|H='+H+'|A='+A;};MODQL.prototype.choose=function(s,A){var st=this.state(s);if(Math.random()<this.e)return A[Math.floor(Math.random()*A.length)];var b=A[0],v=-1e99;A.forEach(function(a){var x=this.q(this.Q1,st,a)+this.q(this.Q2,st,a);if(x>v){v=x;b=a;}},this);return b;};MODQL.prototype.learn=function(s,a,r,ns,A){var one=Math.random()<.5,X=one?this.Q1:this.Q2,Y=one?this.Q2:this.Q1,b=null,v=-1e99;A.forEach(function(x){var z=this.q(X,ns,x);if(z>v){v=z;b=x;}},this);var target=r+(b?this.g*this.q(Y,ns,b):0);if(!X[s])X[s]={};var o=this.q(X,s,a);X[s][a]=o+this.a*(target-o);};
-function Sim(kind,w,agent){this.kind=kind;this.world=w;this.agent=agent;this.current='hub';this.remaining=MAX_STEPS;this.steps=0;this.reward=0;this.coverage=0;this.served={};this.visits={};this.routes=[];this.last='None';this.done=false;COMM.forEach(function(n){this.visits[n.id]=n.visits;},this);}Sim.prototype.actions=function(){var s=this;return COMM.filter(function(n){var p=s.world.route(s.current,n.id);return!s.served[n.id]&&p.length&&(p.length-1)<=s.remaining;}).map(function(n){return n.id;});};Sim.prototype.step=function(){var A=this.actions();if(!A.length){this.done=true;return;}var st=this.agent.state(this),a=this.agent.choose(this,A),path=this.world.route(this.current,a),cost=path.length-1,n=BY[a];this.remaining-=cost;this.steps+=cost;this.served[a]=1;this.visits[a]++;this.coverage+=n.demand;this.routes.push(path);this.last=a;var r=this.kind==='standard'?1/Math.max(cost,1):(n.demand/71)*jain(COMM.map(function(x){return this.visits[x.id];},this))*(1/Math.max(cost,1));this.reward+=r;this.current=a;var ns=this.agent.state(this),next=this.actions();this.agent.learn(st,a,r,ns,next);if(!next.length)this.done=true;};
-var seed=20260905,ep=1,stdAgent=new Standard(),modAgent=new MODQL(),std,mod,timer=null;function reset(newSeed){if(newSeed)seed++;std=new Sim('standard',new World(seed),stdAgent);mod=new Sim('modql',new World(seed),modAgent);render();}function step(){if(!std.done)std.step();if(!mod.done)mod.step();render();if(std.done&&mod.done)stop();}function play(){if(timer){stop();return;}timer=setInterval(step,TICK);render();}function stop(){if(timer){clearInterval(timer);timer=null;}render();}function fresh(){stop();ep++;reset(true);}
-function draw(cv,s,proposed){if(!cv)return;var x=cv.getContext('2d'),cell=40,ox=15,oy=15;x.clearRect(0,0,430,430);for(var r=0;r<SIZE;r++)for(var c=0;c<SIZE;c++){x.fillStyle=s.world.grid[r][c]?'#f2c94c':'#f8fafc';x.fillRect(ox+c*cell,oy+r*cell,cell,cell);x.strokeStyle='#d8dee8';x.strokeRect(ox+c*cell,oy+r*cell,cell,cell);}s.routes.forEach(function(p){x.beginPath();x.strokeStyle=proposed?'#2e67d1':'#d94747';x.lineWidth=3;p.forEach(function(z,i){var a=ox+z[1]*cell+20,b=oy+z[0]*cell+20;i?x.lineTo(a,b):x.moveTo(a,b);});x.stroke();});ALL.forEach(function(n){var a=ox+n.c*cell+20,b=oy+n.r*cell+20;x.beginPath();x.fillStyle=n.id==='hub'?'#2ca56d':s.served[n.id]?'#8fd9ba':'#34495e';x.arc(a,b,11,0,Math.PI*2);x.fill();x.fillStyle='#fff';x.font='bold 10px sans-serif';x.textAlign='center';x.fillText(n.id==='hub'?'H':n.id,a,b+3);});var n=BY[s.current];x.beginPath();x.fillStyle=proposed?'#1c4fa8':'#b52f2f';x.arc(ox+n.c*cell+20,oy+n.r*cell+20,6,0,Math.PI*2);x.fill();}
-function panel(s,title,proposed){return'<div class="card"><h3>'+title+'</h3><div class="k">'+(proposed?'Q1 + Q2 &middot; S=&lang;L,D,T,H,A&rang; &middot; C &times; J &times; (1/Cost)':'Single Q-table &middot; S=L &middot; 1/Travel Cost')+'</div><canvas id="'+(proposed?'mazeMod':'mazeStd')+'" width="430" height="430" style="width:100%;max-width:430px;background:#fff;border-radius:10px;margin-top:8px"></canvas><div class="g3"><div class="kpi"><div class="lab">Coverage</div><div class="v">'+s.coverage+'</div></div><div class="kpi"><div class="lab">Jain J</div><div class="v">'+jain(COMM.map(function(n){return s.visits[n.id];})).toFixed(3)+'</div></div><div class="kpi"><div class="lab">Steps</div><div class="v">'+s.steps+'</div></div></div><div class="k">Last action: <b>'+s.last+'</b> &middot; cumulative reward: '+s.reward.toFixed(4)+'</div></div>';}
-function render(){var root=document.getElementById('sub-maze');if(!root)return;root.innerHTML='<div class="algo-head mod"><div class="ic">&#8644;</div><div><h2>Maze Demo &mdash; Algorithm Comparison</h2><p>Same environment: Standard Q-Learning vs proposed MODQL</p></div></div><div class="card"><div class="k"><b>Defense note:</b> This is a controlled simulated micro-routing demo for algorithm mechanics, not final Chapter 4 evidence.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button id="mazePlay">'+(timer?'Pause':'Play')+'</button><button id="mazeStep">Step</button><button id="mazeNew">New Episode</button><span class="tag">Episode '+ep+'</span><span class="tag">Same seed '+seed+'</span></div></div><div class="split2">'+panel(std,'Existing &mdash; Standard Q-Learning',false)+panel(mod,'Proposed &mdash; MODQL',true)+'</div><div class="card"><h3>What is being compared</h3><table><thead><tr><th>Component</th><th>Existing</th><th>Proposed</th></tr></thead><tbody><tr><td>Estimator</td><td>Single Q-table</td><td>Q1 + Q2, decoupled update</td></tr><tr><td>State</td><td>L only</td><td>L, D, T, H, A</td></tr><tr><td>Reward</td><td>Travel efficiency</td><td>Coverage &times; Jain fairness &times; 1/travel cost</td></tr><tr><td>Environment</td><td colspan="2">Identical 10&times;10 layout and community demand/history</td></tr></tbody></table></div>';document.getElementById('mazePlay').onclick=play;document.getElementById('mazeStep').onclick=step;document.getElementById('mazeNew').onclick=fresh;draw(document.getElementById('mazeStd'),std,false);draw(document.getElementById('mazeMod'),mod,true);}
-function init(){if(document.getElementById('sub-maze'))reset(false);}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+
+var SIZE=10, OBSTACLE_RATIO=.25, CHANGE_FREQUENCY=20, MAX_STEPS=100, STEP_MS=200;
+var ACTIONS=[[-1,0],[1,0],[0,-1],[0,1]], ACTION_NAMES=['Up','Down','Left','Right'];
+function k(p){return p[0]+','+p[1]} function cp(p){return [p[0],p[1]]}
+function same(a,b){return a[0]===b[0]&&a[1]===b[1]}
+function ri(n){return Math.floor(Math.random()*n)}
+function man(a,b){return Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1])}
+function clamp(x,a,b){return Math.max(a,Math.min(b,x))}
+function zeros(){return[0,0,0,0]}
+function argmax(arr){var best=0;for(var i=1;i<arr.length;i++)if(arr[i]>arr[best])best=i;return best}
+function jain(vals){var s=0,q=0;vals.forEach(function(x){s+=x;q+=x*x});return q===0?1:(s*s)/(vals.length*q)}
+
+function MazeEnv(template){
+  this.size=SIZE;this.changeFrequency=CHANGE_FREQUENCY;this.maxSteps=MAX_STEPS;
+  this.steps=0;this.environmentUpdates=0;
+  if(template){this.maze=template.maze.map(function(r){return r.slice()});this.currentPos=cp(template.start);this.goalPos=cp(template.goal)}
+  else this.generate();
+}
+MazeEnv.prototype.generate=function(){
+  var guard=0;
+  while(guard++<300){
+    var maze=Array.from({length:SIZE},function(){return Array(SIZE).fill(0)}), target=Math.floor(SIZE*SIZE*OBSTACLE_RATIO),used={};
+    while(Object.keys(used).length<target){var idx=ri(SIZE*SIZE),r=Math.floor(idx/SIZE),c=idx%SIZE,key=r+','+c;if(used[key])continue;used[key]=1;maze[r][c]=1}
+    var start=[ri(3),ri(3)],goal=[SIZE-1-ri(3),SIZE-1-ri(3)];maze[start[0]][start[1]]=0;maze[goal[0]][goal[1]]=0;
+    this.maze=maze;this.currentPos=start;this.goalPos=goal;
+    if(this.bfs(start,goal).length){this.steps=0;return}
+  }
+  this.maze=Array.from({length:SIZE},function(){return Array(SIZE).fill(0)});this.currentPos=[0,0];this.goalPos=[9,9];
+};
+MazeEnv.prototype.snapshot=function(){return{maze:this.maze.map(function(r){return r.slice()}),start:cp(this.currentPos),goal:cp(this.goalPos)}};
+MazeEnv.prototype.bfs=function(start,goal){
+  var q=[[cp(start),[cp(start)]]],seen={};seen[k(start)]=1;
+  while(q.length){var z=q.shift(),p=z[0],path=z[1];if(same(p,goal))return path;for(var a=0;a<4;a++){var n=[p[0]+ACTIONS[a][0],p[1]+ACTIONS[a][1]],nk=k(n);if(n[0]<0||n[1]<0||n[0]>=SIZE||n[1]>=SIZE||this.maze[n[0]][n[1]]||seen[nk])continue;seen[nk]=1;q.push([n,path.concat([cp(n)])])}}
+  return[];
+};
+MazeEnv.prototype.localAccessibility=function(pos){var valid=0,free=0;for(var a=0;a<4;a++){var n=[pos[0]+ACTIONS[a][0],pos[1]+ACTIONS[a][1]];if(n[0]<0||n[1]<0||n[0]>=SIZE||n[1]>=SIZE)continue;valid++;if(!this.maze[n[0]][n[1]])free++}return valid?free/valid:0};
+MazeEnv.prototype.ensurePath=function(){
+  var guard=0;while(!this.bfs(this.currentPos,this.goalPos).length&&guard++<100){var obs=[];for(var r=0;r<SIZE;r++)for(var c=0;c<SIZE;c++)if(this.maze[r][c])obs.push([r,c]);if(!obs.length)break;var p=obs[ri(obs.length)];if(!same(p,this.currentPos)&&!same(p,this.goalPos))this.maze[p[0]][p[1]]=0}
+};
+MazeEnv.prototype.mutate=function(){
+  var changes=1+ri(3);for(var i=0;i<changes;i++){var p=[ri(SIZE),ri(SIZE)];if(same(p,this.currentPos)||same(p,this.goalPos))continue;this.maze[p[0]][p[1]]=this.maze[p[0]][p[1]]?0:1}this.ensurePath();this.environmentUpdates++;
+};
+MazeEnv.prototype.step=function(action){
+  this.steps++;var old=cp(this.currentPos),d=ACTIONS[action],n=[old[0]+d[0],old[1]+d[1]],collision=false;
+  if(n[0]<0||n[1]<0||n[0]>=SIZE||n[1]>=SIZE||this.maze[n[0]][n[1]]){n=old;collision=true}else this.currentPos=n;
+  var goal=same(this.currentPos,this.goalPos),done=goal||this.steps>=this.maxSteps;
+  if(this.steps%this.changeFrequency===0&&!done)this.mutate();
+  return{old:old,state:cp(this.currentPos),goal:goal,done:done,collision:collision};
+};
+
+function StandardAgent(){this.Q=new Map();this.alpha=.5;this.gamma=.9;this.epsilon=.85;this.epsilonMin=.15;this.epsilonDecay=.992}
+StandardAgent.prototype.q=function(s){if(!this.Q.has(s))this.Q.set(s,zeros());return this.Q.get(s)};
+StandardAgent.prototype.select=function(pos){this.epsilon=Math.max(this.epsilonMin,this.epsilon*this.epsilonDecay);if(Math.random()<this.epsilon)return ri(4);return argmax(this.q(k(pos)))};
+StandardAgent.prototype.reward=function(env,tr){if(tr.goal)return 10;if(tr.collision)return-1;return-.1};
+StandardAgent.prototype.learn=function(prev,a,r,next,done){var q=this.q(k(prev)),nq=this.q(k(next)),target=r+(done?0:this.gamma*Math.max.apply(null,nq));q[a]+=this.alpha*(target-q[a])};
+
+function MODQLAgent(){
+  this.Q1=new Map();this.Q2=new Map();this.alpha=.5;this.gamma=.9;this.epsilon=.72;this.epsilonMin=.08;this.epsilonDecay=.989;
+  this.visits=new Map();this.wallMemory=new Map();this.goal=null;
+}
+MODQLAgent.prototype.setGoal=function(p){this.goal=cp(p)};
+MODQLAgent.prototype.q=function(T,s){if(!T.has(s))T.set(s,zeros());return T.get(s)};
+MODQLAgent.prototype.state=function(env,pos,steps){
+  var L=k(pos),dist=man(pos,env.goalPos),maxDist=(SIZE-1)*2,D=dist/maxDist<.25?0:dist/maxDist<.5?1:dist/maxDist<.75?2:3;
+  var remaining=(MAX_STEPS-steps)/MAX_STEPS,T=remaining<.25?0:remaining<.5?1:remaining<.75?2:3;
+  var count=this.visits.get(L)||0,H=count===0?0:count===1?1:count<=3?2:3;
+  var acc=env.localAccessibility(pos),A=acc<.25?0:acc<.5?1:acc<.75?2:3;
+  return'L='+L+'|D='+D+'|T='+T+'|H='+H+'|A='+A;
+};
+MODQLAgent.prototype.select=function(env,pos,steps){
+  var sk=this.state(env,pos,steps),walls=this.wallMemory.get(k(pos))||{},q1=this.q(this.Q1,sk),q2=this.q(this.Q2,sk),combo=q1.map(function(v,i){return v+q2[i]});
+  this.epsilon=Math.max(this.epsilonMin,this.epsilon*this.epsilonDecay);
+  var preferred=[];for(var a=0;a<4;a++){if(walls[a])continue;var n=[pos[0]+ACTIONS[a][0],pos[1]+ACTIONS[a][1]];if(n[0]<0||n[1]<0||n[0]>=SIZE||n[1]>=SIZE||env.maze[n[0]][n[1]])continue;preferred.push(a)}
+  if(!preferred.length)return ri(4);
+  if(Math.random()<this.epsilon){
+    var improving=preferred.filter(function(a){var n=[pos[0]+ACTIONS[a][0],pos[1]+ACTIONS[a][1]];return man(n,env.goalPos)<man(pos,env.goalPos)});
+    if(improving.length&&Math.random()<.72)return improving[ri(improving.length)];return preferred[ri(preferred.length)];
+  }
+  var best=preferred[0];preferred.forEach(function(a){if(combo[a]>combo[best])best=a});return best;
+};
+MODQLAgent.prototype.reward=function(env,tr,steps){
+  if(tr.goal)return 10;if(tr.collision)return-1;
+  var oldD=man(tr.old,env.goalPos),newD=man(tr.state,env.goalPos),coverage=clamp((oldD-newD+1)/2,.05,1),fairness=1/(1+(this.visits.get(k(tr.state))||0)),travelCost=1;
+  return coverage*fairness*(1/travelCost)-.05;
+};
+MODQLAgent.prototype.learn=function(env,prev,a,r,next,done,steps,collision){
+  var pk=k(prev);this.visits.set(k(next),(this.visits.get(k(next))||0)+1);if(collision){var w=this.wallMemory.get(pk)||{};w[a]=1;this.wallMemory.set(pk,w)}
+  var s=this.state(env,prev,Math.max(0,steps-1)),ns=this.state(env,next,steps),first=Math.random()<.5,X=first?this.Q1:this.Q2,Y=first?this.Q2:this.Q1,qx=this.q(X,s),nx=this.q(X,ns),ny=this.q(Y,ns),astar=argmax(nx),target=r+(done?0:this.gamma*ny[astar]);qx[a]+=this.alpha*(target-qx[a]);
+};
+
+var modes={standard:null,modql:null},active='standard',episode=1,timer=null,template=null;
+function makeRun(kind,keepAgent){
+  if(!template){var base=new MazeEnv();template=base.snapshot()}
+  var old=modes[kind],agent=keepAgent&&old?old.agent:(kind==='standard'?new StandardAgent():new MODQLAgent()),env=new MazeEnv(template);if(kind==='modql')agent.setGoal(env.goalPos);
+  modes[kind]={kind:kind,env:env,agent:agent,steps:0,last:'None',status:'Ready',goalResult:'In Progress...',history:[cp(env.currentPos)],reward:0,finished:false,collisions:0,environmentUpdates:0};
+}
+function newEpisode(){stop();episode++;template=null;makeRun('standard',true);makeRun('modql',true);render()}
+function resetAll(){stop();episode=1;template=null;makeRun('standard',false);makeRun('modql',false);render()}
+function run(){return modes[active]}
+function stepOnce(){
+  var s=run();if(!s||s.finished)return;var prev=cp(s.env.currentPos),a=s.agent.select?s.agent.select(s.env,prev,s.steps):0;
+  if(active==='standard')a=s.agent.select(prev);
+  var tr=s.env.step(a),r=s.agent.reward(s.env,tr,s.steps+1);s.steps++;s.reward+=r;s.last=ACTION_NAMES[a];if(tr.collision)s.collisions++;
+  if(active==='standard')s.agent.learn(prev,a,r,tr.state,tr.done);else s.agent.learn(s.env,prev,a,r,tr.state,tr.done,s.steps,tr.collision);
+  s.history.push(cp(tr.state));s.environmentUpdates=s.env.environmentUpdates;
+  if(tr.done){s.finished=true;s.goalResult=tr.goal?'Goal Achieved!':'Goal Not Achieved';s.status=tr.goal?'Goal Achieved':'Timeout';stop()}else s.status='Episode '+episode+' running';render();
+}
+function play(){if(timer){stop();return}timer=setInterval(stepOnce,STEP_MS);render()}
+function stop(){if(timer){clearInterval(timer);timer=null}render()}
+function switchMode(kind){stop();active=kind;render()}
+
+function draw(){
+  var cv=document.getElementById('mazeCanvas'),s=run();if(!cv||!s)return;var x=cv.getContext('2d'),W=cv.width,H=cv.height,pad=18,cell=Math.floor((Math.min(W,H)-pad*2)/SIZE),ox=Math.floor((W-cell*SIZE)/2),oy=Math.floor((H-cell*SIZE)/2);x.clearRect(0,0,W,H);x.fillStyle='#fff';x.fillRect(0,0,W,H);
+  for(var r=0;r<SIZE;r++)for(var c=0;c<SIZE;c++){x.fillStyle=s.env.maze[r][c]?'#f4c542':'#ffffff';x.fillRect(ox+c*cell,oy+r*cell,cell,cell);x.strokeStyle='#d0d4da';x.lineWidth=1;x.strokeRect(ox+c*cell,oy+r*cell,cell,cell)}
+  if(s.history.length>1){x.beginPath();s.history.forEach(function(p,i){var px=ox+p[1]*cell+cell/2,py=oy+p[0]*cell+cell/2;i?x.lineTo(px,py):x.moveTo(px,py)});x.strokeStyle=active==='standard'?'rgba(210,55,55,.28)':'rgba(46,103,209,.30)';x.lineWidth=3;x.stroke()}
+  var g=s.env.goalPos,gx=ox+g[1]*cell+cell/2,gy=oy+g[0]*cell+cell/2;x.beginPath();x.fillStyle='#2eb85c';x.arc(gx,gy,cell*.28,0,Math.PI*2);x.fill();
+  var p=s.env.currentPos,px=ox+p[1]*cell+cell/2,py=oy+p[0]*cell+cell/2;x.beginPath();x.fillStyle='#e23d3d';x.arc(px,py,cell*.27,0,Math.PI*2);x.fill();x.strokeStyle='#9e2020';x.lineWidth=2;x.stroke();
+}
+function stat(label,val){return'<div style="margin-bottom:14px"><div class="k" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px">'+label+'</div><div style="font-size:17px;font-weight:800;margin-top:3px">'+val+'</div></div>'}
+function lastSummary(kind){var s=modes[kind];if(!s)return'—';return(s.finished?s.goalResult:'In progress')+' · '+s.steps+' steps · '+s.collisions+' collisions'}
+function render(){
+  var root=document.getElementById('sub-maze'),s=run();if(!root||!s)return;
+  var algo=active==='standard'?'Standard Q-Learning':'Proposed MODQL',desc=active==='standard'?'Single Q-table · location-only state · standard scalar reward':'Double Q-learning · enriched L,D,T,H,A state · multi-objective reward';
+  root.innerHTML='<div class="algo-head '+(active==='standard'?'std':'mod')+'"><div class="ic">'+(active==='standard'?'Σ':'⌘')+'</div><div><h2>Maze Demo — '+algo+'</h2><p>'+desc+'</p></div></div>'+
+  '<div class="card"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="modeStd" class="btn '+(active==='standard'?'p':'g')+'">Standard Q-Learning</button><button id="modeMod" class="btn '+(active==='modql'?'p':'g')+'">Proposed MODQL</button><span class="tag">Episode '+episode+'</span></div><div class="k" style="margin-top:9px">Same original Maze Demo presentation. Switch algorithms to compare how each agent learns and reacts in the maze.</div></div>'+
+  '<div class="card" style="padding:18px"><div style="display:grid;grid-template-columns:minmax(210px,290px) minmax(360px,1fr);gap:24px;align-items:start" id="mazeOldLayout">'+
+    '<div><h3 style="margin-bottom:16px">Simulation Information</h3>'+stat('Episode',episode+' / 5')+stat('Status',s.status)+stat('Goal Result',s.goalResult)+stat('Steps Taken',s.steps+' / '+MAX_STEPS)+stat('Last Action',s.last)+stat('Cumulative Reward',s.reward.toFixed(3))+stat('Collisions',s.collisions)+stat('Environment Updates',s.environmentUpdates)+
+    '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)"><div class="k" style="font-weight:700;margin-bottom:8px">Legend</div><div class="k" style="line-height:2"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e23d3d;margin-right:7px"></span>Agent<br><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#2eb85c;margin-right:7px"></span>Goal<br><span style="display:inline-block;width:10px;height:10px;background:#f4c542;margin-right:7px"></span>Wall</div></div></div>'+
+    '<div><canvas id="mazeCanvas" width="520" height="520" style="width:100%;max-width:520px;background:#fff;border-radius:10px;display:block;margin:auto"></canvas><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button id="mazePlay" class="btn p">'+(timer?'Pause':'Play')+'</button><button id="mazeStep" class="btn g">Step</button><button id="mazeNew" class="btn g">New Episode</button><button id="mazeReset" class="btn g">Reset Learning</button></div></div></div></div>'+
+  '<div class="card"><h3>Quick comparison — current learning session</h3><table><thead><tr><th>Algorithm</th><th>State / estimator</th><th>Last result</th></tr></thead><tbody><tr><td><b>Standard Q-Learning</b></td><td>Location only · single Q-table</td><td>'+lastSummary('standard')+'</td></tr><tr><td><b>Proposed MODQL</b></td><td>L,D,T,H,A · Q1/Q2</td><td>'+lastSummary('modql')+'</td></tr></tbody></table><div class="k" style="margin-top:10px"><b>Note:</b> This maze is a visual learning sandbox. Thesis performance claims must still come from the controlled Laiban routing experiments and official/validated datasets.</div></div>';
+  document.getElementById('modeStd').onclick=function(){switchMode('standard')};document.getElementById('modeMod').onclick=function(){switchMode('modql')};document.getElementById('mazePlay').onclick=play;document.getElementById('mazeStep').onclick=stepOnce;document.getElementById('mazeNew').onclick=newEpisode;document.getElementById('mazeReset').onclick=resetAll;
+  var lay=document.getElementById('mazeOldLayout');if(window.innerWidth<850)lay.style.gridTemplateColumns='1fr';draw();
+}
+function init(){if(!document.getElementById('sub-maze'))return;makeRun('standard',false);makeRun('modql',false);render()}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
