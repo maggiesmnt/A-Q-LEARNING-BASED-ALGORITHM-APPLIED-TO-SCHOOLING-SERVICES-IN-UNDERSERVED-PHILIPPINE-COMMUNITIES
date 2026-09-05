@@ -159,19 +159,14 @@ This is exactly the &ldquo;structural amnesia&rdquo; that location-only standard
 <button data-sub="sop2">SOP 2 &mdash; Overestimation</button>
 <button data-sub="sop3">SOP 3 &mdash; State &amp; Hazards</button>
 </div>
-<div class="theme-dock">
-<span class="theme-label">Appearance</span>
-<button class="theme-switch" id="themeSwitch" type="button" aria-label="Switch to light mode" aria-pressed="false">
-<span class="theme-icon sun" aria-hidden="true">
-<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/></svg>
-</span>
-<span class="theme-track"><span class="theme-thumb"></span></span>
-<span class="theme-icon moon" aria-hidden="true">
-<svg viewBox="0 0 24 24"><path d="M20.4 14.2A7.5 7.5 0 019.8 3.6 8.4 8.4 0 1020.4 14.2z"/></svg>
-</span>
+<div class="theme-dock" aria-label="Appearance">
+<button class="theme-icon-btn" id="themeLight" type="button" data-theme-choice="light" aria-label="Use light mode" title="Light mode">
+<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"/></svg>
 </button>
-</div>
-</nav>
+<button class="theme-icon-btn" id="themeDark" type="button" data-theme-choice="dark" aria-label="Use dark mode" title="Dark mode">
+<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.4 14.2A7.5 7.5 0 019.8 3.6 8.4 8.4 0 1020.4 14.2z"/></svg>
+</button>
+</div></nav>
 <div class="research-content">
 <div class="badge-sim">SIMULATED DATA &mdash; FOR SYSTEM DEMONSTRATION</div>
 <div class="note"><b>Placeholder values, where marked.</b> Route KPIs and stop lists on every tab below are computed live by this
