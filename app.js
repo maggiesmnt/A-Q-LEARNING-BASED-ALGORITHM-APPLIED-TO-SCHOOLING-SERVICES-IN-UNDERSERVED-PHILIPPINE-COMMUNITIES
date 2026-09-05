@@ -6,6 +6,28 @@
 
 var MODE = "operational";
 var lastOperationalView = "drive";
+var THEME_KEY = "als-mobile-hub-theme";
+
+function getInitialTheme(){
+  try{
+    var saved = localStorage.getItem(THEME_KEY);
+    if(saved==="light" || saved==="dark") return saved;
+  }catch(e){}
+  return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+function setTheme(theme){
+  var next = theme==="light" ? "light" : "dark";
+  document.body.setAttribute("data-theme", next);
+  try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
+  var btn = document.getElementById("themeSwitch");
+  if(btn){
+    var isDark = next==="dark";
+    btn.setAttribute("aria-pressed", String(isDark));
+    btn.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
+    btn.title = isDark ? "Switch to light mode" : "Switch to dark mode";
+  }
+}
 
 function setMode(m){
   MODE = m;
@@ -24,6 +46,14 @@ function setMode(m){
 document.querySelectorAll("#modeToggle button").forEach(function(b){
   b.onclick=function(){ setMode(b.getAttribute("data-mode")); };
 });
+
+setTheme(getInitialTheme());
+var themeSwitch = document.getElementById("themeSwitch");
+if(themeSwitch){
+  themeSwitch.onclick=function(){
+    setTheme(document.body.getAttribute("data-theme")==="dark" ? "light" : "dark");
+  };
+}
 
 document.querySelectorAll("#tabs button").forEach(function(b){
   b.onclick=function(){
