@@ -20,11 +20,14 @@ function setTheme(theme){
   var next = theme==="light" ? "light" : "dark";
   document.body.setAttribute("data-theme", next);
   try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
-  document.querySelectorAll(".theme-icon-btn[data-theme-choice]").forEach(function(btn){
-    var active = btn.getAttribute("data-theme-choice")===next;
-    btn.classList.toggle("on", active);
-    btn.setAttribute("aria-pressed", String(active));
-  });
+  var btn = document.getElementById("themeSwitch");
+  if(btn){
+    btn.classList.toggle("is-light", next==="light");
+    btn.classList.toggle("is-dark", next==="dark");
+    btn.setAttribute("aria-pressed", String(next==="dark"));
+    btn.setAttribute("aria-label", next==="dark" ? "Switch to light mode" : "Switch to dark mode");
+    btn.title = next==="dark" ? "Switch to light mode" : "Switch to dark mode";
+  }
 }
 
 function setMode(m){
@@ -46,11 +49,12 @@ document.querySelectorAll("#modeToggle button").forEach(function(b){
 });
 
 setTheme(getInitialTheme());
-document.querySelectorAll(".theme-icon-btn[data-theme-choice]").forEach(function(btn){
-  btn.onclick=function(){
-    setTheme(btn.getAttribute("data-theme-choice"));
+var themeSwitch = document.getElementById("themeSwitch");
+if(themeSwitch){
+  themeSwitch.onclick=function(){
+    setTheme(document.body.getAttribute("data-theme")==="dark" ? "light" : "dark");
   };
-});
+}
 
 document.querySelectorAll("#tabs button").forEach(function(b){
   b.onclick=function(){
