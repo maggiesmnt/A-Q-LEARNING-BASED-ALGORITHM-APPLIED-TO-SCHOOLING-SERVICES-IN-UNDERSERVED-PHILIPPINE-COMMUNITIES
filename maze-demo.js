@@ -1,229 +1,494 @@
 /* ============================================================
-   Maze Demo — browser port of simple_maze_demo.py
-   -----------------------------------------------------------
-   Renders the maze-navigation visualization inside the existing
-   "Research & Analysis" view, as a new sub-tab next to Existing
-   Algorithm / Proposed Algorithm / SOP 1-3 (see index.html: new
-   <button data-sub="maze"> in #researchNav, new <div id="sub-maze">
-   in .research-content).
+   Maze Demo — browser implementation of the uploaded
+   simple_maze_demo.py + cathydou/reflection-agent-maze logic.
 
-   IMPORTANT — placeholder policy:
-   dynamic_maze_env.py, baseline_confidence_agent.py and
-   reflection_agent.py (imported by simple_maze_demo.py) were not
-   available, so the maze generation / movement below is a
-   lightweight stand-in (BFS shortest path) that reproduces the
-   same *visual* demo — a ball navigating a 10x10 grid from start
-   to goal, red = agent, green = goal, yellow = walls, with the
-   maze mutating every CHANGE_FREQUENCY steps like the original
-   DynamicMazeEnv. Once those three files are added to the repo,
-   replace stepOnce()/makeMaze() below with real calls into the
-   trained Q-table / policy so this shows actual learned behavior
-   instead of a placeholder path search.
+   Goal: show the same maze demonstration inside the existing
+   Research & Analysis > Maze Demo tab without opening pygame.
+
+   Source behavior mirrored here:
+   - DynamicMazeEnv(size=10, obstacle_ratio=0.25, change_frequency=20)
+   - env.max_steps = 100
+   - ReflectionAgent(action_space)
+   - confidence_threshold = 0.25
+   - adaptation_threshold = 0.45
+   - 5 episodes
+   - actions: Up / Down / Left / Right
    ============================================================ */
 (function () {
+  'use strict';
+
   const SIZE = 10;
   const OBSTACLE_RATIO = 0.25;
-  const CHANGE_FREQUENCY = 20; // matches change_frequency=20 in the original env
+  const CHANGE_FREQUENCY = 20;
   const MAX_STEPS = 100;
-  const STEP_MS = 220;
+  const MAX_EPISODES = 5;
+  const STEP_MS = 200;
+  const ACTIONS = [
+    [-1, 0], // Up
+    [1, 0],  // Down
+    [0, -1], // Left
+    [0, 1]   // Right
+  ];
+  const ACTION_NAMES = ['Up', 'Down', 'Left', 'Right'];
 
-  let maze, start, goal, agentPos, path, pathIdx, steps, episode, timer, running, history;
+  const key = (p) => p[0] + ',' + p[1];
+  const clone = (p) => [p[0], p[1]];
+  const same = (a, b) => a[0] === b[0] && a[1] === b[1];
+  const randInt = (n) => Math.floor(Math.random() * n);
+  const manhattan = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
+  const zeros4 = () => [0, 0, 0, 0];
+
+  class DynamicMazeEnvBrowser {
+    constructor(size = SIZE, obstacleRatio = OBSTACLE_RATIO, changeFrequency = CHANGE_FREQUENCY) {
+      this.size = size;
+      this.obstacleRatio = obstacleRatio;
+      this.changeFrequency = changeFrequency;
+      this.maxSteps = MAX_STEPS;
+      this.STEP_PENALTY = -0.1;
+      this.COLLISION_PENALTY = -1.0;
+      this.GOAL_REWARD = 10.0;
+      this.steps = 0;
+      this.previousPos = [0, 0];
+      this.currentPos = [0, 0];
+      this.goalPos = [size - 1, size - 1];
+      this.maze = [];
+      this.episodeData = { environmentUpdates: 0, goalChanges: 0, obstacleChanges: 0 };
+      this.reset();
+    }
+
+    generateMaze() {
+      const maze = Array.from({ length: this.size }, () => Array(this.size).fill(0));
+      const total = this.size * this.size;
+      const target = Math.floor(total * this.obstacleRatio);
+      const used = new Set();
+      while (used.size < target) {
+        const idx = randInt(total);
+        if (used.has(idx)) continue;
+        used.add(idx);
+        maze[Math.floor(idx / this.size)][idx % this.size] = 1;
+      }
+      return maze;
+    }
+
+    findEmptyPosition() {
+      while (true) {
+        const p = [randInt(this.size), randInt(this.size)];
+        if (this.maze[p[0]][p[1]] === 0) return p;
+      }
+    }
+
+    bfs(start, goal, maze = this.maze) {
+      if (same(start, goal)) return { exists: true, path: [clone(start)] };
+      const q = [[clone(start), [clone(start)]]];
+      const seen = new Set([key(start)]);
+      while (q.length) {
+        const [cur, path] = q.shift();
+        for (const d of ACTIONS) {
+          const next = [cur[0] + d[0], cur[1] + d[1]];
+          if (next[0] < 0 || next[1] < 0 || next[0] >= this.size || next[1] >= this.size) continue;
+          if (maze[next[0]][next[1]] === 1 || seen.has(key(next))) continue;
+          const nextPath = path.concat([clone(next)]);
+          if (same(next, goal)) return { exists: true, path: nextPath };
+          seen.add(key(next));
+          q.push([next, nextPath]);
+        }
+      }
+      return { exists: false, path: [] };
+    }
+
+    ensureAgentNotTrapped() {
+      for (const d of ACTIONS) {
+        const n = [this.currentPos[0] + d[0], this.currentPos[1] + d[1]];
+        if (n[0] >= 0 && n[1] >= 0 && n[0] < this.size && n[1] < this.size && this.maze[n[0]][n[1]] === 0) return;
+      }
+      for (const idx of [1, 3, 0, 2]) {
+        const d = ACTIONS[idx];
+        const n = [this.currentPos[0] + d[0], this.currentPos[1] + d[1]];
+        if (n[0] >= 0 && n[1] >= 0 && n[0] < this.size && n[1] < this.size) {
+          this.maze[n[0]][n[1]] = 0;
+          return;
+        }
+      }
+    }
+
+    ensurePathExists() {
+      let result = this.bfs(this.currentPos, this.goalPos);
+      let guard = 0;
+      while (!result.exists && guard++ < 100) {
+        const obstacles = [];
+        for (let r = 0; r < this.size; r++) {
+          for (let c = 0; c < this.size; c++) if (this.maze[r][c] === 1) obstacles.push([r, c]);
+        }
+        if (!obstacles.length) break;
+        const p = obstacles[randInt(obstacles.length)];
+        if (!same(p, this.currentPos) && !same(p, this.goalPos)) this.maze[p[0]][p[1]] = 0;
+        result = this.bfs(this.currentPos, this.goalPos);
+      }
+    }
+
+    reset() {
+      this.maze = this.generateMaze();
+
+      this.currentPos = this.findEmptyPosition();
+      while (this.currentPos[0] > Math.floor(this.size / 3) || this.currentPos[1] > Math.floor(this.size / 3)) {
+        this.currentPos = this.findEmptyPosition();
+      }
+      this.ensureAgentNotTrapped();
+
+      this.goalPos = this.findEmptyPosition();
+      while (
+        this.goalPos[0] < Math.floor((2 * this.size) / 3) ||
+        this.goalPos[1] < Math.floor((2 * this.size) / 3) ||
+        manhattan(this.goalPos, this.currentPos) < this.size
+      ) {
+        this.goalPos = this.findEmptyPosition();
+      }
+
+      this.steps = 0;
+      this.previousPos = clone(this.currentPos);
+      this.ensurePathExists();
+      return clone(this.currentPos);
+    }
+
+    updateEnvironment() {
+      const oldGoal = clone(this.goalPos);
+      const numChanges = 1 + randInt(3);
+      let actualChanges = 0;
+      for (let i = 0; i < numChanges; i++) {
+        const p = [randInt(this.size), randInt(this.size)];
+        if (same(p, this.currentPos) || same(p, this.goalPos)) continue;
+        this.maze[p[0]][p[1]] = this.maze[p[0]][p[1]] ? 0 : 1;
+        actualChanges++;
+      }
+      this.ensurePathExists();
+      this.ensureAgentNotTrapped();
+      if (!same(oldGoal, this.goalPos)) this.episodeData.goalChanges++;
+      this.episodeData.environmentUpdates++;
+      this.episodeData.obstacleChanges += actualChanges;
+    }
+
+    getOptimalPathLength() {
+      const result = this.bfs(this.currentPos, this.goalPos);
+      return result.exists ? Math.max(0, result.path.length - 1) : Infinity;
+    }
+
+    step(action) {
+      this.steps++;
+      const d = ACTIONS[action];
+      const next = [this.currentPos[0] + d[0], this.currentPos[1] + d[1]];
+
+      if (next[0] < 0 || next[1] < 0 || next[0] >= this.size || next[1] >= this.size) {
+        return { state: clone(this.currentPos), reward: this.COLLISION_PENALTY, done: false, collision: true };
+      }
+      if (this.maze[next[0]][next[1]] === 1) {
+        return { state: clone(this.currentPos), reward: this.COLLISION_PENALTY, done: false, collision: true };
+      }
+
+      this.currentPos = next;
+      const reachedGoal = same(this.currentPos, this.goalPos);
+      const done = reachedGoal || this.steps >= this.maxSteps;
+      const oldDistance = manhattan(this.previousPos, this.goalPos);
+      const newDistance = manhattan(this.currentPos, this.goalPos);
+      const reward = reachedGoal ? this.GOAL_REWARD : this.STEP_PENALTY + (oldDistance - newDistance);
+
+      if (this.steps % this.changeFrequency === 0) this.updateEnvironment();
+      this.previousPos = clone(this.currentPos);
+      return { state: clone(this.currentPos), reward, done, collision: false };
+    }
+  }
+
+  class ReflectionAgentBrowser {
+    constructor() {
+      this.qShort = new Map();
+      this.qLong = new Map();
+      this.memoryBalance = 0.5;
+      this.epsilon = 0.9;
+      this.epsilonMin = 0.3;
+      this.epsilonDecay = 0.999;
+      this.alpha = 0.5;
+      this.gamma = 0.9;
+      this.confidenceThreshold = 0.25;
+      this.adaptationThreshold = 0.45;
+      this.visitCounts = new Map();
+      this.goalPos = null;
+      this.wallMemory = new Map();
+      this.stepsCount = 0;
+      this.environmentStability = 1.0;
+      this.stateActionResults = new Map();
+      this.recentRewards = [];
+      this.recentConfidences = [];
+    }
+
+    setGoalPosition(pos) { this.goalPos = clone(pos); }
+    getQ(map, stateKey) {
+      if (!map.has(stateKey)) map.set(stateKey, zeros4());
+      return map.get(stateKey);
+    }
+
+    selectAction(state) {
+      const sk = key(state);
+      this.visitCounts.set(sk, (this.visitCounts.get(sk) || 0) + 1);
+      this.epsilon = Math.max(this.epsilonMin, this.epsilon * this.epsilonDecay);
+
+      const dr = this.goalPos[0] - state[0];
+      const dc = this.goalPos[1] - state[1];
+      const vd = Math.abs(dr), hd = Math.abs(dc);
+      let possible = [];
+      if (vd >= hd) possible.push(dr > 0 ? 1 : 0);
+      if (hd >= vd) possible.push(dc > 0 ? 3 : 2);
+
+      const walls = this.wallMemory.get(sk);
+      if (walls) possible = possible.filter(a => !walls.has(a));
+      if (!possible.length) return randInt(4);
+
+      if (Math.random() < this.epsilon) {
+        if (Math.random() < 0.7) return possible[randInt(possible.length)];
+        return randInt(4);
+      }
+
+      const qS = this.getQ(this.qShort, sk);
+      const qL = this.getQ(this.qLong, sk);
+      const targetBalance = Math.max(0.3, Math.min(0.7, 1.0 - this.environmentStability));
+      this.memoryBalance = 0.9 * this.memoryBalance + 0.1 * targetBalance;
+      const combined = qS.map((v, i) => this.memoryBalance * v + (1 - this.memoryBalance) * qL[i]);
+      let best = 0;
+      for (let i = 1; i < 4; i++) if (combined[i] > combined[best]) best = i;
+      return best;
+    }
+
+    calculateConfidence(steps, shortestPath) {
+      if (!Number.isFinite(shortestPath) || shortestPath === 0) return 0;
+      return Math.max(0, 1 - (steps - shortestPath) / shortestPath);
+    }
+
+    learn(state, action, reward, nextState, done, steps, shortestPath) {
+      const sk = key(state), nk = key(nextState);
+      const confidence = this.calculateConfidence(steps, shortestPath);
+      this.recentConfidences.push(confidence);
+      this.recentRewards.push(reward);
+      if (this.recentConfidences.length > 10) this.recentConfidences.shift();
+      if (this.recentRewards.length > 10) this.recentRewards.shift();
+
+      const qS = this.getQ(this.qShort, sk);
+      const qSn = this.getQ(this.qShort, nk);
+      const qL = this.getQ(this.qLong, sk);
+      const qLn = this.getQ(this.qLong, nk);
+
+      const nextShort = Math.max(...qSn);
+      const shortAlpha = Math.min(0.8, this.alpha * 1.5);
+      qS[action] = (1 - shortAlpha) * qS[action] + shortAlpha * (reward + this.gamma * nextShort * (done ? 0 : 1));
+
+      const nextLong = Math.max(...qLn);
+      const longAlpha = Math.max(0.1, this.alpha * 0.7);
+      qL[action] = (1 - longAlpha) * qL[action] + longAlpha * (reward + this.gamma * nextLong * (done ? 0 : 1));
+
+      const resultKey = sk + '|' + action;
+      const currentResult = nk + '|' + reward.toFixed(2);
+      const previous = this.stateActionResults.get(resultKey);
+      if (previous && previous !== currentResult) this.environmentStability = Math.max(0.5, this.environmentStability * 0.8);
+      else this.environmentStability = Math.min(1.0, this.environmentStability * 1.02);
+      this.stateActionResults.set(resultKey, currentResult);
+
+      if (reward <= -1) {
+        if (!this.wallMemory.has(sk)) this.wallMemory.set(sk, new Set());
+        this.wallMemory.get(sk).add(action);
+      }
+      this.stepsCount++;
+      if (this.stepsCount % 20 === 0 && this.environmentStability < this.adaptationThreshold) {
+        this.wallMemory.clear();
+      }
+    }
+  }
+
+  let env = null;
+  let agent = null;
+  let episode = 1;
+  let stepsTaken = 0;
+  let lastAction = 'None';
+  let goalStatus = 'In Progress...';
+  let statusText = 'Ready for Episode 1';
+  let history = [];
+  let timer = null;
+  let running = false;
+  let finished = false;
 
   function el(id) { return document.getElementById(id); }
 
-  function bfsPath(m, s, g) {
-    const key = (p) => p[0] + ',' + p[1];
-    const q = [s];
-    const prev = { [key(s)]: null };
-    const seen = new Set([key(s)]);
-    while (q.length) {
-      const cur = q.shift();
-      if (cur[0] === g[0] && cur[1] === g[1]) {
-        const out = [];
-        let k = key(cur);
-        while (k !== null) {
-          const [r, c] = k.split(',').map(Number);
-          out.unshift([r, c]);
-          k = prev[k];
-        }
-        return out;
-      }
-      const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-      for (const [dr, dc] of dirs) {
-        const nr = cur[0] + dr, nc = cur[1] + dc;
-        if (nr < 0 || nc < 0 || nr >= SIZE || nc >= SIZE) continue;
-        if (m[nr][nc] === 1) continue;
-        const nk = nr + ',' + nc;
-        if (seen.has(nk)) continue;
-        seen.add(nk);
-        prev[nk] = key(cur);
-        q.push([nr, nc]);
-      }
-    }
-    return null;
-  }
-
-  function makeMaze() {
-    let m, s, g, ok = false, tries = 0;
-    s = [0, 0];
-    g = [SIZE - 1, SIZE - 1];
-    while (!ok && tries < 50) {
-      tries++;
-      m = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
-      for (let i = 0; i < SIZE; i++) {
-        for (let j = 0; j < SIZE; j++) {
-          if (Math.random() < OBSTACLE_RATIO) m[i][j] = 1;
-        }
-      }
-      m[s[0]][s[1]] = 0;
-      m[g[0]][g[1]] = 0;
-      ok = bfsPath(m, s, g) !== null;
-    }
-    return { maze: m, start: s, goal: g };
-  }
-
-  function mutateMaze() {
-    // Flips a few non-critical cells mid-episode, mirroring the
-    // "dynamic" behavior of DynamicMazeEnv without needing its source.
-    for (let n = 0; n < 3; n++) {
-      const r = Math.floor(Math.random() * SIZE);
-      const c = Math.floor(Math.random() * SIZE);
-      const isEndpoint =
-        (r === start[0] && c === start[1]) ||
-        (r === goal[0] && c === goal[1]) ||
-        (r === agentPos[0] && c === agentPos[1]);
-      if (!isEndpoint) maze[r][c] = maze[r][c] ? 0 : 1;
-    }
-  }
-
-  function resetEpisode() {
-    const built = makeMaze();
-    maze = built.maze;
-    start = built.start;
-    goal = built.goal;
-    agentPos = [...start];
-    path = bfsPath(maze, agentPos, goal) || [agentPos];
-    pathIdx = 0;
-    steps = 0;
-    history = [];
-    if (el('mzStatus')) el('mzStatus').textContent = 'In progress…';
-    if (el('mzSteps')) el('mzSteps').textContent = '0 / ' + MAX_STEPS;
+  function startEpisode(resetAgent = false) {
+    if (!env) env = new DynamicMazeEnvBrowser();
+    const state = env.reset();
+    if (!agent || resetAgent) agent = new ReflectionAgentBrowser();
+    agent.confidenceThreshold = 0.25;
+    agent.adaptationThreshold = 0.45;
+    agent.setGoalPosition(env.goalPos);
+    stepsTaken = 0;
+    lastAction = 'None';
+    goalStatus = 'In Progress...';
+    statusText = 'Episode ' + episode + ' running';
+    history = [clone(state)];
+    finished = false;
+    updateStats();
     draw();
   }
 
-  function finish(success) {
+  function endEpisode(success) {
     stopTimer();
-    if (el('mzStatus')) el('mzStatus').textContent = success ? 'Goal reached' : 'Timed out';
-    episode++;
-    if (el('mzEpisode')) el('mzEpisode').textContent = episode;
+    finished = true;
+    if (success) {
+      goalStatus = 'Goal Achieved!';
+      statusText = 'Goal Achieved';
+    } else {
+      goalStatus = 'Goal Not Achieved';
+      statusText = 'Timeout';
+    }
+    updateStats();
+    draw();
   }
 
   function stepOnce() {
-    if (pathIdx >= path.length - 1) {
-      finish(agentPos[0] === goal[0] && agentPos[1] === goal[1]);
-      return;
-    }
-    if (steps > 0 && steps % CHANGE_FREQUENCY === 0) {
-      mutateMaze();
-      const replan = bfsPath(maze, agentPos, goal);
-      if (replan) {
-        path = replan;
-        pathIdx = 0;
-      }
-    }
-    pathIdx++;
-    agentPos = path[pathIdx];
-    history.push([...agentPos]);
-    steps++;
-    if (el('mzSteps')) el('mzSteps').textContent = steps + ' / ' + MAX_STEPS;
+    if (finished) return;
+    const state = clone(env.currentPos);
+    const action = agent.selectAction(state);
+    const result = env.step(action);
+    lastAction = ACTION_NAMES[action];
+    const shortest = env.getOptimalPathLength();
+    agent.learn(state, action, result.reward, result.state, result.done, stepsTaken, shortest);
+    stepsTaken++;
+    history.push(clone(result.state));
+    updateStats();
     draw();
-    if (agentPos[0] === goal[0] && agentPos[1] === goal[1]) {
-      finish(true);
-      return;
-    }
-    if (steps >= MAX_STEPS) finish(false);
+
+    if (result.done && same(result.state, env.goalPos)) endEpisode(true);
+    else if (stepsTaken >= MAX_STEPS || result.done) endEpisode(false);
+  }
+
+  function updateStats() {
+    if (el('mzEpisode')) el('mzEpisode').textContent = episode + ' / ' + MAX_EPISODES;
+    if (el('mzSteps')) el('mzSteps').textContent = stepsTaken + ' / ' + MAX_STEPS;
+    if (el('mzStatus')) el('mzStatus').textContent = statusText;
+    if (el('mzGoal')) el('mzGoal').textContent = goalStatus;
+    if (el('mzAction')) el('mzAction').textContent = lastAction;
+    if (el('mzEpsilon')) el('mzEpsilon').textContent = agent ? agent.epsilon.toFixed(3) : '—';
   }
 
   function draw() {
     const canvas = el('mzCanvas');
-    if (!canvas) return;
+    if (!canvas || !env) return;
     const ctx = canvas.getContext('2d');
     const cell = canvas.width / SIZE;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    for (let i = 0; i < SIZE; i++) {
-      for (let j = 0; j < SIZE; j++) {
-        ctx.fillStyle = maze[i][j] ? '#ffb020' : '#0f1720';
-        ctx.fillRect(j * cell, i * cell, cell, cell);
-        ctx.strokeStyle = 'rgba(255,255,255,.08)';
-        ctx.strokeRect(j * cell, i * cell, cell, cell);
+
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        ctx.fillStyle = env.maze[r][c] ? '#f4d03f' : '#ffffff';
+        ctx.fillRect(c * cell, r * cell, cell, cell);
+        ctx.strokeStyle = '#808080';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(c * cell, r * cell, cell, cell);
       }
     }
-    ctx.fillStyle = 'rgba(255,255,255,.25)';
+
+    ctx.fillStyle = 'rgba(70,70,70,.28)';
     history.slice(0, -1).forEach(([r, c]) => {
       ctx.beginPath();
-      ctx.arc(c * cell + cell / 2, r * cell + cell / 2, cell * 0.12, 0, Math.PI * 2);
+      ctx.arc(c * cell + cell / 2, r * cell + cell / 2, cell * 0.10, 0, Math.PI * 2);
       ctx.fill();
     });
-    ctx.fillStyle = '#25d07a';
+
+    ctx.fillStyle = '#00c853';
     ctx.beginPath();
-    ctx.arc(goal[1] * cell + cell / 2, goal[0] * cell + cell / 2, cell * 0.3, 0, Math.PI * 2);
+    ctx.arc(env.goalPos[1] * cell + cell / 2, env.goalPos[0] * cell + cell / 2, cell * 0.30, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#ff4d4f';
+
+    ctx.fillStyle = '#f44336';
     ctx.beginPath();
-    ctx.arc(agentPos[1] * cell + cell / 2, agentPos[0] * cell + cell / 2, cell * 0.3, 0, Math.PI * 2);
+    ctx.arc(env.currentPos[1] * cell + cell / 2, env.currentPos[0] * cell + cell / 2, cell * 0.30, 0, Math.PI * 2);
     ctx.fill();
   }
 
   function startTimer() {
-    if (running) return;
+    if (running || finished) return;
     running = true;
     if (el('mzPlay')) el('mzPlay').textContent = 'Pause';
-    timer = setInterval(() => {
-      stepOnce();
-    }, STEP_MS);
+    timer = setInterval(stepOnce, STEP_MS);
   }
 
   function stopTimer() {
     running = false;
     if (timer) clearInterval(timer);
+    timer = null;
     if (el('mzPlay')) el('mzPlay').textContent = 'Play';
+  }
+
+  function nextEpisode() {
+    stopTimer();
+    if (episode >= MAX_EPISODES) {
+      episode = 1;
+      agent = new ReflectionAgentBrowser();
+    } else {
+      episode++;
+    }
+    startEpisode(false);
   }
 
   function buildUI() {
     const host = el('sub-maze');
     if (!host) return;
-    host.innerHTML =
-      '<div class="card">' +
-      '<h3>Maze Demo &mdash; Agent Navigation</h3>' +
-      '<p class="k" style="margin-bottom:10px">' +
-      'Ported from <span class="mono">simple_maze_demo.py</span>. Red = agent, green = goal, ' +
-      'yellow = blocked cell, faint dots = path history. The maze mutates every ' + CHANGE_FREQUENCY +
-      ' steps, matching <span class="mono">change_frequency</span> in the original ' +
-      '<span class="mono">DynamicMazeEnv</span>.</p>' +
-      '<canvas id="mzCanvas" width="360" height="360" ' +
-      'style="width:100%;max-width:360px;border-radius:8px;display:block;margin:0 auto 14px"></canvas>' +
-      '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:10px">' +
-      '<button class="btn p" id="mzPlay">Play</button>' +
-      '<button class="btn g" id="mzStep">Step</button>' +
-      '<button class="btn g" id="mzNew">New Episode</button>' +
-      '</div>' +
-      '<div class="g3" style="text-align:center">' +
-      '<div><div class="k">Episode</div><b id="mzEpisode">1</b></div>' +
-      '<div><div class="k">Steps</div><b id="mzSteps">0 / ' + MAX_STEPS + '</b></div>' +
-      '<div><div class="k">Status</div><b id="mzStatus">Press Play</b></div>' +
-      '</div></div>' +
-      '<div class="badge-sim" style="margin-top:12px">SIMULATED DATA &mdash; FOR SYSTEM DEMONSTRATION</div>' +
-      '<div class="note"><b>Placeholder policy.</b> <span class="mono">dynamic_maze_env.py</span>, ' +
-      '<span class="mono">baseline_confidence_agent.py</span> and <span class="mono">reflection_agent.py</span> ' +
-      "weren't available when this tab was built, so movement here uses a shortest-path search rather " +
-      'than the trained agent. Add those three files to the project and swap them into ' +
-      '<span class="mono">maze-demo.js</span> to show the real learned policy instead of this placeholder.</div>';
+    host.innerHTML = `
+      <div class="card" style="padding:16px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+          <div>
+            <h3 style="font-size:16px;margin-bottom:4px">Maze Demonstration — Reflection Agent</h3>
+            <div class="k">Browser visualization of the uploaded <span class="mono">simple_maze_demo.py</span>. The maze logic and agent behavior are mirrored from <span class="mono">reflection-agent-maze</span>.</div>
+          </div>
+          <span class="pill open">ACTUAL AGENT LOGIC</span>
+        </div>
 
-    episode = 1;
-    el('mzPlay').addEventListener('click', () => (running ? stopTimer() : startTimer()));
+        <div style="display:grid;grid-template-columns:minmax(210px,300px) minmax(300px,500px);gap:18px;align-items:start" class="maze-layout">
+          <div style="background:#f7f7f7;border-radius:12px;padding:14px;color:#111;min-height:420px">
+            <div style="font-weight:800;margin-bottom:12px">Maze Demonstration - Ball Moving in Maze</div>
+            <div style="font-size:13px;line-height:1.9">
+              <div>Episode: <b id="mzEpisode">1 / 5</b></div>
+              <div>Status: <b id="mzStatus">Ready</b></div>
+              <div>Goal Result: <b id="mzGoal">In Progress...</b></div>
+              <div>Steps Taken: <b id="mzSteps">0 / 100</b></div>
+              <div>Last Action: <b id="mzAction">None</b></div>
+              <div>Exploration ε: <b id="mzEpsilon">0.900</b></div>
+              <hr style="border:0;border-top:1px solid #ddd;margin:10px 0">
+              <div><span style="color:#f44336">●</span> Red Ball: Reflection Agent</div>
+              <div><span style="color:#00c853">●</span> Green Circle: Goal</div>
+              <div><span style="color:#d4ac0d">■</span> Yellow Blocks: Walls</div>
+              <div style="margin-top:10px;color:#555">Maze changes every 20 environment steps.</div>
+            </div>
+          </div>
+          <div>
+            <canvas id="mzCanvas" width="500" height="500" style="display:block;width:100%;max-width:500px;aspect-ratio:1/1;background:#fff;border-radius:10px;margin:0 auto"></canvas>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+          <button class="btn p" id="mzPlay" style="flex:0 0 110px">Play</button>
+          <button class="btn g" id="mzStep" style="flex:0 0 110px">Step</button>
+          <button class="btn g" id="mzReset" style="flex:0 0 140px">Restart Episode</button>
+          <button class="btn k" id="mzNext" style="flex:0 0 140px">Next Episode</button>
+        </div>
+      </div>
+
+      <div class="note">
+        <b>Implementation note.</b> The standalone Python version is preserved in the repository as <span class="mono">simple_maze_demo.py</span>. Because pygame cannot render directly inside a normal browser page, this tab mirrors the same environment and ReflectionAgent decision/learning behavior in JavaScript so the demonstration stays inside the existing system.
+      </div>
+      <style>
+        @media (max-width: 820px){ .maze-layout{grid-template-columns:1fr!important} }
+      </style>`;
+
+    el('mzPlay').addEventListener('click', () => running ? stopTimer() : startTimer());
     el('mzStep').addEventListener('click', () => { stopTimer(); stepOnce(); });
-    el('mzNew').addEventListener('click', () => { stopTimer(); resetEpisode(); });
-    resetEpisode();
+    el('mzReset').addEventListener('click', () => { stopTimer(); startEpisode(false); });
+    el('mzNext').addEventListener('click', nextEpisode);
+    episode = 1;
+    env = new DynamicMazeEnvBrowser();
+    agent = new ReflectionAgentBrowser();
+    startEpisode(false);
   }
 
   function wireTab() {
@@ -235,10 +500,11 @@
       document.querySelectorAll('.subview').forEach((s) => s.classList.remove('active'));
       const target = el('sub-maze');
       if (target) target.classList.add('active');
+      draw();
     });
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
+  document.addEventListener('DOMContentLoaded', () => {
     buildUI();
     wireTab();
   });

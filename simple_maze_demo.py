@@ -6,20 +6,6 @@ Simplified Maze Demonstration Program
 
 Shows the movement of a small ball in the maze
 
-NOTE (browser integration): this standalone pygame window is now also
-visible inside the live system as the "Maze Demo" tab under
-Research & Analysis (see index.html + maze-demo.js at the project
-root). That in-app version currently uses a placeholder shortest-path
-search instead of the real trained policy, because this script's three
-imports below are not present anywhere in this repository:
-  - dynamic_maze_env.DynamicMazeEnv
-  - baseline_confidence_agent.BaselineConfidenceAgent
-  - reflection_agent.ReflectionAgent
-Add those three modules to this folder (or wherever they live) to run
-this script locally with pygame, and port their actual step/learn
-logic into maze-demo.js to replace the browser placeholder with the
-real agent behavior.
-
 """
 
 
