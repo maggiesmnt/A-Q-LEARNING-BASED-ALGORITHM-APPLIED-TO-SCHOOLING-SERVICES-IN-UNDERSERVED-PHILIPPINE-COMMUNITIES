@@ -1,25 +1,16 @@
 {
   "episodes_trained": 1200,
-  "hyperparameters": {
-    "alpha": 0.1,
-    "gamma": 0.9,
-    "eps_start": 1.0,
-    "eps_min": 0.05,
-    "eps_decay": 0.995
+  "evaluation_scenarios": 100,
+  "hyperparameters": {"alpha": 0.1, "gamma": 0.9, "eps_start": 1.0, "eps_min": 0.05, "eps_decay": 0.995},
+  "state_design": {
+    "standard": "L (current location only)",
+    "modql": "<L,D,T,H,A> with direct discretized demand, time, history/fairness, and local accessibility features"
   },
-  "modql": {
-    "final_30ep_avg_reward": 12.401781806807048,
-    "rollout_avg_travel_min": 163.32000079003367,
-    "rollout_avg_fairness": 0.7336067503924647,
-    "rollout_avg_stops": 6.02,
-    "rollout_avg_deferred": 1.98
+  "reward_design": {
+    "standard": "1 / travel_cost",
+    "modql": "coverage * Jain_fairness * (1 / travel_cost)"
   },
-  "standard": {
-    "final_30ep_avg_reward": 28.067096793292855,
-    "rollout_avg_travel_min": 164.6857743922415,
-    "rollout_avg_fairness": 0.7439272893772894,
-    "rollout_avg_stops": 6.24,
-    "rollout_avg_deferred": 1.76
-  },
-  "data_note": "Trained on placeholder node/edge data from engine.js (DepEd registry and OSM road data requested, not yet received). Re-run this script unchanged once real data is available -- only NODES/EDGES need to be replaced."
+  "standard": {"travel_min": 175.5502432642442, "fairness": 0.7604047786295903, "stops": 6.12, "deferred": 1.88, "coverage": 354.44},
+  "modql": {"travel_min": 188.59253217210298, "fairness": 0.7403991585483726, "stops": 5.77, "deferred": 2.23, "coverage": 336.05},
+  "data_note": "Placeholder Laiban/Tanay node and road data; not final Chapter 4 evidence. Re-run after official datasets are inserted. Current simulated results do not establish superiority of MODQL and must not be presented as such."
 }
