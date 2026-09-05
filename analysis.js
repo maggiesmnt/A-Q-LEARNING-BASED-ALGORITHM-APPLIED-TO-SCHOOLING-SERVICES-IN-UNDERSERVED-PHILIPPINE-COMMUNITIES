@@ -22,7 +22,7 @@ function stopRowsHTML(plan){
 }
 function deferredHTML(plan){
   if(!plan.deferred.length)return '<div class="k">None &mdash; every community reachable under current conditions.</div>';
-  return plan.deferred.map(function(df){return '<div style="margin-bottom:6px"><b style="color:#ffabad">'+N[df.id].name+'</b> &mdash; '+df.reason+'</div>'}).join('')
+  return plan.deferred.map(function(df){return '<div style="margin-bottom:6px"><b style="color:var(--bad)">'+N[df.id].name+'</b> &mdash; '+df.reason+'</div>'}).join('')
 }
 function planKPIs(plan){
   var km=0,min=0,learners=0;plan.stops.forEach(function(s){km+=s.p.km;min+=s.p.min+serviceMin(N[s.id]);learners+=N[s.id].learners});if(plan.ret)km+=plan.ret.km;
@@ -70,7 +70,7 @@ function renderSOP2(){
 function renderSOP3(){
   var html='<div class="sop-problem"><b>SOP 3 &mdash; Limited state representation.</b> This is the largest code correction made during the audit.</div>'+
   '<div class="split2"><div class="splitcol std"><h4>Standard state</h4><div class="k mono">S = L</div><div class="k">The same location maps to the same state even when demand, remaining time, history, or road conditions differ.</div></div><div class="splitcol mod"><h4>Proposed state</h4><div class="k mono">S = &lang;L,D,T,H,A&rang;</div><div class="k">The corrected trainer directly observes all five dimensions and discretizes D/T/H/A for a finite tabular state space.</div></div></div><div style="height:12px"></div>'+
-  '<div class="card"><h3>Live state-vector inspector</h3><div class="k" style="margin-bottom:9px">Select a simulated community to inspect the real values that correspond to the five terms.</div><select id="svSelect" style="width:100%;padding:9px;border-radius:8px;background:var(--ink3);color:var(--text);border:1px solid var(--line)">';
+  '<div class="card"><h3>Live state-vector inspector</h3><div class="k" style="margin-bottom:9px">Select a simulated community to inspect the real values that correspond to the five terms.</div><select id="svSelect" style="width:100%;padding:9px;border-radius:8px;background:var(--ink3);color:var(--txt);border:1px solid var(--line)">';
   NODES.filter(function(n){return n.kind==='node'}).forEach(function(n){html+='<option value="'+n.id+'">'+n.name+'</option>'});
   html+='</select><div id="svBody" style="margin-top:10px"></div></div>'+evidenceNote();
   document.getElementById('sub-sop3').innerHTML=html;
@@ -79,7 +79,7 @@ function renderSOP3(){
 function updateSV(id){
   var n=N[id],p=path('hub',id),worst=1;if(p)p.legs.forEach(function(e){worst=Math.min(worst,accA(e))});
   var used=0;PLAN.stops.slice(0,PROGRESS).forEach(function(st){used+=st.p.min+serviceMin(N[st.id])});var b=band(worst),maxL=Math.max.apply(null,NODES.filter(function(x){return x.kind==='node'}).map(function(x){return x.learners}));
-  document.getElementById('svBody').innerHTML=sv('L','Location','current graph node',n.name+' ('+n.lat.toFixed(4)+', '+n.lng.toFixed(4)+')','#31c8ff')+sv('D','Student demand','current simulated learner demand',n.learners+' learners ('+(n.learners/maxL).toFixed(2)+' normalized)','#25d07a')+sv('T','Remaining time','time left in the 480-minute shift',Math.max(0,Math.round(SHIFT_MIN-used))+' min','#ffb020')+sv('H','Visit history','days since last service and visits in 30 days',n.days+' days; '+n.visits30+' visits','#8b7dff')+sv('A','Road accessibility','worst accessibility on the current best open approach',p?worst.toFixed(2)+' &mdash; '+b.lab:'no open approach',b.col)
+  document.getElementById('svBody').innerHTML=sv('L','Location','current graph node',n.name+' ('+n.lat.toFixed(4)+', '+n.lng.toFixed(4)+')','var(--cy)')+sv('D','Student demand','current simulated learner demand',n.learners+' learners ('+(n.learners/maxL).toFixed(2)+' normalized)','var(--go)')+sv('T','Remaining time','time left in the 480-minute shift',Math.max(0,Math.round(SHIFT_MIN-used))+' min','var(--warn)')+sv('H','Visit history','days since last service and visits in 30 days',n.days+' days; '+n.visits30+' visits','var(--vio)')+sv('A','Road accessibility','worst accessibility on the current best open approach',p?worst.toFixed(2)+' &mdash; '+b.lab:'no open approach',b.col)
 }
 function sv(sym,nm,desc,val,col){return '<div class="sv"><div class="sym" style="color:'+col+'">'+sym+'</div><div class="nm"><b>'+nm+'</b>'+desc+'</div><div class="vv" style="color:'+col+'">'+val+'</div></div>'}
 
