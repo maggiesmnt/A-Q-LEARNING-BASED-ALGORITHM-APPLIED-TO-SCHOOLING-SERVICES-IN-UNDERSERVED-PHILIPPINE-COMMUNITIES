@@ -1,28 +1,38 @@
-# /training -- real Q-learning training run
+# /training — Chapter 3 aligned Q-learning experiment
 
-See the root README.md for the overall project. This folder contains
-the ACTUAL training run of the Enhanced Double Q-Learning algorithm
-(Section 3.2.1) -- what `engine.js`'s `planRoute()` now uses via
-`trained_policy.js` in the project root.
+This folder contains the research experiment used to compare the Chapter 3 control and proposed algorithms.
 
-| File | What it is |
+| File | Purpose |
 |---|---|
-| `train_q_learning.py` | Trains MODQL (Double Q) + Standard Q baseline, 1,200 episodes each |
-| `make_sim_js.py` | Regenerates the root `charts.js` SIM block from a fresh training run |
-| `training_log.csv` | Reward / drift / fairness logged every episode, both algorithms |
-| `convergence_chart.png` | Training curve for the writeup/defense slides |
-| `final_policy_modql.json` | Trained Q1/Q2 tables (also copied to `/trained_policy.js` in the project root) |
-| `comparison_summary.json` | Headline metrics from a 50-simulated-day rollout of both trained policies |
+| `train_q_learning.py` | Trains Standard Q-Learning and MODQL for 1,200 episodes under the same simulated environment |
+| `comparison_summary.json` | Current validation summary from 100 held-out simulated scenarios |
+| `outputs_aligned/standard_policy.json` | Trained single-table Standard Q-Learning control policy |
+| `outputs_aligned/comparison_summary.json` | Copy of the aligned validation summary |
+| `training_log.csv` / legacy outputs | Previous experiment artifacts retained for traceability |
 
-**Still placeholder data.** DepEd registry data and the real road
-network have been requested but not released yet. When they arrive,
-replace `NODES`/`EDGES` at the top of `train_q_learning.py`, then:
+## Research alignment
+
+**Existing / control — Standard Q-Learning**
+
+- State: `S = L` (current location only)
+- One Q-table
+- Reward: `1 / Travel Cost`
+- Standard max-based Q update
+
+**Proposed / experimental — MODQL**
+
+- State: `S = <L,D,T,H,A>`
+- `D`, `T`, `H`, and `A` are explicitly observed and discretized so the state remains finite for tabular learning
+- Two independently updated tables, `Q1` and `Q2`
+- Reward: `Coverage × Jain's Fairness × (1 / Travel Cost)`
+- Action selection and evaluation are decoupled during the Double Q update
+
+## Data status
+
+The current Laiban/Tanay nodes, learner counts, and road network are **simulation placeholders**. The current results are for implementation validation only and must not be presented as final Chapter 4 evidence. Once the official DepEd/OSM/weather datasets are available, replace the environment data and re-run:
 
 ```bash
-python3 train_q_learning.py
-python3 make_sim_js.py
+python train_q_learning.py
 ```
 
-...and copy the new `outputs/sim_block.js` over the `SIM` block in
-`../charts.js`, and the new `outputs/final_policy_modql.json` into
-`../trained_policy.js` (keep the `var TRAINED_POLICY = ...;` wrapper).
+The current placeholder run does **not** establish that MODQL is superior to Standard Q-Learning on all metrics. That is a valid experimental finding and should remain visible until the real-data experiment is completed.
