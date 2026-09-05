@@ -1,591 +1,245 @@
-"""
-train_q_learning.py
-=============================================================================
-Enhanced Double Q-Learning training script for:
-"A Q-Learning Based Algorithm Applied to Schooling Services in
-Underserved Philippine Communities" -- Chapter 3, Section 3.2.1
-(Algorithm Procedure) and Section 3.2.2 (System Architecture).
+"""Research-aligned training script for Standard Q-Learning vs MODQL.
 
-WHAT THIS SCRIPT IS FOR
--------------------------------------------------------------------------
-The GitHub prototype (engine.js) only replays a fixed greedy scoring
-formula on hardcoded node data -- it never actually trains a policy,
-which is why nothing in that repo "updates." This script is the piece
-that was missing: it actually runs the training loop from Section
-3.2.1 -- Q1/Q2 tables, epsilon-greedy exploration, the multi-objective
-reward function, and the decoupled Double Q-learning update rule --
-across many episodes, and logs what a real Chapter 4 training run
-would produce.
+Chapter 3 mapping
+-----------------
+Existing/control:
+  - Standard single-table Q-Learning
+  - location-only state S=L
+  - single-objective travel-efficiency reward
 
-DATA NOTE
--------------------------------------------------------------------------
-DepEd enrollment/registry data and the real OSM road network have been
-requested but not yet released. Until that data arrives, this script
-trains on the SAME placeholder node/edge data already used in the
-prototype's engine.js (the Laiban / Tanay / Rizal sitios), so the
-numbers produced here are illustrative, not final results. When the
-real data comes in, only the NODES / EDGES / weather-report tables at
-the top of this file need to be swapped -- the state design, reward
-function, and training loop underneath do not change.
+Proposed/experimental MODQL:
+  - two independent tables Q1 and Q2
+  - enriched state S=<L,D,T,H,A>
+  - reward R = Coverage * JainFairness * (1 / TravelCost)
 
-STATE / ACTION / REWARD DESIGN (documented for the defense)
--------------------------------------------------------------------------
-The paper defines the state as S = <L, D, T, H, A> (location, demand,
-time budget, visit history, accessibility). For TABULAR Q-learning,
-a continuous S must be discretized into a finite table, so this script
-encodes state as:
-
-    state = (current_node, visited_mask, time_bucket)
-
-  - L (location)        -> current_node: which sitio the unit is at
-  - H (visit history)    -> visited_mask: bitmask of which sitios have
-                             already been served THIS shift (this also
-                             stands in for D, since a node still masked
-                             "unvisited" is still in demand)
-  - T (time budget)      -> time_bucket: remaining shift minutes,
-                             discretized into 6 bins
-  - A (accessibility)    -> NOT stored in the state directly. Instead,
-                             exactly like engine.js's neighbors()/path(),
-                             a road with A < 0.20 is masked out of the
-                             action set for that step. This keeps A as
-                             a hard, algorithm-agnostic safety constraint
-                             rather than a table dimension, matching how
-                             the existing prototype already treats it.
-
-This is a defensible simplification, not a deviation from the theory:
-full continuous-state MDPs are normally paired with function
-approximation (e.g. a neural network) rather than a lookup table; a
-tabular implementation of a continuous-state MDP always requires this
-kind of discretization. Flag this explicitly if asked in the defense.
-
-Each episode samples a fresh weather scenario (rainfall mm) and, with
-some probability, a random hazard report that closes or degrades a
-road -- this is what makes Q-learning worth using in the first place:
-a fixed shortest-path table computed once cannot adapt to a road that
-is only sometimes usable, but a policy trained across many randomized
-weather/hazard days can learn to route around that uncertainty.
-=============================================================================
+The environment uses the repository's placeholder Laiban/Tanay nodes until the
+requested DepEd/OSM/PAGASA data are available. Outputs are simulation evidence,
+not final Chapter 4 results.
 """
 
-import json
-import math
-import os
-import random
+import csv, json, math, random
 from collections import defaultdict
+from pathlib import Path
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-
-random.seed(42)
-np.random.seed(42)
-
-OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
-os.makedirs(OUT_DIR, exist_ok=True)
-
-# =============================================================================
-# 1. ENVIRONMENT -- ported directly from engine.js (same placeholder data)
-# =============================================================================
+OUT = Path(__file__).with_name('outputs_aligned')
+OUT.mkdir(exist_ok=True)
 
 NODES = {
-    "hub": dict(name="Laiban ALS Hub",       kind="depot", lat=14.5762, lng=121.3828, learners=0,  visits30=0),
-    "mah": dict(name="Sitio Mahabang Lalim",  kind="node",  lat=14.5921, lng=121.4026, learners=48, visits30=2),
-    "kab": dict(name="Sitio Kabayunan",       kind="node",  lat=14.5606, lng=121.4131, learners=63, visits30=1),
-    "dar": dict(name="Daraitan Proper",       kind="node",  lat=14.6108, lng=121.4315, learners=87, visits30=3),
-    "tin": dict(name="Sitio Tinipak",         kind="node",  lat=14.6204, lng=121.4402, learners=41, visits30=0),
-    "inz": dict(name="Sta. Inez",             kind="node",  lat=14.5512, lng=121.3562, learners=72, visits30=2),
-    "cay": dict(name="Cayabu",                kind="node",  lat=14.5292, lng=121.3396, learners=56, visits30=2),
-    "pun": dict(name="Sitio Pungo",           kind="node",  lat=14.5446, lng=121.4288, learners=34, visits30=0),
-    "amp": dict(name="Sitio Mag-Ampon",       kind="node",  lat=14.6018, lng=121.3548, learners=29, visits30=1),
+    'hub': dict(kind='depot', lat=14.5762, lng=121.3828, learners=0, visits30=0),
+    'mah': dict(kind='node', lat=14.5921, lng=121.4026, learners=48, visits30=2),
+    'kab': dict(kind='node', lat=14.5606, lng=121.4131, learners=63, visits30=1),
+    'dar': dict(kind='node', lat=14.6108, lng=121.4315, learners=87, visits30=3),
+    'tin': dict(kind='node', lat=14.6204, lng=121.4402, learners=41, visits30=0),
+    'inz': dict(kind='node', lat=14.5512, lng=121.3562, learners=72, visits30=2),
+    'cay': dict(kind='node', lat=14.5292, lng=121.3396, learners=56, visits30=2),
+    'pun': dict(kind='node', lat=14.5446, lng=121.4288, learners=34, visits30=0),
+    'amp': dict(kind='node', lat=14.6018, lng=121.3548, learners=29, visits30=1),
 }
-SERVICE_NODES = [nid for nid, n in NODES.items() if n["kind"] == "node"]  # excludes hub
-MAX_LEARNERS = max(NODES[n]["learners"] for n in SERVICE_NODES)
-
-SURF_A = {"concrete": 1.00, "gravel": 0.85, "dirt": 0.65, "ford": 0.50}
-SURF_SPEED = {"concrete": 38, "gravel": 24, "dirt": 16, "ford": 12}
-
+SERVICE = [n for n,v in NODES.items() if v['kind']=='node']
+IDX = {n:i for i,n in enumerate(SERVICE)}
 EDGES = [
-    ("hub", "inz", "concrete"),
-    ("inz", "cay", "concrete"),
-    ("hub", "amp", "gravel"),
-    ("hub", "mah", "gravel"),
-    ("amp", "dar", "dirt"),
-    ("mah", "dar", "gravel"),
-    ("dar", "tin", "ford"),
-    ("mah", "kab", "dirt"),
-    ("kab", "pun", "dirt"),
-    ("inz", "kab", "dirt"),
-    ("cay", "pun", "dirt"),
+    ('hub','inz','concrete'),('inz','cay','concrete'),('hub','amp','gravel'),('hub','mah','gravel'),
+    ('amp','dar','dirt'),('mah','dar','gravel'),('dar','tin','ford'),('mah','kab','dirt'),
+    ('kab','pun','dirt'),('inz','kab','dirt'),('cay','pun','dirt')
 ]
-
-SHIFT_MIN = 480          # 8-hour shift, same as CLOCK/SHIFT_MIN in engine.js
-TIME_BUCKETS = 6         # discretization of remaining time budget for state T
-
-
-def haversine_km(a, b):
-    r = 6371.0
-    la1, lo1, la2, lo2 = map(math.radians, [NODES[a]["lat"], NODES[a]["lng"], NODES[b]["lat"], NODES[b]["lng"]])
-    dla, dlo = la2 - la1, lo2 - lo1
-    h = math.sin(dla / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin(dlo / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(h))
+SURF_A={'concrete':1.0,'gravel':0.85,'dirt':0.65,'ford':0.50}
+SPEED={'concrete':38,'gravel':24,'dirt':16,'ford':12}
+ALPHA=.1; GAMMA=.9; EPS_START=1.0; EPS_MIN=.05; EPS_DECAY=.995; EPISODES=1200; SHIFT=480; TB=6
 
 
-EDGE_KM = {}
-EDGE_SURF = {}
-ADJ = defaultdict(list)
-for a, b, surf in EDGES:
-    key = tuple(sorted((a, b)))
-    km = haversine_km(a, b)
-    EDGE_KM[key] = km
-    EDGE_SURF[key] = surf
-    ADJ[a].append(b)
-    ADJ[b].append(a)
+def hav(a,b):
+    R=6371.0
+    la1,lo1,la2,lo2=map(math.radians,[NODES[a]['lat'],NODES[a]['lng'],NODES[b]['lat'],NODES[b]['lng']])
+    dla,dlo=la2-la1,lo2-lo1
+    h=math.sin(dla/2)**2+math.cos(la1)*math.cos(la2)*math.sin(dlo/2)**2
+    return 2*R*math.asin(math.sqrt(h))
+
+EDGE_KM={}; EDGE_SURF={}; ADJ=defaultdict(list)
+for a,b,s in EDGES:
+    k=tuple(sorted((a,b))); EDGE_KM[k]=hav(a,b); EDGE_SURF[k]=s; ADJ[a].append(b); ADJ[b].append(a)
 
 
-def service_min(node_id):
-    return 25 + round(NODES[node_id]["learners"] / 3)
+def service_min(n,demand): return 25+round(demand[n]/3)
+def jain(vals):
+    vals=list(vals); s=sum(vals); q=sum(x*x for x in vals)
+    return 1.0 if q==0 else (s*s)/(len(vals)*q)
+
+class Scenario:
+    def __init__(self,rng):
+        self.rain=rng.uniform(0,80)
+        self.demand={n:max(1,round(NODES[n]['learners']*rng.uniform(.75,1.25))) for n in SERVICE}
+        self.hazard=None; self.sev=None
+        if rng.random()<.35:
+            self.hazard=rng.choice(list(EDGE_KM)); self.sev=rng.choice(['impassable','major','minor'])
+    def access(self,k):
+        surf=EDGE_SURF[k]
+        band=0 if self.rain<10 else 1 if self.rain<30 else 2 if self.rain<60 else 3
+        wf=([1,1,.95,.85] if surf=='concrete' else [1,.85,.45,.15] if surf=='ford' else [1,.85,.60,.35])[band]
+        hf=1.0 if self.hazard!=k else {'impassable':.05,'major':.40,'minor':.72}[self.sev]
+        return max(0,min(1,SURF_A[surf]*wf*hf))
+    def edge_min(self,a,b):
+        k=tuple(sorted((a,b))); A=self.access(k)
+        if A<.20: return None
+        return EDGE_KM[k]/SPEED[EDGE_SURF[k]]*60/max(A,.08)
 
 
-def jain_index(values):
-    values = list(values)
-    s = sum(values)
-    q = sum(v * v for v in values)
-    if q == 0:
-        return 1.0
-    return (s * s) / (len(values) * q)
-
-
-class WeatherDay:
-    """One episode's environmental conditions -- sampled fresh every
-    episode so the agent has to generalize across varying road access,
-    not memorize one fixed map. Mirrors WX/REPORTS in engine.js."""
-
-    def __init__(self, rng):
-        self.mm = rng.uniform(0, 80)
-        # With some probability, a random edge gets a hazard report this
-        # "day" (landslide / washout / rising water), same idea as the
-        # REPORTS array in engine.js but randomized per episode.
-        self.hazard_edge = None
-        self.hazard_severity = None
-        if rng.random() < 0.35:
-            self.hazard_edge = rng.choice(list(EDGE_KM.keys()))
-            self.hazard_severity = rng.choice(["impassable", "major", "minor"])
-
-    def wx_factor(self, surf):
-        band = 0 if self.mm < 10 else 1 if self.mm < 30 else 2 if self.mm < 60 else 3
-        if surf == "concrete":
-            return [1, 1, 0.95, 0.85][band]
-        if surf == "ford":
-            return [1, 0.85, 0.45, 0.15][band]
-        return [1, 0.85, 0.60, 0.35][band]
-
-    def hazard_factor(self, key):
-        if self.hazard_edge != key:
-            return 1.0
-        return {"impassable": 0.05, "major": 0.40, "minor": 0.72}[self.hazard_severity]
-
-    def accessibility(self, key):
-        surf = EDGE_SURF[key]
-        a = SURF_A[surf] * self.wx_factor(surf) * self.hazard_factor(key)
-        return max(0.0, min(1.0, a))
-
-    def edge_minutes(self, a, b):
-        key = tuple(sorted((a, b)))
-        acc = self.accessibility(key)
-        if acc < 0.20:
-            return None  # hard mask, same threshold as engine.js neighbors()
-        km = EDGE_KM[key]
-        speed = SURF_SPEED[EDGE_SURF[key]]
-        return (km / speed) * 60 / max(acc, 0.08)
-
-
-def dijkstra(weather, start, goal):
-    """Shortest-time path under this episode's hazard-masked graph.
-    Same masking rule engine.js applies to BOTH algorithms."""
-    dist = {start: 0.0}
-    prev = {}
-    visited = set()
-    frontier = [start]
-    while frontier:
-        frontier.sort(key=lambda n: dist.get(n, math.inf))
-        cur = frontier.pop(0)
-        if cur in visited:
-            continue
-        visited.add(cur)
-        if cur == goal:
-            break
+def dijkstra(sc,start,goal):
+    dist={start:0.0}; seen=set(); q=[start]
+    while q:
+        q.sort(key=lambda x:dist[x]); cur=q.pop(0)
+        if cur in seen: continue
+        seen.add(cur)
+        if cur==goal: return dist[cur]
         for nb in ADJ[cur]:
-            mins = weather.edge_minutes(cur, nb)
-            if mins is None:
-                continue
-            nd = dist[cur] + mins
-            if nd < dist.get(nb, math.inf):
-                dist[nb] = nd
-                prev[nb] = cur
-                frontier.append(nb)
-    if goal not in dist:
-        return None
-    return dist[goal]
+            m=sc.edge_min(cur,nb)
+            if m is None: continue
+            nd=dist[cur]+m
+            if nd<dist.get(nb,1e99): dist[nb]=nd; q.append(nb)
+    return None
 
+def reachable(sc,cur,mask,remaining):
+    out=[]
+    for n in SERVICE:
+        if mask&(1<<IDX[n]): continue
+        d=dijkstra(sc,cur,n)
+        if d is not None and d+service_min(n,sc.demand)<=remaining: out.append((n,d))
+    return out
 
-# =============================================================================
-# 2. STATE / ACTION HELPERS
-# =============================================================================
+def t_bucket(rem): return min(TB-1,max(0,int((rem/SHIFT)*TB)))
+def access_bucket(x): return 0 if x<.20 else 1 if x<.45 else 2 if x<.75 else 3
 
-NODE_IDX = {nid: i for i, nid in enumerate(SERVICE_NODES)}  # bit position per node
-N_NODES = len(SERVICE_NODES)
+def standard_state(cur): return cur
 
+def proposed_state(sc,cur,mask,remaining,visits):
+    """Finite tabular encoding of every Chapter 3 state dimension.
 
-def time_bucket(remaining):
-    frac = max(0.0, min(1.0, remaining / SHIFT_MIN))
-    b = int(frac * TIME_BUCKETS)
-    return min(b, TIME_BUCKETS - 1)
+    L: current location.
+    D: demand-pressure bucket among currently reachable, unserved communities.
+    T: remaining-time bucket.
+    H: historical-service/fairness bucket from the visit-frequency vector.
+    A: local road-accessibility bucket around the current location.
 
+    The raw D/H/A vectors are observed every step; bucketed summaries keep the
+    tabular state space learnable within the paper's 500-2,000 episode range.
+    """
+    candidates=[]
+    for n in SERVICE:
+        if mask&(1<<IDX[n]): continue
+        d=dijkstra(sc,cur,n)
+        if d is not None: candidates.append(n)
+    mx=max(sc.demand.values())
+    demand_pressure=max((sc.demand[n]/mx for n in candidates),default=0.0)
+    D=0 if demand_pressure==0 else 1 if demand_pressure<.45 else 2 if demand_pressure<.75 else 3
+    J=jain(visits.values())
+    H=0 if J<.55 else 1 if J<.70 else 2 if J<.85 else 3
+    local=[]
+    for nb in ADJ[cur]: local.append(sc.access(tuple(sorted((cur,nb)))))
+    meanA=sum(local)/len(local) if local else 0
+    A=access_bucket(meanA)
+    return f'L={cur}|D={D}|T={t_bucket(remaining)}|H={H}|A={A}'
 
-def encode_state(cur, mask, remaining):
-    return (cur, mask, time_bucket(remaining))
+def qget(Q,s,a): return Q.get(s,{}).get(a,0.0)
+def qset(Q,s,a,v): Q.setdefault(s,{})[a]=v
 
+def reward_modql(sc,target,travel,visits):
+    cov=sc.demand[target]/max(sc.demand.values())
+    trial=dict(visits); trial[target]+=1
+    J=jain(trial.values()); cost=max(travel/60,1e-6)
+    return cov*J*(1/cost),J
 
-def reachable_actions(weather, cur, mask, remaining, visits):
-    """Valid next stops: not yet visited this shift, and reachable
-    within the remaining time budget under this episode's hazards."""
-    actions = []
-    for nid in SERVICE_NODES:
-        bit = 1 << NODE_IDX[nid]
-        if mask & bit:
-            continue
-        d = dijkstra(weather, cur, nid)
-        if d is None:
-            continue
-        need = d + service_min(nid)
-        if need <= remaining:
-            actions.append((nid, d))
-    return actions
+def reward_std(travel): return 1/max(travel/60,1e-6)
 
+def choose(Q,s,acts,eps,rng):
+    if rng.random()<eps: return rng.choice(acts)
+    vals=[qget(Q,s,a) for a in acts]; m=max(vals); best=[a for a,v in zip(acts,vals) if v==m]
+    return rng.choice(best)
 
-# =============================================================================
-# 3. REWARD -- multi-objective for the proposed algorithm (Section 3.2.1),
-#    single-objective (travel time only) for the "existing" baseline.
-# =============================================================================
-
-def proposed_reward(target, travel_min, visits, mask):
-    coverage = NODES[target]["learners"] / MAX_LEARNERS
-    trial = dict(visits)
-    trial[target] = trial.get(target, 0) + 1
-    fairness = jain_index(trial.values())
-    travel_hours = max(travel_min / 60, 1e-6)
-    return coverage * fairness * (1 / travel_hours), fairness
-
-
-def baseline_reward(travel_min):
-    travel_hours = max(travel_min / 60, 1e-6)
-    return 1 / travel_hours  # single objective: efficiency only, no coverage/fairness term
-
-
-# =============================================================================
-# 4. DOUBLE Q-LEARNING TRAINING LOOP  (Section 3.2.1 -- Algorithm Procedure)
-# =============================================================================
-
-ALPHA = 0.10
-GAMMA = 0.90
-EPS_START = 1.0
-EPS_MIN = 0.05
-EPS_DECAY = 0.995
-N_EPISODES = 1200  # within the paper's stated 500-2,000 range
-
-
-def epsilon_greedy(q_combo, state, actions, eps, rng):
-    if rng.random() < eps or state not in q_combo:
-        return rng.choice(actions)
-    values = {a: q_combo[state].get(a, 0.0) for a in actions}
-    best = max(values, key=values.get)
-    return best
-
-
-def q_get(table, state, action):
-    return table.get(state, {}).get(action, 0.0)
-
-
-def q_set(table, state, action, value):
-    table.setdefault(state, {})[action] = value
-
-
-def train_double_q():
-    """Full implementation of the pseudocode on pages 51-52: two
-    independent tables Q1/Q2, epsilon-greedy behavior policy on the
-    combined value, and a randomly-chosen decoupled update each step."""
-    Q1, Q2 = {}, {}
-    rng = random.Random(7)
-    eps = EPS_START
-    log = []
-
-    for ep in range(N_EPISODES):
-        weather = WeatherDay(rng)
-        cur, mask, remaining = "hub", 0, SHIFT_MIN
-        visits = {nid: NODES[nid]["visits30"] for nid in SERVICE_NODES}
-        ep_reward = 0.0
-        drift_sum, drift_n = 0.0, 0
-
+def train_standard(seed=7):
+    Q={}; rng=random.Random(seed); eps=EPS_START; logs=[]
+    for ep in range(EPISODES):
+        sc=Scenario(rng); cur='hub'; mask=0; rem=SHIFT; visits={n:NODES[n]['visits30'] for n in SERVICE}; total=0
         while True:
-            actions = reachable_actions(weather, cur, mask, remaining, visits)
-            if not actions:
-                break  # terminal: no reachable, unvisited node left in budget
+            choices=reachable(sc,cur,mask,rem)
+            if not choices: break
+            s=standard_state(cur); acts=[x[0] for x in choices]; travel=dict(choices)
+            a=choose(Q,s,acts,eps,rng); r=reward_std(travel[a]); total+=r
+            nm=mask|(1<<IDX[a]); nr=rem-travel[a]-service_min(a,sc.demand); ns=standard_state(a)
+            nxt=[x[0] for x in reachable(sc,a,nm,nr)]
+            target=r+(GAMMA*max((qget(Q,ns,x) for x in nxt),default=0))
+            old=qget(Q,s,a); qset(Q,s,a,old+ALPHA*(target-old))
+            visits[a]+=1; cur,mask,rem=a,nm,nr
+        logs.append(total); eps=max(EPS_MIN,eps*EPS_DECAY)
+    return Q,logs
 
-            state = encode_state(cur, mask, remaining)
-            action_ids = [a[0] for a in actions]
-            travel_of = {a: t for a, t in actions}
-
-            q_combo = defaultdict(dict)
-            for a in action_ids:
-                q_combo[state][a] = q_get(Q1, state, a) + q_get(Q2, state, a)
-
-            action = epsilon_greedy(q_combo, state, action_ids, eps, rng)
-            travel_min = travel_of[action]
-            reward, _ = proposed_reward(action, travel_min, visits, mask)
-            ep_reward += reward
-
-            next_mask = mask | (1 << NODE_IDX[action])
-            next_remaining = remaining - (travel_min + service_min(action))
-            next_state = encode_state(action, next_mask, next_remaining)
-            next_actions = [a for a, _ in reachable_actions(weather, action, next_mask, next_remaining, visits)]
-
-            if rng.random() < 0.5:
-                if next_actions:
-                    a_star = max(next_actions, key=lambda a: q_get(Q1, next_state, a))
-                    target = reward + GAMMA * q_get(Q2, next_state, a_star)
-                else:
-                    target = reward
-                old = q_get(Q1, state, action)
-                q_set(Q1, state, action, old + ALPHA * (target - old))
-                drift_sum += abs(q_get(Q1, state, action) - q_get(Q2, state, action))
+def train_modql(seed=7):
+    Q1={}; Q2={}; rng=random.Random(seed); eps=EPS_START; logs=[]; spread=[]
+    for ep in range(EPISODES):
+        sc=Scenario(rng); cur='hub'; mask=0; rem=SHIFT; visits={n:NODES[n]['visits30'] for n in SERVICE}; total=0; diffs=[]
+        while True:
+            choices=reachable(sc,cur,mask,rem)
+            if not choices: break
+            s=proposed_state(sc,cur,mask,rem,visits); acts=[x[0] for x in choices]; travel=dict(choices)
+            combo={a:qget(Q1,s,a)+qget(Q2,s,a) for a in acts}
+            if rng.random()<eps: a=rng.choice(acts)
             else:
-                if next_actions:
-                    a_star = max(next_actions, key=lambda a: q_get(Q2, next_state, a))
-                    target = reward + GAMMA * q_get(Q1, next_state, a_star)
-                else:
-                    target = reward
-                old = q_get(Q2, state, action)
-                q_set(Q2, state, action, old + ALPHA * (target - old))
-                drift_sum += abs(q_get(Q1, state, action) - q_get(Q2, state, action))
-            drift_n += 1
+                m=max(combo.values()); a=rng.choice([x for x in acts if combo[x]==m])
+            r,_=reward_modql(sc,a,travel[a],visits); total+=r
+            nm=mask|(1<<IDX[a]); nr=rem-travel[a]-service_min(a,sc.demand)
+            next_vis=dict(visits); next_vis[a]+=1
+            ns=proposed_state(sc,a,nm,nr,next_vis); nxt=[x[0] for x in reachable(sc,a,nm,nr)]
+            if rng.random()<.5:
+                astar=max(nxt,key=lambda x:qget(Q1,ns,x)) if nxt else None
+                target=r+(GAMMA*qget(Q2,ns,astar) if astar else 0)
+                old=qget(Q1,s,a); qset(Q1,s,a,old+ALPHA*(target-old))
+            else:
+                astar=max(nxt,key=lambda x:qget(Q2,ns,x)) if nxt else None
+                target=r+(GAMMA*qget(Q1,ns,astar) if astar else 0)
+                old=qget(Q2,s,a); qset(Q2,s,a,old+ALPHA*(target-old))
+            diffs.append(abs(qget(Q1,s,a)-qget(Q2,s,a)))
+            visits=next_vis; cur,mask,rem=a,nm,nr
+        logs.append(total); spread.append(sum(diffs)/len(diffs) if diffs else 0); eps=max(EPS_MIN,eps*EPS_DECAY)
+    return Q1,Q2,logs,spread
 
-            visits[action] = visits.get(action, 0) + 1
-            cur, mask, remaining = action, next_mask, next_remaining
+def rollout(sc,Q=None,Q1=None,Q2=None,mod=False):
+    cur='hub'; mask=0; rem=SHIFT; visits={n:NODES[n]['visits30'] for n in SERVICE}; travel_sum=0; covered=0; seq=[]
+    while True:
+        choices=reachable(sc,cur,mask,rem)
+        if not choices: break
+        acts=[x[0] for x in choices]; tm=dict(choices)
+        if mod:
+            s=proposed_state(sc,cur,mask,rem,visits)
+            vals={a:qget(Q1,s,a)+qget(Q2,s,a) for a in acts}
+        else:
+            s=standard_state(cur); vals={a:qget(Q,s,a) for a in acts}
+        best=max(acts,key=lambda a:(vals[a],-tm[a]))
+        travel_sum+=tm[best]; covered+=sc.demand[best]; seq.append(best)
+        rem-=tm[best]+service_min(best,sc.demand); mask|=1<<IDX[best]; visits[best]+=1; cur=best
+    return dict(travel_min=travel_sum,fairness=jain(visits.values()),stops=len(seq),deferred=len(SERVICE)-len(seq),coverage=covered,route=seq)
 
-        eps = max(EPS_MIN, eps * EPS_DECAY)
-        log.append(dict(episode=ep, reward=ep_reward, epsilon=eps,
-                         q_drift=(drift_sum / drift_n if drift_n else 0.0),
-                         fairness=jain_index(visits.values())))
-
-    return Q1, Q2, pd.DataFrame(log)
-
-
-def train_standard_q():
-    """Single-table baseline ('Existing Algorithm'): classic Q-learning,
-    travel-time-only reward, no fairness/coverage term -- mirrors
-    planRouteStandard() in engine.js but actually trained over episodes."""
-    Q = {}
-    rng = random.Random(7)
-    eps = EPS_START
-    log = []
-    prev_snapshot = {}
-
-    for ep in range(N_EPISODES):
-        weather = WeatherDay(rng)
-        cur, mask, remaining = "hub", 0, SHIFT_MIN
-        visits = {nid: NODES[nid]["visits30"] for nid in SERVICE_NODES}
-        ep_reward = 0.0
-        change_sum, change_n = 0.0, 0
-
-        while True:
-            actions = reachable_actions(weather, cur, mask, remaining, visits)
-            if not actions:
-                break
-
-            state = encode_state(cur, mask, remaining)
-            action_ids = [a[0] for a in actions]
-            travel_of = {a: t for a, t in actions}
-            action = epsilon_greedy(defaultdict(dict, {state: {a: q_get(Q, state, a) for a in action_ids}}),
-                                     state, action_ids, eps, rng)
-            travel_min = travel_of[action]
-            reward = baseline_reward(travel_min)
-            ep_reward += reward
-
-            next_mask = mask | (1 << NODE_IDX[action])
-            next_remaining = remaining - (travel_min + service_min(action))
-            next_state = encode_state(action, next_mask, next_remaining)
-            next_actions = [a for a, _ in reachable_actions(weather, action, next_mask, next_remaining, visits)]
-
-            best_next = max((q_get(Q, next_state, a) for a in next_actions), default=0.0)
-            old = q_get(Q, state, action)
-            new = old + ALPHA * (reward + GAMMA * best_next - old)
-            q_set(Q, state, action, new)
-            change_sum += abs(new - prev_snapshot.get((state, action), 0.0))
-            prev_snapshot[(state, action)] = new
-            change_n += 1
-
-            visits[action] = visits.get(action, 0) + 1
-            cur, mask, remaining = action, next_mask, next_remaining
-
-        eps = max(EPS_MIN, eps * EPS_DECAY)
-        log.append(dict(episode=ep, reward=ep_reward, epsilon=eps,
-                         q_drift=(change_sum / change_n if change_n else 0.0),
-                         fairness=jain_index(visits.values())))
-
-    return Q, pd.DataFrame(log)
-
-
-# =============================================================================
-# 5. GREEDY ROLLOUT WITH THE TRAINED POLICY (for the comparison metrics)
-# =============================================================================
-
-def rollout(policy_fn, n_days=50, seed=123):
-    rng = random.Random(seed)
-    totals = []
-    for _ in range(n_days):
-        weather = WeatherDay(rng)
-        cur, mask, remaining = "hub", 0, SHIFT_MIN
-        visits = {nid: NODES[nid]["visits30"] for nid in SERVICE_NODES}
-        visited_this_shift, travel_total = [], 0.0
-        while True:
-            actions = reachable_actions(weather, cur, mask, remaining, visits)
-            if not actions:
-                break
-            action_ids = [a[0] for a in actions]
-            travel_of = {a: t for a, t in actions}
-            state = encode_state(cur, mask, remaining)
-            action = policy_fn(state, action_ids)
-            travel_min = travel_of[action]
-            travel_total += travel_min
-            visited_this_shift.append(action)
-            visits[action] = visits.get(action, 0) + 1
-            mask |= (1 << NODE_IDX[action])
-            remaining -= (travel_min + service_min(action))
-            cur = action
-        fairness = jain_index(visits.values())
-        coverage = sum(NODES[n]["learners"] for n in visited_this_shift)
-        deferred = len(SERVICE_NODES) - len(visited_this_shift)
-        totals.append(dict(travel_min=travel_total, fairness=fairness,
-                            coverage=coverage, deferred=deferred,
-                            stops=len(visited_this_shift)))
-    return pd.DataFrame(totals)
-
-
-def make_modql_policy(Q1, Q2):
-    def policy(state, actions):
-        values = {a: q_get(Q1, state, a) + q_get(Q2, state, a) for a in actions}
-        return max(values, key=values.get)
-    return policy
-
-
-def make_standard_policy(Q):
-    def policy(state, actions):
-        values = {a: q_get(Q, state, a) for a in actions}
-        return max(values, key=values.get)
-    return policy
-
-
-# =============================================================================
-# 6. RUN, LOG, PLOT
-# =============================================================================
-
-def moving_average(series, window=30):
-    return series.rolling(window, min_periods=1).mean()
-
+def avg(rows,key): return sum(r[key] for r in rows)/len(rows)
 
 def main():
-    print(f"Training Enhanced Double Q-Learning (MODQL) -- {N_EPISODES} episodes...")
-    Q1, Q2, log_modql = train_double_q()
-    print(f"Training Standard Q-Learning (baseline) -- {N_EPISODES} episodes...")
-    Q_std, log_std = train_standard_q()
-
-    # ---- combined training log CSV ----
-    log_modql = log_modql.rename(columns={"reward": "reward_modql", "q_drift": "q_drift_modql",
-                                           "epsilon": "epsilon_modql", "fairness": "fairness_modql"})
-    log_std = log_std.rename(columns={"reward": "reward_standard", "q_drift": "q_drift_standard",
-                                       "epsilon": "epsilon_standard", "fairness": "fairness_standard"})
-    combined = log_modql.merge(log_std, on="episode")
-    csv_path = os.path.join(OUT_DIR, "training_log.csv")
-    combined.to_csv(csv_path, index=False)
-    print(f"Wrote {csv_path}")
-
-    # ---- convergence chart ----
-    fig, axes = plt.subplots(2, 1, figsize=(9, 8), sharex=True)
-    axes[0].plot(combined["episode"], moving_average(combined["reward_modql"]),
-                 label="MODQL (proposed, Q1+Q2)", color="#0F6E56")
-    axes[0].plot(combined["episode"], moving_average(combined["reward_standard"]),
-                 label="Standard Q-learning (baseline)", color="#D85A30")
-    axes[0].set_ylabel("Reward per episode\n(30-episode moving avg)")
-    axes[0].set_title("Composite reward per episode -- MODQL vs Standard Q-learning")
-    axes[0].legend()
-
-    axes[1].plot(combined["episode"], moving_average(combined["q_drift_modql"]),
-                 label="mean |Q1 - Q2| (MODQL)", color="#FAC775")
-    axes[1].plot(combined["episode"], moving_average(combined["q_drift_standard"]),
-                 label="single-table update drift (Standard)", color="#F09595")
-    axes[1].set_ylabel("Value drift\n(30-episode moving avg)")
-    axes[1].set_xlabel("Episode")
-    axes[1].legend()
-
-    fig.tight_layout()
-    chart_path = os.path.join(OUT_DIR, "convergence_chart.png")
-    fig.savefig(chart_path, dpi=150)
-    print(f"Wrote {chart_path}")
-
-    # ---- rollout comparison (greedy policy replay of the TRAINED tables) ----
-    modql_days = rollout(make_modql_policy(Q1, Q2))
-    std_days = rollout(make_standard_policy(Q_std))
-
-    summary = {
-        "episodes_trained": N_EPISODES,
-        "hyperparameters": {"alpha": ALPHA, "gamma": GAMMA, "eps_start": EPS_START,
-                             "eps_min": EPS_MIN, "eps_decay": EPS_DECAY},
-        "modql": {
-            "final_30ep_avg_reward": float(moving_average(combined["reward_modql"]).iloc[-1]),
-            "rollout_avg_travel_min": float(modql_days["travel_min"].mean()),
-            "rollout_avg_fairness": float(modql_days["fairness"].mean()),
-            "rollout_avg_stops": float(modql_days["stops"].mean()),
-            "rollout_avg_deferred": float(modql_days["deferred"].mean()),
-        },
-        "standard": {
-            "final_30ep_avg_reward": float(moving_average(combined["reward_standard"]).iloc[-1]),
-            "rollout_avg_travel_min": float(std_days["travel_min"].mean()),
-            "rollout_avg_fairness": float(std_days["fairness"].mean()),
-            "rollout_avg_stops": float(std_days["stops"].mean()),
-            "rollout_avg_deferred": float(std_days["deferred"].mean()),
-        },
-        "data_note": ("Trained on placeholder node/edge data from engine.js "
-                      "(DepEd registry and OSM road data requested, not yet received). "
-                      "Re-run this script unchanged once real data is available -- "
-                      "only NODES/EDGES need to be replaced."),
+    Q,std_log=train_standard(); Q1,Q2,mod_log,spread=train_modql()
+    eval_rng=random.Random(991); scenarios=[Scenario(eval_rng) for _ in range(100)]
+    std=[rollout(sc,Q=Q) for sc in scenarios]; mod=[rollout(sc,Q1=Q1,Q2=Q2,mod=True) for sc in scenarios]
+    summary={
+      'episodes_trained':EPISODES,'evaluation_scenarios':len(scenarios),
+      'hyperparameters':{'alpha':ALPHA,'gamma':GAMMA,'eps_start':EPS_START,'eps_min':EPS_MIN,'eps_decay':EPS_DECAY},
+      'state_design':{
+        'standard':'L (current location only)',
+        'modql':'<L,D,T,H,A> with direct discretized demand, time, history/fairness, and local accessibility features'
+      },
+      'reward_design':{'standard':'1 / travel_cost','modql':'coverage * Jain_fairness * (1 / travel_cost)'},
+      'standard':{k:avg(std,k) for k in ['travel_min','fairness','stops','deferred','coverage']},
+      'modql':{k:avg(mod,k) for k in ['travel_min','fairness','stops','deferred','coverage']},
+      'data_note':'Placeholder Laiban/Tanay node and road data; not final Chapter 4 evidence. Re-run after official datasets are inserted.'
     }
-    summary_path = os.path.join(OUT_DIR, "comparison_summary.json")
-    with open(summary_path, "w") as f:
-        json.dump(summary, f, indent=2)
-    print(f"Wrote {summary_path}")
+    (OUT/'comparison_summary.json').write_text(json.dumps(summary,indent=2),encoding='utf-8')
+    (OUT/'standard_policy.json').write_text(json.dumps({'q':Q},separators=(',',':')),encoding='utf-8')
+    (OUT/'modql_policy.json').write_text(json.dumps({'q1':Q1,'q2':Q2},separators=(',',':')),encoding='utf-8')
+    with (OUT/'training_log.csv').open('w',newline='',encoding='utf-8') as f:
+        w=csv.writer(f); w.writerow(['episode','standard_reward','modql_reward','mean_q1_q2_spread'])
+        for i,(a,b,c) in enumerate(zip(std_log,mod_log,spread),1): w.writerow([i,a,b,c])
+    print(json.dumps(summary,indent=2))
 
-    # ---- compact trained policy export (for wiring back into charts.js) ----
-    policy_export = {
-        "q1": {f"{s[0]}|{s[1]}|{s[2]}": v for s, v in Q1.items()},
-        "q2": {f"{s[0]}|{s[1]}|{s[2]}": v for s, v in Q2.items()},
-        "node_bit_index": NODE_IDX,
-        "note": "state key format = current_node|visited_mask|time_bucket",
-    }
-    policy_path = os.path.join(OUT_DIR, "final_policy_modql.json")
-    with open(policy_path, "w") as f:
-        json.dump(policy_export, f, indent=2)
-    print(f"Wrote {policy_path}")
-
-    print("\n=== Headline comparison (rollout over 50 simulated deployment days) ===")
-    print(f"{'metric':<24}{'MODQL':>12}{'Standard':>12}")
-    for key, label in [("rollout_avg_travel_min", "avg travel min"),
-                        ("rollout_avg_fairness", "avg Jain fairness"),
-                        ("rollout_avg_stops", "avg stops/day"),
-                        ("rollout_avg_deferred", "avg deferred/day")]:
-        print(f"{label:<24}{summary['modql'][key]:>12.3f}{summary['standard'][key]:>12.3f}")
-
-
-if __name__ == "__main__":
-    main()
+if __name__=='__main__': main()
