@@ -19,15 +19,15 @@ function svgLine(series,opts){
   function Y(v){return P.t+(H-P.t-P.b)*(1-(v-lo)/(hi-lo))}
   var s='<svg class="chart" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none">';
   for(var g=0;g<=4;g++){var y=P.t+(H-P.t-P.b)*g/4,val=hi-(hi-lo)*g/4;
-    s+='<line x1="'+P.l+'" y1="'+y+'" x2="'+(W-P.r)+'" y2="'+y+'" stroke="#26334d" stroke-width="1"/>';
-    s+='<text x="'+(P.l-7)+'" y="'+(y+3.5)+'" fill="#6b7b98" font-size="9.5" text-anchor="end">'+val.toFixed(opts.dp||2)+'</text>';}
+    s+='<line x1="'+P.l+'" y1="'+y+'" x2="'+(W-P.r)+'" y2="'+y+'" stroke="var(--chart-grid)" stroke-width="1"/>';
+    s+='<text x="'+(P.l-7)+'" y="'+(y+3.5)+'" fill="var(--chart-label)" font-size="9.5" text-anchor="end">'+val.toFixed(opts.dp||2)+'</text>';}
   [0,0.25,0.5,0.75,1].forEach(function(f){var i=Math.round(f*(xs-1));
-    s+='<text x="'+X(i)+'" y="'+(H-8)+'" fill="#6b7b98" font-size="9.5" text-anchor="middle">'+(opts.xs?opts.xs[i]:i)+'</text>';});
+    s+='<text x="'+X(i)+'" y="'+(H-8)+'" fill="var(--chart-label)" font-size="9.5" text-anchor="middle">'+(opts.xs?opts.xs[i]:i)+'</text>';});
   series.forEach(function(se){
     var p="";se.d.forEach(function(v,i){p+=(i?" L":"M")+X(i).toFixed(1)+" "+Y(v).toFixed(1)});
     s+='<path d="'+p+'" fill="none" stroke="'+se.c+'" stroke-width="'+(se.w||2.2)+'" stroke-linejoin="round"'+(se.dash?' stroke-dasharray="5 5"':'')+'/>';
   });
-  s+='<text x="'+(W/2)+'" y="'+(H-8)+'" fill="#6b7b98" font-size="9.5" text-anchor="middle" opacity="0">.</text>';
+  s+='<text x="'+(W/2)+'" y="'+(H-8)+'" fill="var(--chart-label)" font-size="9.5" text-anchor="middle" opacity="0">.</text>';
   s+='</svg>';
   return s;
 }

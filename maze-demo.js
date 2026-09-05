@@ -313,6 +313,10 @@
   let finished = false;
 
   function el(id) { return document.getElementById(id); }
+  function themeColor(name, fallback) {
+    const value = getComputedStyle(document.body).getPropertyValue(name).trim();
+    return value || fallback;
+  }
 
   function startEpisode(resetAgent = false) {
     if (!env) env = new DynamicMazeEnvBrowser();
@@ -380,27 +384,27 @@
 
     for (let r = 0; r < SIZE; r++) {
       for (let c = 0; c < SIZE; c++) {
-        ctx.fillStyle = env.maze[r][c] ? '#f4d03f' : '#ffffff';
+        ctx.fillStyle = env.maze[r][c] ? themeColor('--maze-wall', '#B9AB6B') : themeColor('--maze-cell', '#F7F0E2');
         ctx.fillRect(c * cell, r * cell, cell, cell);
-        ctx.strokeStyle = '#808080';
+        ctx.strokeStyle = themeColor('--maze-grid', '#C9B99B');
         ctx.lineWidth = 1;
         ctx.strokeRect(c * cell, r * cell, cell, cell);
       }
     }
 
-    ctx.fillStyle = 'rgba(70,70,70,.28)';
+    ctx.fillStyle = themeColor('--maze-trail', 'rgba(94,104,40,.28)');
     history.slice(0, -1).forEach(([r, c]) => {
       ctx.beginPath();
       ctx.arc(c * cell + cell / 2, r * cell + cell / 2, cell * 0.10, 0, Math.PI * 2);
       ctx.fill();
     });
 
-    ctx.fillStyle = '#00c853';
+    ctx.fillStyle = themeColor('--maze-goal', '#5E6828');
     ctx.beginPath();
     ctx.arc(env.goalPos[1] * cell + cell / 2, env.goalPos[0] * cell + cell / 2, cell * 0.30, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = '#f44336';
+    ctx.fillStyle = themeColor('--maze-agent', '#8A633F');
     ctx.beginPath();
     ctx.arc(env.currentPos[1] * cell + cell / 2, env.currentPos[0] * cell + cell / 2, cell * 0.30, 0, Math.PI * 2);
     ctx.fill();
@@ -445,7 +449,7 @@
         </div>
 
         <div style="display:grid;grid-template-columns:minmax(210px,300px) minmax(300px,500px);gap:18px;align-items:start" class="maze-layout">
-          <div style="background:#f7f7f7;border-radius:12px;padding:14px;color:#111;min-height:420px">
+          <div style="background:var(--maze-panel);border:1px solid var(--line);border-radius:12px;padding:14px;color:var(--txt);min-height:420px">
             <div style="font-weight:800;margin-bottom:12px">Maze Demonstration - Ball Moving in Maze</div>
             <div style="font-size:13px;line-height:1.9">
               <div>Episode: <b id="mzEpisode">1 / 5</b></div>
@@ -454,15 +458,15 @@
               <div>Steps Taken: <b id="mzSteps">0 / 100</b></div>
               <div>Last Action: <b id="mzAction">None</b></div>
               <div>Exploration ε: <b id="mzEpsilon">0.900</b></div>
-              <hr style="border:0;border-top:1px solid #ddd;margin:10px 0">
-              <div><span style="color:#f44336">●</span> Red Ball: Reflection Agent</div>
-              <div><span style="color:#00c853">●</span> Green Circle: Goal</div>
-              <div><span style="color:#d4ac0d">■</span> Yellow Blocks: Walls</div>
-              <div style="margin-top:10px;color:#555">Maze changes every 20 environment steps.</div>
+              <hr style="border:0;border-top:1px solid var(--line);margin:10px 0">
+              <div><span style="color:var(--maze-agent)">●</span> Red Ball: Reflection Agent</div>
+              <div><span style="color:var(--maze-goal)">●</span> Green Circle: Goal</div>
+              <div><span style="color:var(--maze-wall)">■</span> Yellow Blocks: Walls</div>
+              <div style="margin-top:10px;color:var(--dim)">Maze changes every 20 environment steps.</div>
             </div>
           </div>
           <div>
-            <canvas id="mzCanvas" width="500" height="500" style="display:block;width:100%;max-width:500px;aspect-ratio:1/1;background:#fff;border-radius:10px;margin:0 auto"></canvas>
+            <canvas id="mzCanvas" width="500" height="500" style="display:block;width:100%;max-width:500px;aspect-ratio:1/1;background:var(--maze-cell);border:1px solid var(--line);border-radius:10px;margin:0 auto"></canvas>
           </div>
         </div>
 

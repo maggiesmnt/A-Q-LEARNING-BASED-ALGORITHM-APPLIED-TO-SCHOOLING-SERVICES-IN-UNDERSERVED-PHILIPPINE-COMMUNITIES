@@ -8,8 +8,8 @@ function renderHazards(){
   var closed=0,caut=0;
   EDGES.forEach(function(e){var A=accA(e);if(A<0.20)closed++;else if(A<0.75)caut++});
   document.getElementById("hzSummary").innerHTML=
-    '<div class="kpi"><div class="lab">Segments closed (A &lt; 0.20)</div><div class="v" style="color:#ff4d4f">'+closed+'</div><div class="d">masked out of the action set</div></div>'+
-    '<div class="kpi"><div class="lab">Degraded segments</div><div class="v" style="color:#ffb020">'+caut+'</div><div class="d">travel cost penalised by 1/A</div></div>';
+    '<div class="kpi"><div class="lab">Segments closed (A &lt; 0.20)</div><div class="v" style="color:var(--bad)">'+closed+'</div><div class="d">masked out of the action set</div></div>'+
+    '<div class="kpi"><div class="lab">Degraded segments</div><div class="v" style="color:var(--warn)">'+caut+'</div><div class="d">travel cost penalised by 1/A</div></div>';
 
   var box=document.getElementById("hazardList");box.innerHTML="";
   var all=REPORTS.slice().sort(function(a,b){return a.ago-b.ago});
@@ -23,7 +23,7 @@ function renderHazards(){
       '<div class="k">'+N[e.a].name+' &harr; '+N[e.b].name+' &middot; '+SURF[e.surf].lab+'</div></div>'+
       '<div class="k" style="text-align:right">'+(r.ago<1?Math.round(r.ago*60)+' min':r.ago.toFixed(1)+' h')+' ago<br>'+r.who+'</div></div>'+
       '<div class="k" style="margin-top:9px">&ldquo;'+r.note+'&rdquo;</div>'+
-      '<div class="meter"><i style="width:'+(c*100).toFixed(0)+'%;background:'+(c>0.6?"#ff4d4f":c>0.3?"#ffb020":"#6b7b98")+'"></i></div>'+
+      '<div class="meter"><i style="width:'+(c*100).toFixed(0)+'%;background:'+(c>0.6?"var(--bad)":c>0.3?"var(--warn)":"var(--dim2)")+'"></i></div>'+
       '<div class="k">Confidence <b>'+(c*100).toFixed(0)+'%</b> ('+r.reporters+' reporter'+(r.reporters>1?'s':'')+
       ', '+r.src+', 6 h half-life) &rarr; resulting <b class="mono">A = '+A.toFixed(2)+'</b>'+
       ' <span style="color:var(--dim2)">= surface '+SURF[e.surf].a.toFixed(2)+' &times; weather '+wxFactor(e.surf).toFixed(2)+' &times; reports '+reportFactor(e.key).toFixed(2)+'</span></div>'+

@@ -25,7 +25,7 @@ function renderStops(){
       '<span class="tag'+(n.days>=20?' hot':'')+'">last served '+n.days+'d ago</span>'+
       '<span class="tag" style="color:'+b.col+'">worst segment A '+worst.toFixed(2)+' &middot; '+b.lab+'</span>'+
       '<span class="tag">'+serviceMin(n)+' min on site</span>'+
-      '<span class="tag" style="color:'+(s.usedPolicy?"#25d07a":"#8b95ab")+'">'+(s.usedPolicy?"trained policy":"fallback formula")+'</span></div>'+
+      '<span class="tag" style="color:'+(s.usedPolicy?"var(--go)":"var(--dim2)")+'">'+(s.usedPolicy?"trained policy":"fallback formula")+'</span></div>'+
       '<div class="k" style="margin-top:7px">via '+s.p.seq.map(function(x){return N[x].name.replace("Sitio ","")}).join(" \u2192 ")+'</div>'+
       '</div><div class="rt"><b>'+s.arrive+'</b>'+s.p.km.toFixed(1)+' km &middot; '+Math.round(s.p.min)+' min</div>';
     L2.appendChild(d);
@@ -33,7 +33,7 @@ function renderStops(){
   var dl=document.getElementById("deferList");
   if(!PLAN.deferred.length){dl.innerHTML="None &mdash; every scheduled community is reachable under current conditions.";}
   else{dl.innerHTML=PLAN.deferred.map(function(df){
-    return '<div style="margin-bottom:8px"><b style="color:#ffabad">'+N[df.id].name+'</b> &mdash; '+df.reason+
+    return '<div style="margin-bottom:8px"><b style="color:var(--bad)">'+N[df.id].name+'</b> &mdash; '+df.reason+
       '<br><span style="color:var(--dim2)">'+N[df.id].learners+' learners &middot; last served '+N[df.id].days+
       ' days ago &middot; H-priority boost applied to next deployment</span></div>'}).join("");}
 }

@@ -127,8 +127,8 @@ function accA(e){
   var v=SURF[e.surf].a*wxFactor(e.surf)*reportFactor(e.key);
   return Math.max(0,Math.min(1,v));
 }
-function band(A){return A>=0.75?{k:"open",lab:"OPEN",col:"#25d07a"}:A>=0.45?{k:"caut",lab:"CAUTION",col:"#ffb020"}:
-  A>=0.20?{k:"rest",lab:"RESTRICTED",col:"#ff8a3d"}:{k:"cls",lab:"CLOSED",col:"#ff4d4f"}}
+function band(A){return A>=0.75?{k:"open",lab:"OPEN",col:"#7B753B"}:A>=0.45?{k:"caut",lab:"CAUTION",col:"#A77A2D"}:
+  A>=0.20?{k:"rest",lab:"RESTRICTED",col:"#9A633B"}:{k:"cls",lab:"CLOSED",col:"#A24D42"}}
 function speed(surf){return surf==="concrete"?38:surf==="gravel"?24:surf==="ford"?12:16}
 function edgeMin(e){var A=accA(e);return (e.km/speed(e.surf))*60/Math.max(A,0.08)}
 function serviceMin(n){return 25+Math.round(n.learners/3)}
