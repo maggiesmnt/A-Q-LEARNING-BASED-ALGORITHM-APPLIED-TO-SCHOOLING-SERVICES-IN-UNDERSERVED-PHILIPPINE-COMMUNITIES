@@ -283,14 +283,27 @@ select{background:var(--ink3);border:1px solid var(--line);color:var(--txt);bord
    show/hide logic lives in app.js (setMode()).
    ============================================================================ */
 .mode-toggle{
-  display:flex;gap:2px;background:var(--ink3);border:1px solid var(--line);
-  border-radius:999px;padding:3px;flex:0 0 auto;
+  display:flex;
+  gap:2px;
+  background:var(--ink3);
+  border:1px solid var(--line);
+  border-radius:999px;
+  padding:3px;
+  flex:0 0 auto;
 }
 .mode-toggle button{
-  padding:8px 18px;border-radius:999px;font-size:12.5px;font-weight:700;
-  color:var(--dim);white-space:nowrap;transition:background .15s ease,color .15s ease;
+  padding:8px 18px;
+  border-radius:999px;
+  font-size:12.5px;
+  font-weight:500;
+  color:var(--dim);
+  white-space:nowrap;
+  transition:background .15s ease,color .15s ease;
 }
-.mode-toggle button.on{background:var(--txt);color:var(--ink);}
+.mode-toggle button.on{
+  background:var(--txt);
+  color:var(--ink);
+}
 
 /* ============================================================================
    RESEARCH & ANALYSIS — light sidebar-dashboard theme.
@@ -626,3 +639,49 @@ body[data-theme] .leaflet-popup-content-wrapper,
 body[data-theme] .leaflet-popup-tip{background:var(--ink2);color:var(--txt)}
 body[data-theme] .leaflet-popup-content span{color:var(--dim)}
 body[data-theme] .leaflet-popup-content b{color:var(--txt)}
+/* ICON ONLY THEME CHOOSER */
+.theme-dock{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  justify-content:flex-end;
+}
+.theme-icon-btn{
+  width:34px;
+  height:34px;
+  border-radius:999px;
+  border:1px solid rgba(220,201,175,.24);
+  background:rgba(220,201,175,.10);
+  color:#DCC9AF;
+  display:grid;
+  place-items:center;
+  transition:background .18s ease,border-color .18s ease,color .18s ease,transform .18s ease;
+}
+.theme-icon-btn:hover{
+  background:rgba(220,201,175,.18);
+  border-color:#B9AB6B;
+  transform:translateY(-1px);
+}
+.theme-icon-btn svg{
+  width:17px;
+  height:17px;
+  stroke:currentColor;
+  fill:none;
+  stroke-width:2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.theme-icon-btn[data-theme-choice="dark"] svg{fill:currentColor;stroke-width:1.6}
+.theme-icon-btn.on{
+  background:#DCC9AF;
+  border-color:#DCC9AF;
+  color:#1F2612;
+}
+.theme-switch,
+.theme-track,
+.theme-thumb,
+.theme-icon,
+.theme-label{display:none!important}
+@media (max-width:820px){
+  .theme-dock{justify-content:flex-start}
+}
