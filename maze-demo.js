@@ -1,149 +1,511 @@
-/* ============================================================================
-   MAZE DEMO — thesis comparison using the original full-size maze presentation
-   Standard Q-Learning vs Proposed MODQL
+/* ============================================================
+   Maze Demo — browser implementation of the uploaded
+   simple_maze_demo.py + cathydou/reflection-agent-maze logic.
 
-   The UI intentionally keeps the earlier Maze Demo look: one large 10x10 maze,
-   information panel, red agent, green goal, yellow walls, and Play/Step/New
-   Episode controls. Use the algorithm switch to view each algorithm separately.
+   Goal: show the same maze demonstration inside the existing
+   Research & Analysis > Maze Demo tab without opening pygame.
 
-   This is a controlled visualization of algorithm behaviour. It is not a
-   substitute for the Chapter 4 routing experiment on the Laiban road graph.
-   ============================================================================ */
-(function(){
-'use strict';
+   Source behavior mirrored here:
+   - DynamicMazeEnv(size=10, obstacle_ratio=0.25, change_frequency=20)
+   - env.max_steps = 100
+   - ReflectionAgent(action_space)
+   - confidence_threshold = 0.25
+   - adaptation_threshold = 0.45
+   - 5 episodes
+   - actions: Up / Down / Left / Right
+   ============================================================ */
+(function () {
+  'use strict';
 
-var SIZE=10, OBSTACLE_RATIO=.25, CHANGE_FREQUENCY=20, MAX_STEPS=100, STEP_MS=200;
-var ACTIONS=[[-1,0],[1,0],[0,-1],[0,1]], ACTION_NAMES=['Up','Down','Left','Right'];
-function k(p){return p[0]+','+p[1]} function cp(p){return [p[0],p[1]]}
-function same(a,b){return a[0]===b[0]&&a[1]===b[1]}
-function ri(n){return Math.floor(Math.random()*n)}
-function man(a,b){return Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1])}
-function clamp(x,a,b){return Math.max(a,Math.min(b,x))}
-function zeros(){return[0,0,0,0]}
-function argmax(arr){var best=0;for(var i=1;i<arr.length;i++)if(arr[i]>arr[best])best=i;return best}
-function jain(vals){var s=0,q=0;vals.forEach(function(x){s+=x;q+=x*x});return q===0?1:(s*s)/(vals.length*q)}
+  const SIZE = 10;
+  const OBSTACLE_RATIO = 0.25;
+  const CHANGE_FREQUENCY = 20;
+  const MAX_STEPS = 100;
+  const MAX_EPISODES = 5;
+  const STEP_MS = 200;
+  const ACTIONS = [
+    [-1, 0], // Up
+    [1, 0],  // Down
+    [0, -1], // Left
+    [0, 1]   // Right
+  ];
+  const ACTION_NAMES = ['Up', 'Down', 'Left', 'Right'];
 
-function MazeEnv(template){
-  this.size=SIZE;this.changeFrequency=CHANGE_FREQUENCY;this.maxSteps=MAX_STEPS;
-  this.steps=0;this.environmentUpdates=0;
-  if(template){this.maze=template.maze.map(function(r){return r.slice()});this.currentPos=cp(template.start);this.goalPos=cp(template.goal)}
-  else this.generate();
-}
-MazeEnv.prototype.generate=function(){
-  var guard=0;
-  while(guard++<300){
-    var maze=Array.from({length:SIZE},function(){return Array(SIZE).fill(0)}), target=Math.floor(SIZE*SIZE*OBSTACLE_RATIO),used={};
-    while(Object.keys(used).length<target){var idx=ri(SIZE*SIZE),r=Math.floor(idx/SIZE),c=idx%SIZE,key=r+','+c;if(used[key])continue;used[key]=1;maze[r][c]=1}
-    var start=[ri(3),ri(3)],goal=[SIZE-1-ri(3),SIZE-1-ri(3)];maze[start[0]][start[1]]=0;maze[goal[0]][goal[1]]=0;
-    this.maze=maze;this.currentPos=start;this.goalPos=goal;
-    if(this.bfs(start,goal).length){this.steps=0;return}
+  const key = (p) => p[0] + ',' + p[1];
+  const clone = (p) => [p[0], p[1]];
+  const same = (a, b) => a[0] === b[0] && a[1] === b[1];
+  const randInt = (n) => Math.floor(Math.random() * n);
+  const manhattan = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
+  const zeros4 = () => [0, 0, 0, 0];
+
+  class DynamicMazeEnvBrowser {
+    constructor(size = SIZE, obstacleRatio = OBSTACLE_RATIO, changeFrequency = CHANGE_FREQUENCY) {
+      this.size = size;
+      this.obstacleRatio = obstacleRatio;
+      this.changeFrequency = changeFrequency;
+      this.maxSteps = MAX_STEPS;
+      this.STEP_PENALTY = -0.1;
+      this.COLLISION_PENALTY = -1.0;
+      this.GOAL_REWARD = 10.0;
+      this.steps = 0;
+      this.previousPos = [0, 0];
+      this.currentPos = [0, 0];
+      this.goalPos = [size - 1, size - 1];
+      this.maze = [];
+      this.episodeData = { environmentUpdates: 0, goalChanges: 0, obstacleChanges: 0 };
+      this.reset();
+    }
+
+    generateMaze() {
+      const maze = Array.from({ length: this.size }, () => Array(this.size).fill(0));
+      const total = this.size * this.size;
+      const target = Math.floor(total * this.obstacleRatio);
+      const used = new Set();
+      while (used.size < target) {
+        const idx = randInt(total);
+        if (used.has(idx)) continue;
+        used.add(idx);
+        maze[Math.floor(idx / this.size)][idx % this.size] = 1;
+      }
+      return maze;
+    }
+
+    findEmptyPosition() {
+      while (true) {
+        const p = [randInt(this.size), randInt(this.size)];
+        if (this.maze[p[0]][p[1]] === 0) return p;
+      }
+    }
+
+    bfs(start, goal, maze = this.maze) {
+      if (same(start, goal)) return { exists: true, path: [clone(start)] };
+      const q = [[clone(start), [clone(start)]]];
+      const seen = new Set([key(start)]);
+      while (q.length) {
+        const [cur, path] = q.shift();
+        for (const d of ACTIONS) {
+          const next = [cur[0] + d[0], cur[1] + d[1]];
+          if (next[0] < 0 || next[1] < 0 || next[0] >= this.size || next[1] >= this.size) continue;
+          if (maze[next[0]][next[1]] === 1 || seen.has(key(next))) continue;
+          const nextPath = path.concat([clone(next)]);
+          if (same(next, goal)) return { exists: true, path: nextPath };
+          seen.add(key(next));
+          q.push([next, nextPath]);
+        }
+      }
+      return { exists: false, path: [] };
+    }
+
+    ensureAgentNotTrapped() {
+      for (const d of ACTIONS) {
+        const n = [this.currentPos[0] + d[0], this.currentPos[1] + d[1]];
+        if (n[0] >= 0 && n[1] >= 0 && n[0] < this.size && n[1] < this.size && this.maze[n[0]][n[1]] === 0) return;
+      }
+      for (const idx of [1, 3, 0, 2]) {
+        const d = ACTIONS[idx];
+        const n = [this.currentPos[0] + d[0], this.currentPos[1] + d[1]];
+        if (n[0] >= 0 && n[1] >= 0 && n[0] < this.size && n[1] < this.size) {
+          this.maze[n[0]][n[1]] = 0;
+          return;
+        }
+      }
+    }
+
+    ensurePathExists() {
+      let result = this.bfs(this.currentPos, this.goalPos);
+      let guard = 0;
+      while (!result.exists && guard++ < 100) {
+        const obstacles = [];
+        for (let r = 0; r < this.size; r++) {
+          for (let c = 0; c < this.size; c++) if (this.maze[r][c] === 1) obstacles.push([r, c]);
+        }
+        if (!obstacles.length) break;
+        const p = obstacles[randInt(obstacles.length)];
+        if (!same(p, this.currentPos) && !same(p, this.goalPos)) this.maze[p[0]][p[1]] = 0;
+        result = this.bfs(this.currentPos, this.goalPos);
+      }
+    }
+
+    reset() {
+      this.maze = this.generateMaze();
+
+      this.currentPos = this.findEmptyPosition();
+      while (this.currentPos[0] > Math.floor(this.size / 3) || this.currentPos[1] > Math.floor(this.size / 3)) {
+        this.currentPos = this.findEmptyPosition();
+      }
+      this.ensureAgentNotTrapped();
+
+      this.goalPos = this.findEmptyPosition();
+      while (
+        this.goalPos[0] < Math.floor((2 * this.size) / 3) ||
+        this.goalPos[1] < Math.floor((2 * this.size) / 3) ||
+        manhattan(this.goalPos, this.currentPos) < this.size
+      ) {
+        this.goalPos = this.findEmptyPosition();
+      }
+
+      this.steps = 0;
+      this.previousPos = clone(this.currentPos);
+      this.ensurePathExists();
+      return clone(this.currentPos);
+    }
+
+    updateEnvironment() {
+      const oldGoal = clone(this.goalPos);
+      const numChanges = 1 + randInt(3);
+      let actualChanges = 0;
+      for (let i = 0; i < numChanges; i++) {
+        const p = [randInt(this.size), randInt(this.size)];
+        if (same(p, this.currentPos) || same(p, this.goalPos)) continue;
+        this.maze[p[0]][p[1]] = this.maze[p[0]][p[1]] ? 0 : 1;
+        actualChanges++;
+      }
+      this.ensurePathExists();
+      this.ensureAgentNotTrapped();
+      if (!same(oldGoal, this.goalPos)) this.episodeData.goalChanges++;
+      this.episodeData.environmentUpdates++;
+      this.episodeData.obstacleChanges += actualChanges;
+    }
+
+    getOptimalPathLength() {
+      const result = this.bfs(this.currentPos, this.goalPos);
+      return result.exists ? Math.max(0, result.path.length - 1) : Infinity;
+    }
+
+    step(action) {
+      this.steps++;
+      const d = ACTIONS[action];
+      const next = [this.currentPos[0] + d[0], this.currentPos[1] + d[1]];
+
+      if (next[0] < 0 || next[1] < 0 || next[0] >= this.size || next[1] >= this.size) {
+        return { state: clone(this.currentPos), reward: this.COLLISION_PENALTY, done: false, collision: true };
+      }
+      if (this.maze[next[0]][next[1]] === 1) {
+        return { state: clone(this.currentPos), reward: this.COLLISION_PENALTY, done: false, collision: true };
+      }
+
+      this.currentPos = next;
+      const reachedGoal = same(this.currentPos, this.goalPos);
+      const done = reachedGoal || this.steps >= this.maxSteps;
+      const oldDistance = manhattan(this.previousPos, this.goalPos);
+      const newDistance = manhattan(this.currentPos, this.goalPos);
+      const reward = reachedGoal ? this.GOAL_REWARD : this.STEP_PENALTY + (oldDistance - newDistance);
+
+      if (this.steps % this.changeFrequency === 0) this.updateEnvironment();
+      this.previousPos = clone(this.currentPos);
+      return { state: clone(this.currentPos), reward, done, collision: false };
+    }
   }
-  this.maze=Array.from({length:SIZE},function(){return Array(SIZE).fill(0)});this.currentPos=[0,0];this.goalPos=[9,9];
-};
-MazeEnv.prototype.snapshot=function(){return{maze:this.maze.map(function(r){return r.slice()}),start:cp(this.currentPos),goal:cp(this.goalPos)}};
-MazeEnv.prototype.bfs=function(start,goal){
-  var q=[[cp(start),[cp(start)]]],seen={};seen[k(start)]=1;
-  while(q.length){var z=q.shift(),p=z[0],path=z[1];if(same(p,goal))return path;for(var a=0;a<4;a++){var n=[p[0]+ACTIONS[a][0],p[1]+ACTIONS[a][1]],nk=k(n);if(n[0]<0||n[1]<0||n[0]>=SIZE||n[1]>=SIZE||this.maze[n[0]][n[1]]||seen[nk])continue;seen[nk]=1;q.push([n,path.concat([cp(n)])])}}
-  return[];
-};
-MazeEnv.prototype.localAccessibility=function(pos){var valid=0,free=0;for(var a=0;a<4;a++){var n=[pos[0]+ACTIONS[a][0],pos[1]+ACTIONS[a][1]];if(n[0]<0||n[1]<0||n[0]>=SIZE||n[1]>=SIZE)continue;valid++;if(!this.maze[n[0]][n[1]])free++}return valid?free/valid:0};
-MazeEnv.prototype.ensurePath=function(){
-  var guard=0;while(!this.bfs(this.currentPos,this.goalPos).length&&guard++<100){var obs=[];for(var r=0;r<SIZE;r++)for(var c=0;c<SIZE;c++)if(this.maze[r][c])obs.push([r,c]);if(!obs.length)break;var p=obs[ri(obs.length)];if(!same(p,this.currentPos)&&!same(p,this.goalPos))this.maze[p[0]][p[1]]=0}
-};
-MazeEnv.prototype.mutate=function(){
-  var changes=1+ri(3);for(var i=0;i<changes;i++){var p=[ri(SIZE),ri(SIZE)];if(same(p,this.currentPos)||same(p,this.goalPos))continue;this.maze[p[0]][p[1]]=this.maze[p[0]][p[1]]?0:1}this.ensurePath();this.environmentUpdates++;
-};
-MazeEnv.prototype.step=function(action){
-  this.steps++;var old=cp(this.currentPos),d=ACTIONS[action],n=[old[0]+d[0],old[1]+d[1]],collision=false;
-  if(n[0]<0||n[1]<0||n[0]>=SIZE||n[1]>=SIZE||this.maze[n[0]][n[1]]){n=old;collision=true}else this.currentPos=n;
-  var goal=same(this.currentPos,this.goalPos),done=goal||this.steps>=this.maxSteps;
-  if(this.steps%this.changeFrequency===0&&!done)this.mutate();
-  return{old:old,state:cp(this.currentPos),goal:goal,done:done,collision:collision};
-};
 
-function StandardAgent(){this.Q=new Map();this.alpha=.5;this.gamma=.9;this.epsilon=.85;this.epsilonMin=.15;this.epsilonDecay=.992}
-StandardAgent.prototype.q=function(s){if(!this.Q.has(s))this.Q.set(s,zeros());return this.Q.get(s)};
-StandardAgent.prototype.select=function(pos){this.epsilon=Math.max(this.epsilonMin,this.epsilon*this.epsilonDecay);if(Math.random()<this.epsilon)return ri(4);return argmax(this.q(k(pos)))};
-StandardAgent.prototype.reward=function(env,tr){if(tr.goal)return 10;if(tr.collision)return-1;return-.1};
-StandardAgent.prototype.learn=function(prev,a,r,next,done){var q=this.q(k(prev)),nq=this.q(k(next)),target=r+(done?0:this.gamma*Math.max.apply(null,nq));q[a]+=this.alpha*(target-q[a])};
+  class ReflectionAgentBrowser {
+    constructor() {
+      this.qShort = new Map();
+      this.qLong = new Map();
+      this.memoryBalance = 0.5;
+      this.epsilon = 0.9;
+      this.epsilonMin = 0.3;
+      this.epsilonDecay = 0.999;
+      this.alpha = 0.5;
+      this.gamma = 0.9;
+      this.confidenceThreshold = 0.25;
+      this.adaptationThreshold = 0.45;
+      this.visitCounts = new Map();
+      this.goalPos = null;
+      this.wallMemory = new Map();
+      this.stepsCount = 0;
+      this.environmentStability = 1.0;
+      this.stateActionResults = new Map();
+      this.recentRewards = [];
+      this.recentConfidences = [];
+    }
 
-function MODQLAgent(){
-  this.Q1=new Map();this.Q2=new Map();this.alpha=.5;this.gamma=.9;this.epsilon=.72;this.epsilonMin=.08;this.epsilonDecay=.989;
-  this.visits=new Map();this.wallMemory=new Map();this.goal=null;
-}
-MODQLAgent.prototype.setGoal=function(p){this.goal=cp(p)};
-MODQLAgent.prototype.q=function(T,s){if(!T.has(s))T.set(s,zeros());return T.get(s)};
-MODQLAgent.prototype.state=function(env,pos,steps){
-  var L=k(pos),dist=man(pos,env.goalPos),maxDist=(SIZE-1)*2,D=dist/maxDist<.25?0:dist/maxDist<.5?1:dist/maxDist<.75?2:3;
-  var remaining=(MAX_STEPS-steps)/MAX_STEPS,T=remaining<.25?0:remaining<.5?1:remaining<.75?2:3;
-  var count=this.visits.get(L)||0,H=count===0?0:count===1?1:count<=3?2:3;
-  var acc=env.localAccessibility(pos),A=acc<.25?0:acc<.5?1:acc<.75?2:3;
-  return'L='+L+'|D='+D+'|T='+T+'|H='+H+'|A='+A;
-};
-MODQLAgent.prototype.select=function(env,pos,steps){
-  var sk=this.state(env,pos,steps),walls=this.wallMemory.get(k(pos))||{},q1=this.q(this.Q1,sk),q2=this.q(this.Q2,sk),combo=q1.map(function(v,i){return v+q2[i]});
-  this.epsilon=Math.max(this.epsilonMin,this.epsilon*this.epsilonDecay);
-  var preferred=[];for(var a=0;a<4;a++){if(walls[a])continue;var n=[pos[0]+ACTIONS[a][0],pos[1]+ACTIONS[a][1]];if(n[0]<0||n[1]<0||n[0]>=SIZE||n[1]>=SIZE||env.maze[n[0]][n[1]])continue;preferred.push(a)}
-  if(!preferred.length)return ri(4);
-  if(Math.random()<this.epsilon){
-    var improving=preferred.filter(function(a){var n=[pos[0]+ACTIONS[a][0],pos[1]+ACTIONS[a][1]];return man(n,env.goalPos)<man(pos,env.goalPos)});
-    if(improving.length&&Math.random()<.72)return improving[ri(improving.length)];return preferred[ri(preferred.length)];
+    setGoalPosition(pos) { this.goalPos = clone(pos); }
+    getQ(map, stateKey) {
+      if (!map.has(stateKey)) map.set(stateKey, zeros4());
+      return map.get(stateKey);
+    }
+
+    selectAction(state) {
+      const sk = key(state);
+      this.visitCounts.set(sk, (this.visitCounts.get(sk) || 0) + 1);
+      this.epsilon = Math.max(this.epsilonMin, this.epsilon * this.epsilonDecay);
+
+      const dr = this.goalPos[0] - state[0];
+      const dc = this.goalPos[1] - state[1];
+      const vd = Math.abs(dr), hd = Math.abs(dc);
+      let possible = [];
+      if (vd >= hd) possible.push(dr > 0 ? 1 : 0);
+      if (hd >= vd) possible.push(dc > 0 ? 3 : 2);
+
+      const walls = this.wallMemory.get(sk);
+      if (walls) possible = possible.filter(a => !walls.has(a));
+      if (!possible.length) return randInt(4);
+
+      if (Math.random() < this.epsilon) {
+        if (Math.random() < 0.7) return possible[randInt(possible.length)];
+        return randInt(4);
+      }
+
+      const qS = this.getQ(this.qShort, sk);
+      const qL = this.getQ(this.qLong, sk);
+      const targetBalance = Math.max(0.3, Math.min(0.7, 1.0 - this.environmentStability));
+      this.memoryBalance = 0.9 * this.memoryBalance + 0.1 * targetBalance;
+      const combined = qS.map((v, i) => this.memoryBalance * v + (1 - this.memoryBalance) * qL[i]);
+      let best = 0;
+      for (let i = 1; i < 4; i++) if (combined[i] > combined[best]) best = i;
+      return best;
+    }
+
+    calculateConfidence(steps, shortestPath) {
+      if (!Number.isFinite(shortestPath) || shortestPath === 0) return 0;
+      return Math.max(0, 1 - (steps - shortestPath) / shortestPath);
+    }
+
+    learn(state, action, reward, nextState, done, steps, shortestPath) {
+      const sk = key(state), nk = key(nextState);
+      const confidence = this.calculateConfidence(steps, shortestPath);
+      this.recentConfidences.push(confidence);
+      this.recentRewards.push(reward);
+      if (this.recentConfidences.length > 10) this.recentConfidences.shift();
+      if (this.recentRewards.length > 10) this.recentRewards.shift();
+
+      const qS = this.getQ(this.qShort, sk);
+      const qSn = this.getQ(this.qShort, nk);
+      const qL = this.getQ(this.qLong, sk);
+      const qLn = this.getQ(this.qLong, nk);
+
+      const nextShort = Math.max(...qSn);
+      const shortAlpha = Math.min(0.8, this.alpha * 1.5);
+      qS[action] = (1 - shortAlpha) * qS[action] + shortAlpha * (reward + this.gamma * nextShort * (done ? 0 : 1));
+
+      const nextLong = Math.max(...qLn);
+      const longAlpha = Math.max(0.1, this.alpha * 0.7);
+      qL[action] = (1 - longAlpha) * qL[action] + longAlpha * (reward + this.gamma * nextLong * (done ? 0 : 1));
+
+      const resultKey = sk + '|' + action;
+      const currentResult = nk + '|' + reward.toFixed(2);
+      const previous = this.stateActionResults.get(resultKey);
+      if (previous && previous !== currentResult) this.environmentStability = Math.max(0.5, this.environmentStability * 0.8);
+      else this.environmentStability = Math.min(1.0, this.environmentStability * 1.02);
+      this.stateActionResults.set(resultKey, currentResult);
+
+      if (reward <= -1) {
+        if (!this.wallMemory.has(sk)) this.wallMemory.set(sk, new Set());
+        this.wallMemory.get(sk).add(action);
+      }
+      this.stepsCount++;
+      if (this.stepsCount % 20 === 0 && this.environmentStability < this.adaptationThreshold) {
+        this.wallMemory.clear();
+      }
+    }
   }
-  var best=preferred[0];preferred.forEach(function(a){if(combo[a]>combo[best])best=a});return best;
-};
-MODQLAgent.prototype.reward=function(env,tr,steps){
-  if(tr.goal)return 10;if(tr.collision)return-1;
-  var oldD=man(tr.old,env.goalPos),newD=man(tr.state,env.goalPos),coverage=clamp((oldD-newD+1)/2,.05,1),fairness=1/(1+(this.visits.get(k(tr.state))||0)),travelCost=1;
-  return coverage*fairness*(1/travelCost)-.05;
-};
-MODQLAgent.prototype.learn=function(env,prev,a,r,next,done,steps,collision){
-  var pk=k(prev);this.visits.set(k(next),(this.visits.get(k(next))||0)+1);if(collision){var w=this.wallMemory.get(pk)||{};w[a]=1;this.wallMemory.set(pk,w)}
-  var s=this.state(env,prev,Math.max(0,steps-1)),ns=this.state(env,next,steps),first=Math.random()<.5,X=first?this.Q1:this.Q2,Y=first?this.Q2:this.Q1,qx=this.q(X,s),nx=this.q(X,ns),ny=this.q(Y,ns),astar=argmax(nx),target=r+(done?0:this.gamma*ny[astar]);qx[a]+=this.alpha*(target-qx[a]);
-};
 
-var modes={standard:null,modql:null},active='standard',episode=1,timer=null,template=null;
-function makeRun(kind,keepAgent){
-  if(!template){var base=new MazeEnv();template=base.snapshot()}
-  var old=modes[kind],agent=keepAgent&&old?old.agent:(kind==='standard'?new StandardAgent():new MODQLAgent()),env=new MazeEnv(template);if(kind==='modql')agent.setGoal(env.goalPos);
-  modes[kind]={kind:kind,env:env,agent:agent,steps:0,last:'None',status:'Ready',goalResult:'In Progress...',history:[cp(env.currentPos)],reward:0,finished:false,collisions:0,environmentUpdates:0};
-}
-function newEpisode(){stop();episode++;template=null;makeRun('standard',true);makeRun('modql',true);render()}
-function resetAll(){stop();episode=1;template=null;makeRun('standard',false);makeRun('modql',false);render()}
-function run(){return modes[active]}
-function stepOnce(){
-  var s=run();if(!s||s.finished)return;var prev=cp(s.env.currentPos),a=s.agent.select?s.agent.select(s.env,prev,s.steps):0;
-  if(active==='standard')a=s.agent.select(prev);
-  var tr=s.env.step(a),r=s.agent.reward(s.env,tr,s.steps+1);s.steps++;s.reward+=r;s.last=ACTION_NAMES[a];if(tr.collision)s.collisions++;
-  if(active==='standard')s.agent.learn(prev,a,r,tr.state,tr.done);else s.agent.learn(s.env,prev,a,r,tr.state,tr.done,s.steps,tr.collision);
-  s.history.push(cp(tr.state));s.environmentUpdates=s.env.environmentUpdates;
-  if(tr.done){s.finished=true;s.goalResult=tr.goal?'Goal Achieved!':'Goal Not Achieved';s.status=tr.goal?'Goal Achieved':'Timeout';stop()}else s.status='Episode '+episode+' running';render();
-}
-function play(){if(timer){stop();return}timer=setInterval(stepOnce,STEP_MS);render()}
-function stop(){if(timer){clearInterval(timer);timer=null}render()}
-function switchMode(kind){stop();active=kind;render()}
+  let env = null;
+  let agent = null;
+  let episode = 1;
+  let stepsTaken = 0;
+  let lastAction = 'None';
+  let goalStatus = 'In Progress...';
+  let statusText = 'Ready for Episode 1';
+  let history = [];
+  let timer = null;
+  let running = false;
+  let finished = false;
 
-function draw(){
-  var cv=document.getElementById('mazeCanvas'),s=run();if(!cv||!s)return;var x=cv.getContext('2d'),W=cv.width,H=cv.height,pad=18,cell=Math.floor((Math.min(W,H)-pad*2)/SIZE),ox=Math.floor((W-cell*SIZE)/2),oy=Math.floor((H-cell*SIZE)/2);x.clearRect(0,0,W,H);x.fillStyle='#fff';x.fillRect(0,0,W,H);
-  for(var r=0;r<SIZE;r++)for(var c=0;c<SIZE;c++){x.fillStyle=s.env.maze[r][c]?'#f4c542':'#ffffff';x.fillRect(ox+c*cell,oy+r*cell,cell,cell);x.strokeStyle='#d0d4da';x.lineWidth=1;x.strokeRect(ox+c*cell,oy+r*cell,cell,cell)}
-  if(s.history.length>1){x.beginPath();s.history.forEach(function(p,i){var px=ox+p[1]*cell+cell/2,py=oy+p[0]*cell+cell/2;i?x.lineTo(px,py):x.moveTo(px,py)});x.strokeStyle=active==='standard'?'rgba(210,55,55,.28)':'rgba(46,103,209,.30)';x.lineWidth=3;x.stroke()}
-  var g=s.env.goalPos,gx=ox+g[1]*cell+cell/2,gy=oy+g[0]*cell+cell/2;x.beginPath();x.fillStyle='#2eb85c';x.arc(gx,gy,cell*.28,0,Math.PI*2);x.fill();
-  var p=s.env.currentPos,px=ox+p[1]*cell+cell/2,py=oy+p[0]*cell+cell/2;x.beginPath();x.fillStyle='#e23d3d';x.arc(px,py,cell*.27,0,Math.PI*2);x.fill();x.strokeStyle='#9e2020';x.lineWidth=2;x.stroke();
-}
-function stat(label,val){return'<div style="margin-bottom:14px"><div class="k" style="font-size:11px;text-transform:uppercase;letter-spacing:.6px">'+label+'</div><div style="font-size:17px;font-weight:800;margin-top:3px">'+val+'</div></div>'}
-function lastSummary(kind){var s=modes[kind];if(!s)return'—';return(s.finished?s.goalResult:'In progress')+' · '+s.steps+' steps · '+s.collisions+' collisions'}
-function render(){
-  var root=document.getElementById('sub-maze'),s=run();if(!root||!s)return;
-  var algo=active==='standard'?'Standard Q-Learning':'Proposed MODQL',desc=active==='standard'?'Single Q-table · location-only state · standard scalar reward':'Double Q-learning · enriched L,D,T,H,A state · multi-objective reward';
-  root.innerHTML='<div class="algo-head '+(active==='standard'?'std':'mod')+'"><div class="ic">'+(active==='standard'?'Σ':'⌘')+'</div><div><h2>Maze Demo — '+algo+'</h2><p>'+desc+'</p></div></div>'+
-  '<div class="card"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="modeStd" class="btn '+(active==='standard'?'p':'g')+'">Standard Q-Learning</button><button id="modeMod" class="btn '+(active==='modql'?'p':'g')+'">Proposed MODQL</button><span class="tag">Episode '+episode+'</span></div><div class="k" style="margin-top:9px">Same original Maze Demo presentation. Switch algorithms to compare how each agent learns and reacts in the maze.</div></div>'+
-  '<div class="card" style="padding:18px"><div style="display:grid;grid-template-columns:minmax(210px,290px) minmax(360px,1fr);gap:24px;align-items:start" id="mazeOldLayout">'+
-    '<div><h3 style="margin-bottom:16px">Simulation Information</h3>'+stat('Episode',episode+' / 5')+stat('Status',s.status)+stat('Goal Result',s.goalResult)+stat('Steps Taken',s.steps+' / '+MAX_STEPS)+stat('Last Action',s.last)+stat('Cumulative Reward',s.reward.toFixed(3))+stat('Collisions',s.collisions)+stat('Environment Updates',s.environmentUpdates)+
-    '<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line)"><div class="k" style="font-weight:700;margin-bottom:8px">Legend</div><div class="k" style="line-height:2"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e23d3d;margin-right:7px"></span>Agent<br><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#2eb85c;margin-right:7px"></span>Goal<br><span style="display:inline-block;width:10px;height:10px;background:#f4c542;margin-right:7px"></span>Wall</div></div></div>'+
-    '<div><canvas id="mazeCanvas" width="520" height="520" style="width:100%;max-width:520px;background:#fff;border-radius:10px;display:block;margin:auto"></canvas><div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px"><button id="mazePlay" class="btn p">'+(timer?'Pause':'Play')+'</button><button id="mazeStep" class="btn g">Step</button><button id="mazeNew" class="btn g">New Episode</button><button id="mazeReset" class="btn g">Reset Learning</button></div></div></div></div>'+
-  '<div class="card"><h3>Quick comparison — current learning session</h3><table><thead><tr><th>Algorithm</th><th>State / estimator</th><th>Last result</th></tr></thead><tbody><tr><td><b>Standard Q-Learning</b></td><td>Location only · single Q-table</td><td>'+lastSummary('standard')+'</td></tr><tr><td><b>Proposed MODQL</b></td><td>L,D,T,H,A · Q1/Q2</td><td>'+lastSummary('modql')+'</td></tr></tbody></table><div class="k" style="margin-top:10px"><b>Note:</b> This maze is a visual learning sandbox. Thesis performance claims must still come from the controlled Laiban routing experiments and official/validated datasets.</div></div>';
-  document.getElementById('modeStd').onclick=function(){switchMode('standard')};document.getElementById('modeMod').onclick=function(){switchMode('modql')};document.getElementById('mazePlay').onclick=play;document.getElementById('mazeStep').onclick=stepOnce;document.getElementById('mazeNew').onclick=newEpisode;document.getElementById('mazeReset').onclick=resetAll;
-  var lay=document.getElementById('mazeOldLayout');if(window.innerWidth<850)lay.style.gridTemplateColumns='1fr';draw();
-}
-function init(){if(!document.getElementById('sub-maze'))return;makeRun('standard',false);makeRun('modql',false);render()}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+  function el(id) { return document.getElementById(id); }
+
+  function startEpisode(resetAgent = false) {
+    if (!env) env = new DynamicMazeEnvBrowser();
+    const state = env.reset();
+    if (!agent || resetAgent) agent = new ReflectionAgentBrowser();
+    agent.confidenceThreshold = 0.25;
+    agent.adaptationThreshold = 0.45;
+    agent.setGoalPosition(env.goalPos);
+    stepsTaken = 0;
+    lastAction = 'None';
+    goalStatus = 'In Progress...';
+    statusText = 'Episode ' + episode + ' running';
+    history = [clone(state)];
+    finished = false;
+    updateStats();
+    draw();
+  }
+
+  function endEpisode(success) {
+    stopTimer();
+    finished = true;
+    if (success) {
+      goalStatus = 'Goal Achieved!';
+      statusText = 'Goal Achieved';
+    } else {
+      goalStatus = 'Goal Not Achieved';
+      statusText = 'Timeout';
+    }
+    updateStats();
+    draw();
+  }
+
+  function stepOnce() {
+    if (finished) return;
+    const state = clone(env.currentPos);
+    const action = agent.selectAction(state);
+    const result = env.step(action);
+    lastAction = ACTION_NAMES[action];
+    const shortest = env.getOptimalPathLength();
+    agent.learn(state, action, result.reward, result.state, result.done, stepsTaken, shortest);
+    stepsTaken++;
+    history.push(clone(result.state));
+    updateStats();
+    draw();
+
+    if (result.done && same(result.state, env.goalPos)) endEpisode(true);
+    else if (stepsTaken >= MAX_STEPS || result.done) endEpisode(false);
+  }
+
+  function updateStats() {
+    if (el('mzEpisode')) el('mzEpisode').textContent = episode + ' / ' + MAX_EPISODES;
+    if (el('mzSteps')) el('mzSteps').textContent = stepsTaken + ' / ' + MAX_STEPS;
+    if (el('mzStatus')) el('mzStatus').textContent = statusText;
+    if (el('mzGoal')) el('mzGoal').textContent = goalStatus;
+    if (el('mzAction')) el('mzAction').textContent = lastAction;
+    if (el('mzEpsilon')) el('mzEpsilon').textContent = agent ? agent.epsilon.toFixed(3) : '—';
+  }
+
+  function draw() {
+    const canvas = el('mzCanvas');
+    if (!canvas || !env) return;
+    const ctx = canvas.getContext('2d');
+    const cell = canvas.width / SIZE;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (let r = 0; r < SIZE; r++) {
+      for (let c = 0; c < SIZE; c++) {
+        ctx.fillStyle = env.maze[r][c] ? '#f4d03f' : '#ffffff';
+        ctx.fillRect(c * cell, r * cell, cell, cell);
+        ctx.strokeStyle = '#808080';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(c * cell, r * cell, cell, cell);
+      }
+    }
+
+    ctx.fillStyle = 'rgba(70,70,70,.28)';
+    history.slice(0, -1).forEach(([r, c]) => {
+      ctx.beginPath();
+      ctx.arc(c * cell + cell / 2, r * cell + cell / 2, cell * 0.10, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ctx.fillStyle = '#00c853';
+    ctx.beginPath();
+    ctx.arc(env.goalPos[1] * cell + cell / 2, env.goalPos[0] * cell + cell / 2, cell * 0.30, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#f44336';
+    ctx.beginPath();
+    ctx.arc(env.currentPos[1] * cell + cell / 2, env.currentPos[0] * cell + cell / 2, cell * 0.30, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function startTimer() {
+    if (running || finished) return;
+    running = true;
+    if (el('mzPlay')) el('mzPlay').textContent = 'Pause';
+    timer = setInterval(stepOnce, STEP_MS);
+  }
+
+  function stopTimer() {
+    running = false;
+    if (timer) clearInterval(timer);
+    timer = null;
+    if (el('mzPlay')) el('mzPlay').textContent = 'Play';
+  }
+
+  function nextEpisode() {
+    stopTimer();
+    if (episode >= MAX_EPISODES) {
+      episode = 1;
+      agent = new ReflectionAgentBrowser();
+    } else {
+      episode++;
+    }
+    startEpisode(false);
+  }
+
+  function buildUI() {
+    const host = el('sub-maze');
+    if (!host) return;
+    host.innerHTML = `
+      <div class="card" style="padding:16px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+          <div>
+            <h3 style="font-size:16px;margin-bottom:4px">Maze Demonstration — Reflection Agent</h3>
+            <div class="k">Browser visualization of the uploaded <span class="mono">simple_maze_demo.py</span>. The maze logic and agent behavior are mirrored from <span class="mono">reflection-agent-maze</span>.</div>
+          </div>
+          <span class="pill open">ACTUAL AGENT LOGIC</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:minmax(210px,300px) minmax(300px,500px);gap:18px;align-items:start" class="maze-layout">
+          <div style="background:#f7f7f7;border-radius:12px;padding:14px;color:#111;min-height:420px">
+            <div style="font-weight:800;margin-bottom:12px">Maze Demonstration - Ball Moving in Maze</div>
+            <div style="font-size:13px;line-height:1.9">
+              <div>Episode: <b id="mzEpisode">1 / 5</b></div>
+              <div>Status: <b id="mzStatus">Ready</b></div>
+              <div>Goal Result: <b id="mzGoal">In Progress...</b></div>
+              <div>Steps Taken: <b id="mzSteps">0 / 100</b></div>
+              <div>Last Action: <b id="mzAction">None</b></div>
+              <div>Exploration ε: <b id="mzEpsilon">0.900</b></div>
+              <hr style="border:0;border-top:1px solid #ddd;margin:10px 0">
+              <div><span style="color:#f44336">●</span> Red Ball: Reflection Agent</div>
+              <div><span style="color:#00c853">●</span> Green Circle: Goal</div>
+              <div><span style="color:#d4ac0d">■</span> Yellow Blocks: Walls</div>
+              <div style="margin-top:10px;color:#555">Maze changes every 20 environment steps.</div>
+            </div>
+          </div>
+          <div>
+            <canvas id="mzCanvas" width="500" height="500" style="display:block;width:100%;max-width:500px;aspect-ratio:1/1;background:#fff;border-radius:10px;margin:0 auto"></canvas>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+          <button class="btn p" id="mzPlay" style="flex:0 0 110px">Play</button>
+          <button class="btn g" id="mzStep" style="flex:0 0 110px">Step</button>
+          <button class="btn g" id="mzReset" style="flex:0 0 140px">Restart Episode</button>
+          <button class="btn k" id="mzNext" style="flex:0 0 140px">Next Episode</button>
+        </div>
+      </div>
+
+      <div class="note">
+        <b>Implementation note.</b> The standalone Python version is preserved in the repository as <span class="mono">simple_maze_demo.py</span>. Because pygame cannot render directly inside a normal browser page, this tab mirrors the same environment and ReflectionAgent decision/learning behavior in JavaScript so the demonstration stays inside the existing system.
+      </div>
+      <style>
+        @media (max-width: 820px){ .maze-layout{grid-template-columns:1fr!important} }
+      </style>`;
+
+    el('mzPlay').addEventListener('click', () => running ? stopTimer() : startTimer());
+    el('mzStep').addEventListener('click', () => { stopTimer(); stepOnce(); });
+    el('mzReset').addEventListener('click', () => { stopTimer(); startEpisode(false); });
+    el('mzNext').addEventListener('click', nextEpisode);
+    episode = 1;
+    env = new DynamicMazeEnvBrowser();
+    agent = new ReflectionAgentBrowser();
+    startEpisode(false);
+  }
+
+  function wireTab() {
+    const btn = document.querySelector('#researchNav button[data-sub="maze"]');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#researchNav button').forEach((b) => b.classList.remove('on'));
+      btn.classList.add('on');
+      document.querySelectorAll('.subview').forEach((s) => s.classList.remove('active'));
+      const target = el('sub-maze');
+      if (target) target.classList.add('active');
+      draw();
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    buildUI();
+    wireTab();
+  });
 })();
