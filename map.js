@@ -30,7 +30,25 @@ function drawRoads(){
       L.marker(mid,{icon:L.divIcon({className:"",iconSize:[30,30],iconAnchor:[15,15],
         html:"<div style='width:30px;height:30px;border-radius:50%;background:#A24D42;border:2.5px solid #F4EAD8;box-shadow:0 3px 10px rgba(0,0,0,.5);display:grid;place-items:center;font-size:15px;color:#fff;font-weight:900'>&times;</div>"})}).addTo(gRoads);
     }
+    if(A<0.75){
+      var pts=edgeGeom(e),p=pts[Math.floor(pts.length/2)],reason=roadIssueReason(e,A);
+      var marker=L.marker([p[0]-0.0026,p[1]+0.0024],{icon:L.divIcon({className:"restriction-marker",iconSize:[28,28],iconAnchor:[14,14],
+        html:"<div class='rm "+b.k+"'>!</div>"})}).addTo(gRoads);
+      marker.bindPopup("<b>"+b.lab+" road segment</b><br>"+N[e.a].name+" &harr; "+N[e.b].name+
+        "<br>"+reason+"<br>Accessibility: <b>"+A.toFixed(2)+"</b>");
+      marker.on("mouseover",function(){this.openPopup()});
+      marker.on("mouseout",function(){this.closePopup()});
+    }
   });
+}
+function roadIssueReason(e,A){
+  var advisory=ADVISORIES.filter(function(a){return a.edge===e.key})[0];
+  if(advisory) return advisory.note||"official closure advisory";
+  var active=REPORTS.filter(function(r){return r.edge===e.key&&!r.cleared&&confidence(r)>=0.06})
+    .sort(function(a,b){return confidence(b)-confidence(a)})[0];
+  if(active) return active.type.toLowerCase()+" report: "+active.note;
+  if(wxFactor(e.surf)<0.9) return "rain slowed this "+SURF[e.surf].lab;
+  return "accessibility A "+A.toFixed(2);
 }
 function drawNodes(){
   gNodes.clearLayers();
@@ -38,7 +56,7 @@ function drawNodes(){
     if(n.kind==="depot"){
       L.marker([n.lat,n.lng],{icon:L.divIcon({className:"",iconSize:[34,34],iconAnchor:[17,17],
         html:"<div style='width:34px;height:34px;border-radius:11px;background:#333D1C;border:2.5px solid #B9AB6B;display:grid;place-items:center;font-size:15px;box-shadow:0 4px 12px rgba(0,0,0,.5)'>\uD83C\uDFEB</div>"})})
-        .addTo(gNodes).bindPopup("<b>"+n.name+"</b><br>"+n.sitios);
+        .addTo(gNodes).bindPopup("<b>"+n.name+"</b><br><span>Role:</span> Deployment origin / motor pool<br><span>Area:</span> "+n.sitios);
       return;
     }
     var idx=-1;PLAN.stops.forEach(function(s,i){if(s.id===n.id)idx=i});
@@ -49,10 +67,11 @@ function drawNodes(){
     L.circleMarker([n.lat,n.lng],{radius:r,color:col,weight:2,fillColor:col,fillOpacity:.16}).addTo(gNodes);
     L.marker([n.lat,n.lng],{icon:L.divIcon({className:"",iconSize:[26,26],iconAnchor:[13,13],
       html:"<div style='width:26px;height:26px;border-radius:50%;background:"+col+";color:#1F2612;display:grid;place-items:center;font-size:12px;font-weight:800;border:2px solid rgba(255,255,255,.85);box-shadow:0 3px 9px rgba(0,0,0,.45)'>"+lbl+"</div>"})})
-      .addTo(gNodes).bindPopup("<b>"+n.name+"</b><br>"+n.sitios+
-        "<br>D (learners): <b>"+n.learners+"</b><br>H (last served): <b>"+n.days+" days ago</b>"+
-        "<br>Visits, last 30 days: "+n.visits30+
-        (def?"<br><span style='color:#A24D42'><b>Deferred today</b></span>":idx>=0?"<br>Stop #"+(idx+1)+" &middot; ETA "+PLAN.stops[idx].arrive:"<br>Not scheduled today"));
+      .addTo(gNodes).bindPopup("<b>"+n.name+"</b><br><span>Community:</span> "+n.sitios+
+        "<br><span>Learners to Serve:</span> <b>"+n.learners+"</b>"+
+        "<br><span>Last Served:</span> <b>"+n.days+" days ago</b>"+
+        "<br><span>Visits This Month:</span> "+n.visits30+
+        (def?"<br><span>Status:</span> <b style='color:#A24D42'>Deferred today</b>":idx>=0?"<br><span>Stop Order:</span> <b>#"+(idx+1)+"</b><br><span>Estimated Arrival:</span> <b>"+PLAN.stops[idx].arrive+"</b>":"<br><span>Status:</span> Not scheduled today"));
   });
 }
 function drawRoute(){
@@ -75,12 +94,14 @@ function drawHaz(){
     var e=EK[r.edge]; if(!e) return;
     var g=edgeGeom(e),p=g[Math.max(0,Math.floor(g.length/2)-0)];
     var off=[p[0]+0.0035,p[1]+0.0035];
-    L.marker(off,{icon:L.divIcon({className:"",iconSize:[32,32],iconAnchor:[16,32],
+    var hz=L.marker(off,{icon:L.divIcon({className:"",iconSize:[32,32],iconAnchor:[16,32],
       html:"<div style='width:32px;height:32px;border-radius:11px 11px 11px 3px;background:#8A633F;border:2px solid #F4EAD8;display:grid;place-items:center;font-size:15px;box-shadow:0 4px 12px rgba(0,0,0,.5)'>"+r.em+"</div>"})})
       .addTo(gHaz).bindPopup("<b>"+r.type+"</b><br>"+N[e.a].name+" &harr; "+N[e.b].name+
         "<br>"+r.who+" &middot; "+(r.ago<1?Math.round(r.ago*60)+" min":r.ago.toFixed(1)+" h")+" ago"+
         "<br>Confidence <b>"+(confidence(r)*100).toFixed(0)+"%</b> &rarr; A = "+accA(e).toFixed(2)+
         "<br><i>"+r.note+"</i>");
+    hz.on("mouseover",function(){this.openPopup()});
+    hz.on("mouseout",function(){this.closePopup()});
   });
 }
 var unit=L.marker([0,0],{icon:L.divIcon({className:"",iconSize:[30,30],iconAnchor:[15,15],

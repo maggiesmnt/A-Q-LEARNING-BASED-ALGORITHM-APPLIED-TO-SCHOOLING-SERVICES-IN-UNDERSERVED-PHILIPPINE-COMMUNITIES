@@ -82,7 +82,7 @@ document.getElementById("btnRain").onclick=function(){
 };
 
 /* boot */
-drawRoads();drawRoute();drawNodes();drawHaz();placeUnit();renderDrive();renderStops();renderHazards();renderAnalysis();
+drawRoads();drawRoute();drawNodes();drawHaz();placeUnit();renderDrive();renderStops();renderHazards();renderHistory();renderAnalysis();
 map.fitBounds(L.latLngBounds(NODES.map(function(n){return [n.lat,n.lng]})).pad(0.12));
 setTimeout(function(){
   var e=EK["kab|pun"];

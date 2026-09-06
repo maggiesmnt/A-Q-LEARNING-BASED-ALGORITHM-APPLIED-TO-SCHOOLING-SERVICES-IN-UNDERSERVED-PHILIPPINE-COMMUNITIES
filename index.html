@@ -11,9 +11,17 @@
 <div id="app">
 <header id="top">
 <div class="brand">
-<div class="mark">A</div>
+<div class="logo-mark" aria-hidden="true">
+<svg viewBox="0 0 48 48" role="img">
+<path class="logo-road" d="M8 39C16 31 18 19 24 9c6 10 8 22 16 30"/>
+<path class="logo-route" d="M14 34c7-3 13-3 20 0"/>
+<circle class="logo-pin" cx="24" cy="12" r="5"/>
+<path class="logo-book" d="M13 20h9c1.4 0 2.5.6 3 1.5 0-.9 1.6-1.5 3-1.5h7v11h-8c-1.2 0-2 .4-2 1.2 0-.8-.8-1.2-2-1.2H13z"/>
+<path class="logo-hand" d="M11 37h26"/>
+</svg>
+</div>
 <div>Philippine Mobile Hub
-<small>Laiban · Tanay, Rizal — Deployment Ops</small>
+<small>Laiban · Tanay, Rizal — Deployment Site</small>
 </div>
 </div>
 <div class="spacer"></div>
@@ -45,21 +53,19 @@
 <button id="btnCenter" title="Re-center on unit">
 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
 </button>
-<button id="btnRain" title="Toggle heavy-rain telemetry">
+<button id="btnRain" title="Rain telemetry" aria-label="Toggle rain telemetry">
 <svg viewBox="0 0 24 24"><path d="M6 14a4 4 0 010-8 5 5 0 019.6-1A4 4 0 1117 14z"/><path d="M9 17v2M13 17v3M17 17v2"/></svg>
 </button>
-</div>
-<div id="legend">
-<div><i style="background:#25d07a"></i> Open (A &ge; .75)</div>
-<div><i style="background:#ffb020"></i> Caution (.45&ndash;.74)</div>
-<div><i style="background:#ff8a3d"></i> Restricted (.20&ndash;.44)</div>
-<div><i style="background:#ff4d4f"></i> Closed (A &lt; .20)</div>
 </div>
 <button id="fab">
 <svg viewBox="0 0 24 24"><path d="M12 3v11M12 18.5v.5"/><path d="M4.5 20h15L12 4.5z" style="stroke-width:1.7"/></svg>
 REPORT
 </button>
 <div id="navCard">
+<div class="panel-title">
+<span>Driver&rsquo;s Navigation</span>
+<small>Live route and road access</small>
+</div>
 <div class="turn">
 <div class="arrow"><svg viewBox="0 0 24 24" id="turnIcon"><path d="M12 20V7M12 7l-5 5M12 7l5 5"/></svg></div>
 <div>
@@ -72,32 +78,52 @@ REPORT
 <div class="big" id="etaMin">24</div>
 <div class="sub" id="etaClock">min &middot; 09:12</div>
 </div>
-<div class="who">
-<div class="nm" id="stopName">Sitio Kabayunan</div>
-<div class="mt" id="stopTags"></div>
-</div>
 </div>
 <div style="padding:0 15px 12px">
 <button class="btn k" id="completeBtn" style="width:100%">Mark stop as completed</button>
 </div>
-<div class="strip" id="routeStrip"></div>
-<div class="pbar"><i id="pbar" style="width:18%"></i></div>
+<div class="destination-panel">
+<div class="destination-label">Next destination</div>
+<div class="nm" id="stopName">Sitio Kabayunan</div>
+<div class="mt" id="stopTags"></div>
+</div>
+<div id="legend" class="accessibility-legend" aria-label="Road Accessibility Legend">
+<h3>Road Accessibility Legend</h3>
+<div><i style="background:#25d07a"></i><b>Open</b><span>Normal road, drive as usual</span></div>
+<div><i style="background:#ffb020"></i><b>Caution</b><span>Passable, but slower going</span></div>
+<div><i style="background:#ff8a3d"></i><b>Restricted</b><span>Needs supervisor approval to use</span></div>
+<div><i style="background:#ff4d4f"></i><b>Closed</b><span>Not passable right now</span></div>
+</div>
 </div>
 </section>
 <!-- ============ STOPS ============ -->
 <section class="view pad" id="view-stops">
-<h2 class="sec">Today&rsquo;s deployment</h2>
+<h2 class="sec">Stops / Deployment</h2>
 <p class="lede">Stop order produced by the trained policy, then re-checked against live road accessibility before dispatch.
 A community that becomes unreachable is <b>deferred, not dropped</b> &mdash; its visit-history index (H) carries a priority boost into the next run so equity is not silently lost.</p>
 <div class="g3" id="dayKpis"></div>
 <div style="height:12px"></div>
+<div class="card">
+<h3>Generated weekly route sequence</h3>
+<div class="k" id="weeklySequence"></div>
+</div>
+<div class="card">
+<h3>Remaining service time</h3>
+<div class="k" id="remainingService"></div>
+</div>
 <div id="stopsList"></div>
 <div class="card">
 <h3>Deferred / carried forward</h3>
 <div class="k" id="deferList">None &mdash; every scheduled community is reachable under current conditions.</div>
 </div>
 </section>
-<!-- ============ HAZARDS ============ -->
+<!-- ============ HISTORY ============ -->
+<section class="view pad" id="view-history">
+<h2 class="sec">History</h2>
+<p class="lede">Completed deployment records are structured so each run can later feed the visit-history term <span class="mono">H</span> in the next planning cycle.</p>
+<div id="historyList"></div>
+</section>
+<!-- ============ HAZARDS DATA VIEW (kept for routing behavior, no separate tab) ============ -->
 <section class="view pad" id="view-hazards">
 <h2 class="sec">Road &amp; hazard status</h2>
 <p class="lede">This is the answer to &ldquo;how do we know a path is unavailable?&rdquo; Every road segment carries an accessibility
@@ -194,7 +220,7 @@ Base map &copy; OpenStreetMap contributors. Node coordinates, learner demand and
 <nav id="tabs">
 <button data-view="drive" class="on"><svg viewBox="0 0 24 24"><path d="M12 21s7-6.3 7-11a7 7 0 10-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>Drive</button>
 <button data-view="stops"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Stops</button>
-<button data-view="hazards"><svg viewBox="0 0 24 24"><path d="M10.3 3.9L2.5 18a2 2 0 001.7 3h15.6a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4M12 17v.5"/></svg>Hazards<span class="bdg" id="tabBdg">2</span></button>
+<button data-view="history"><svg viewBox="0 0 24 24"><path d="M12 8v5l3 2"/><path d="M3.05 11a9 9 0 113.4 7"/><path d="M3 18v-5h5"/></svg>History</button>
 </nav>
 </div>
 <div id="veil"></div>

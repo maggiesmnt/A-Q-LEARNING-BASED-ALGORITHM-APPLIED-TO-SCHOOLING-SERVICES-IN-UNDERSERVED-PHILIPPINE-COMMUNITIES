@@ -21,8 +21,8 @@ function renderDrive(){
     var n=N[s.id], leg=s.p.legs[0], A=accA(leg), b=band(A);
     document.getElementById("stopName").textContent=n.name;
     document.getElementById("stopTags").innerHTML=
-      '<span class="tag">'+n.learners+' learners (D)</span>'+
-      '<span class="tag'+(n.days>=20?' hot':'')+'">last served '+n.days+'d ago (H)</span>'+
+      '<span class="tag">'+n.learners+' learners</span>'+
+      '<span class="tag'+(n.days>=20?' hot':'')+'">last served '+n.days+'d ago</span>'+
       '<span class="tag eq">'+s.p.km.toFixed(1)+' km</span>';
     document.getElementById("etaMin").textContent=Math.round(s.p.min);
     document.getElementById("etaClock").textContent="min &middot; arrive "+s.arrive;
@@ -32,27 +32,34 @@ function renderDrive(){
     cb.textContent="Mark \u201c"+n.name+"\u201d as completed";
     cb.disabled=false;
   }
-  var strip=document.getElementById("routeStrip");strip.innerHTML="";
-  PLAN.stops.forEach(function(st,i){
-    var d=document.createElement("div");
-    d.className="s "+(i<PROGRESS?"done":i===PROGRESS?"now":"");
-    d.innerHTML="<b>"+(i+1)+". "+N[st.id].name.replace("Sitio ","")+"</b>"+st.arrive+" &middot; "+N[st.id].learners+" learners";
-    strip.appendChild(d);
-  });
-  PLAN.deferred.forEach(function(df){
-    var d=document.createElement("div");d.className="s skip";
-    d.innerHTML="<b>\u2298 "+N[df.id].name.replace("Sitio ","")+"</b>deferred";
-    strip.appendChild(d);
-  });
-  document.getElementById("pbar").style.width=(100*PROGRESS/Math.max(1,PLAN.stops.length))+"%";
+  var strip=document.getElementById("routeStrip");
+  if(strip){
+    strip.innerHTML="";
+    PLAN.stops.forEach(function(st,i){
+      var d=document.createElement("div");
+      d.className="s "+(i<PROGRESS?"done":i===PROGRESS?"now":"");
+      d.innerHTML="<b>"+(i+1)+". "+N[st.id].name.replace("Sitio ","")+"</b>"+st.arrive+" &middot; "+N[st.id].learners+" learners";
+      strip.appendChild(d);
+    });
+    PLAN.deferred.forEach(function(df){
+      var d=document.createElement("div");d.className="s skip";
+      d.innerHTML="<b>\u2298 "+N[df.id].name.replace("Sitio ","")+"</b>deferred";
+      strip.appendChild(d);
+    });
+  }
+  var pbar=document.getElementById("pbar");
+  if(pbar) pbar.style.width=(100*PROGRESS/Math.max(1,PLAN.stops.length))+"%";
   var used=0;PLAN.stops.slice(0,PROGRESS).forEach(function(st){used+=st.p.min+serviceMin(N[st.id])});
   var left=Math.max(0,SHIFT_MIN-used);
   document.getElementById("shiftLeft").textContent=Math.floor(left/60)+"h "+Math.round(left%60)+"m";
   document.getElementById("wxMm").textContent=WX.mm+" mm";
   var live=REPORTS.filter(function(r){return !r.cleared&&confidence(r)>=0.15}).length+ADVISORIES.length;
   document.getElementById("hzCount").textContent=live;
-  document.getElementById("tabBdg").textContent=live;
-  document.getElementById("tabBdg").style.display=live?"block":"none";
+  var tabBdg=document.getElementById("tabBdg");
+  if(tabBdg){
+    tabBdg.textContent=live;
+    tabBdg.style.display=live?"block":"none";
+  }
 }
 
 function alertShow(title,text){
@@ -84,6 +91,7 @@ function refresh(msg){
   PLAN=planRoute();
   if(PROGRESS>PLAN.stops.length)PROGRESS=PLAN.stops.length;
   drawRoads();drawRoute();drawNodes();drawHaz();placeUnit();renderDrive();renderStops();renderHazards();
+  if(typeof renderHistory==="function") renderHistory();
   if(typeof renderAnalysis==="function") renderAnalysis();
   var after=PLAN.stops.map(function(s){return s.id}).join(",");
   if(msg){
