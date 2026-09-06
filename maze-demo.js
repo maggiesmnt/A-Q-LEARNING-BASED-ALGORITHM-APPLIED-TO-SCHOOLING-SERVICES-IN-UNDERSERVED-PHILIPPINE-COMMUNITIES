@@ -1,24 +1,17 @@
 /* ============================================================
    Maze Demo — side-by-side Standard Q-Learning vs Proposed MODQL
 
-   Standard side:
-   - preserved from iboasay/sys baseline maze adaptation
-   - single Q-table
-   - location-only state
-
-   Proposed side:
-   - visual analogy of thesis MODQL methodology
-   - two Q-tables (Q1/Q2)
-   - enriched maze state inspired by <L,D,T,H,A>
-   - decoupled Double Q-Learning updates
-   - combined Q1 + Q2 action selection
-
-   Both sides keep the same existing UI language and maze design.
+   Revision:
+   - hidden pretraining runs before the visible demonstration
+   - both agents train on copies of the same base maze
+   - visible evaluation uses near-greedy policies
+   - current UI and side-by-side comparison are preserved
    ============================================================ */
 (function(){
   'use strict';
 
   const SIZE=10, OBSTACLE_RATIO=.25, CHANGE_FREQUENCY=20, MAX_STEPS=100, MAX_EPISODES=5, STEP_MS=200;
+  const PRETRAIN_EPISODES=350, TRAIN_EPS_START=1.0, TRAIN_EPS_MIN=.02, TRAIN_EPS_DECAY=.985, EVAL_EPS=.01;
   const ACTIONS=[[-1,0],[1,0],[0,-1],[0,1]], ACTION_NAMES=['Up','Down','Left','Right'];
   const key=p=>p[0]+','+p[1], clone=p=>[p[0],p[1]], same=(a,b)=>a[0]===b[0]&&a[1]===b[1];
   const randInt=n=>Math.floor(Math.random()*n), manhattan=(a,b)=>Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1]), zeros4=()=>[0,0,0,0];
@@ -77,21 +70,22 @@
     selectAction(state){if(Math.random()<this.epsilon)return randInt(4);const q=this.qTable.has(key(state))?this.qTable.get(key(state)):this.defaultQ,max=Math.max(...q),choices=[];q.forEach((v,i)=>{if(v===max)choices.push(i);});return choices[randInt(choices.length)];}
     updateQ(state,action,reward,nextState,done){const q=this.getQ(key(state)),nq=this.getQ(key(nextState)),nextMax=Math.max(...nq),old=q[action];q[action]=(1-this.alpha)*old+this.alpha*(reward+(done?0:this.gamma*nextMax));}
     learn(state,action,reward,nextState,done,steps){
+      this.updateQ(state,action,reward,nextState,done);
       this.experienceBuffer.push([clone(state),action,reward,clone(nextState),done]);if(this.experienceBuffer.length>this.experienceMax)this.experienceBuffer.shift();
       if(this.experienceBuffer.length>=32)for(let i=0;i<32;i++){const e=this.experienceBuffer[randInt(this.experienceBuffer.length)];this.updateQ(e[0],e[1],e[2],e[3],e[4]);}
-      if(done)this.epsilon=Math.max(this.minEpsilon,this.epsilon*this.epsilonDecay);this.visitedStates.add(key(nextState));this.rewardHistory.push(reward);if(this.rewardHistory.length>this.historySize)this.rewardHistory.shift();
+      this.visitedStates.add(key(nextState));this.rewardHistory.push(reward);if(this.rewardHistory.length>this.historySize)this.rewardHistory.shift();
       if(done){this.stepHistory.push(steps);if(this.stepHistory.length>this.historySize)this.stepHistory.shift();this.successHistory.push(reward>0?1:0);if(this.successHistory.length>150)this.successHistory.shift();}
     }
   }
 
   class ProposedMODQLMazeAgent{
-    constructor(){this.q1=new Map();this.q2=new Map();this.alpha=.1;this.gamma=.9;this.epsilon=.3;this.epsilonDecay=.995;this.epsilonMin=.1;this.visits=new Map();}
+    constructor(){this.q1=new Map();this.q2=new Map();this.alpha=.1;this.gamma=.9;this.epsilon=.3;this.visits=new Map();}
     q(map,sk){if(!map.has(sk))map.set(sk,zeros4());return map.get(sk);}
     visitCount(p){return this.visits.get(key(p))||0;}
+    resetEpisodeMemory(){this.visits=new Map();}
     fairness(){const vals=[...this.visits.values()];if(!vals.length)return 1;const s=vals.reduce((a,b)=>a+b,0),sq=vals.reduce((a,b)=>a+b*b,0);return sq===0?1:(s*s)/(vals.length*sq);}
     stateKey(env,pos,steps){
-      const L=key(pos);
-      const maxDist=(SIZE-1)*2,dist=manhattan(pos,env.goalPos),progress=1-dist/maxDist;
+      const L=key(pos),maxDist=(SIZE-1)*2,dist=manhattan(pos,env.goalPos),progress=1-dist/maxDist;
       const D=progress<.25?0:progress<.5?1:progress<.75?2:3;
       const remaining=Math.max(0,MAX_STEPS-steps),T=Math.min(5,Math.max(0,Math.floor((remaining/MAX_STEPS)*6)));
       const count=this.visitCount(pos),H=count===0?3:count===1?2:count<=3?1:0;
@@ -104,7 +98,8 @@
     }
     reward(env,before,result){
       if(result.collision)return-1;
-      const oldDist=manhattan(before,env.goalPos),newDist=manhattan(result.state,env.goalPos),coverage=result.done&&same(result.state,env.goalPos)?1:Math.max(.05,(oldDist-newDist+1)/3);
+      const oldDist=manhattan(before,env.goalPos),newDist=manhattan(result.state,env.goalPos);
+      const coverage=result.done&&same(result.state,env.goalPos)?1:Math.max(.05,(oldDist-newDist+1)/3);
       const fairness=Math.max(.2,this.fairness()),travelCost=1,base=coverage*fairness*(1/travelCost);
       return result.done&&same(result.state,env.goalPos)?10+base:base-.1;
     }
@@ -112,22 +107,51 @@
       const sk=this.stateKey(env,state,steps),nk=this.stateKey(env,result.state,steps+1),r=this.reward(env,state,result),done=result.done;
       if(Math.random()<.5){const q1=this.q(this.q1,sk),n1=this.q(this.q1,nk),n2=this.q(this.q2,nk),astar=n1.indexOf(Math.max(...n1)),target=r+(done?0:this.gamma*n2[astar]);q1[action]+=this.alpha*(target-q1[action]);}
       else{const q2=this.q(this.q2,sk),n2=this.q(this.q2,nk),n1=this.q(this.q1,nk),astar=n2.indexOf(Math.max(...n2)),target=r+(done?0:this.gamma*n1[astar]);q2[action]+=this.alpha*(target-q2[action]);}
-      this.visits.set(key(result.state),this.visitCount(result.state)+1);if(done)this.epsilon=Math.max(this.epsilonMin,this.epsilon*this.epsilonDecay);return r;
+      this.visits.set(key(result.state),this.visitCount(result.state)+1);return r;
     }
   }
 
-  let stdEnv=null,modEnv=null,stdAgent=null,modAgent=null,episode=1,timer=null,running=false;
+  let stdEnv=null,modEnv=null,stdAgent=null,modAgent=null,episode=1,timer=null,running=false,baseMaze=null;
+  let trainingSummary={stdSuccess:0,modSuccess:0,episodes:PRETRAIN_EPISODES};
   const state={std:{steps:0,last:'None',goal:'In Progress...',status:'Ready',history:[],finished:false},mod:{steps:0,last:'None',goal:'In Progress...',status:'Ready',history:[],finished:false}};
 
+  function trainStandardOnBase(agent,base){
+    let successes=0;agent.epsilon=TRAIN_EPS_START;
+    for(let ep=0;ep<PRETRAIN_EPISODES;ep++){
+      const env=new DynamicMazeEnvBrowser();env.cloneFrom(base);let steps=0,done=false;
+      while(!done&&steps<MAX_STEPS){const s=clone(env.currentPos),a=agent.selectAction(s),r=env.step(a);agent.learn(s,a,r.reward,r.state,r.done,steps);steps++;done=r.done;if(done&&same(r.state,env.goalPos))successes++;}
+      agent.epsilon=Math.max(TRAIN_EPS_MIN,agent.epsilon*TRAIN_EPS_DECAY);
+    }
+    agent.epsilon=EVAL_EPS;return successes;
+  }
+
+  function trainMODQLOnBase(agent,base){
+    let successes=0;agent.epsilon=TRAIN_EPS_START;
+    for(let ep=0;ep<PRETRAIN_EPISODES;ep++){
+      const env=new DynamicMazeEnvBrowser();env.cloneFrom(base);agent.resetEpisodeMemory();let steps=0,done=false;
+      while(!done&&steps<MAX_STEPS){const s=clone(env.currentPos),a=agent.selectAction(env,s,steps),r=env.step(a);agent.learn(env,s,a,r,steps);steps++;done=r.done;if(done&&same(r.state,env.goalPos))successes++;}
+      agent.epsilon=Math.max(TRAIN_EPS_MIN,agent.epsilon*TRAIN_EPS_DECAY);
+    }
+    agent.resetEpisodeMemory();agent.epsilon=EVAL_EPS;return successes;
+  }
+
+  function pretrainPair(){
+    stdAgent=new BaselineConfidenceAgentBrowser();modAgent=new ProposedMODQLMazeAgent();
+    trainingSummary.stdSuccess=trainStandardOnBase(stdAgent,baseMaze);
+    trainingSummary.modSuccess=trainMODQLOnBase(modAgent,baseMaze);
+  }
+
   function resetPair(resetAgents=false){
-    const base=new DynamicMazeEnvBrowser();base.reset();stdEnv=new DynamicMazeEnvBrowser();modEnv=new DynamicMazeEnvBrowser();stdEnv.cloneFrom(base);modEnv.cloneFrom(base);
-    if(!stdAgent||resetAgents)stdAgent=new BaselineConfidenceAgentBrowser();if(!modAgent||resetAgents)modAgent=new ProposedMODQLMazeAgent();
-    for(const side of ['std','mod']){state[side].steps=0;state[side].last='None';state[side].goal='In Progress...';state[side].status='Episode '+episode+' running';state[side].finished=false;}
+    if(!baseMaze){baseMaze=new DynamicMazeEnvBrowser();baseMaze.reset();}
+    if(resetAgents)pretrainPair();
+    stdEnv=new DynamicMazeEnvBrowser();modEnv=new DynamicMazeEnvBrowser();stdEnv.cloneFrom(baseMaze);modEnv.cloneFrom(baseMaze);modAgent.resetEpisodeMemory();
+    stdAgent.epsilon=EVAL_EPS;modAgent.epsilon=EVAL_EPS;
+    for(const side of ['std','mod']){state[side].steps=0;state[side].last='None';state[side].goal='In Progress...';state[side].status='Evaluation '+episode;state[side].finished=false;}
     state.std.history=[clone(stdEnv.currentPos)];state.mod.history=[clone(modEnv.currentPos)];updateStats();drawAll();
   }
 
-  function stepStandard(){if(state.std.finished)return;const s=clone(stdEnv.currentPos),a=stdAgent.selectAction(s),r=stdEnv.step(a);stdAgent.learn(s,a,r.reward,r.state,r.done,state.std.steps);state.std.steps++;state.std.last=ACTION_NAMES[a];state.std.history.push(clone(r.state));if(r.done&&same(r.state,stdEnv.goalPos)){state.std.goal='Goal Achieved!';state.std.status='Goal Achieved';state.std.finished=true;}else if(state.std.steps>=MAX_STEPS||r.done){state.std.goal='Goal Not Achieved';state.std.status='Timeout';state.std.finished=true;}}
-  function stepProposed(){if(state.mod.finished)return;const s=clone(modEnv.currentPos),a=modAgent.selectAction(modEnv,s,state.mod.steps),r=modEnv.step(a);modAgent.learn(modEnv,s,a,r,state.mod.steps);state.mod.steps++;state.mod.last=ACTION_NAMES[a];state.mod.history.push(clone(r.state));if(r.done&&same(r.state,modEnv.goalPos)){state.mod.goal='Goal Achieved!';state.mod.status='Goal Achieved';state.mod.finished=true;}else if(state.mod.steps>=MAX_STEPS||r.done){state.mod.goal='Goal Not Achieved';state.mod.status='Timeout';state.mod.finished=true;}}
+  function stepStandard(){if(state.std.finished)return;const s=clone(stdEnv.currentPos),a=stdAgent.selectAction(s),r=stdEnv.step(a);state.std.steps++;state.std.last=ACTION_NAMES[a];state.std.history.push(clone(r.state));if(r.done&&same(r.state,stdEnv.goalPos)){state.std.goal='Goal Achieved!';state.std.status='Goal Achieved';state.std.finished=true;}else if(state.std.steps>=MAX_STEPS||r.done){state.std.goal='Goal Not Achieved';state.std.status='Timeout';state.std.finished=true;}}
+  function stepProposed(){if(state.mod.finished)return;const s=clone(modEnv.currentPos),a=modAgent.selectAction(modEnv,s,state.mod.steps),r=modEnv.step(a);modAgent.visits.set(key(r.state),modAgent.visitCount(r.state)+1);state.mod.steps++;state.mod.last=ACTION_NAMES[a];state.mod.history.push(clone(r.state));if(r.done&&same(r.state,modEnv.goalPos)){state.mod.goal='Goal Achieved!';state.mod.status='Goal Achieved';state.mod.finished=true;}else if(state.mod.steps>=MAX_STEPS||r.done){state.mod.goal='Goal Not Achieved';state.mod.status='Timeout';state.mod.finished=true;}}
   function stepBoth(){stepStandard();stepProposed();updateStats();drawAll();if(state.std.finished&&state.mod.finished)stopTimer();}
 
   function drawMaze(canvasId,env,history){const canvas=el(canvasId);if(!canvas||!env)return;const ctx=canvas.getContext('2d'),cell=canvas.width/SIZE;ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -138,11 +162,14 @@
   function drawAll(){drawMaze('mzCanvasStd',stdEnv,state.std.history);drawMaze('mzCanvasMod',modEnv,state.mod.history);}
   function updateStats(){
     const bind=(prefix,s,eps)=>{if(el(prefix+'Episode'))el(prefix+'Episode').textContent=episode+' / '+MAX_EPISODES;if(el(prefix+'Steps'))el(prefix+'Steps').textContent=s.steps+' / '+MAX_STEPS;if(el(prefix+'Status'))el(prefix+'Status').textContent=s.status;if(el(prefix+'Goal'))el(prefix+'Goal').textContent=s.goal;if(el(prefix+'Action'))el(prefix+'Action').textContent=s.last;if(el(prefix+'Epsilon'))el(prefix+'Epsilon').textContent=eps.toFixed(3);};
-    bind('std',state.std,stdAgent?stdAgent.epsilon:.3);bind('mod',state.mod,modAgent?modAgent.epsilon:.3);
+    bind('std',state.std,stdAgent?stdAgent.epsilon:EVAL_EPS);bind('mod',state.mod,modAgent?modAgent.epsilon:EVAL_EPS);
+    if(el('stdTrain'))el('stdTrain').textContent=trainingSummary.stdSuccess+' / '+PRETRAIN_EPISODES;
+    if(el('modTrain'))el('modTrain').textContent=trainingSummary.modSuccess+' / '+PRETRAIN_EPISODES;
   }
   function startTimer(){if(running)return;running=true;if(el('mzPlay'))el('mzPlay').textContent='Pause';timer=setInterval(stepBoth,STEP_MS);}
   function stopTimer(){running=false;if(timer)clearInterval(timer);timer=null;if(el('mzPlay'))el('mzPlay').textContent='Play';}
-  function nextEpisode(){stopTimer();if(episode>=MAX_EPISODES){episode=1;stdAgent=new BaselineConfidenceAgentBrowser();modAgent=new ProposedMODQLMazeAgent();}else episode++;resetPair(false);}
+  function nextEpisode(){stopTimer();episode=episode>=MAX_EPISODES?1:episode+1;resetPair(false);}
+  function retrain(){stopTimer();baseMaze=new DynamicMazeEnvBrowser();baseMaze.reset();episode=1;pretrainPair();resetPair(false);}
 
   function panel(title,badge,prefix,canvasId,description,logicNote){return `
     <div class="card" style="padding:14px;margin:0">
@@ -150,7 +177,7 @@
       <div style="display:grid;grid-template-columns:minmax(170px,220px) minmax(250px,1fr);gap:12px;align-items:start" class="maze-side-layout">
         <div style="background:var(--maze-panel);border:1px solid var(--line);border-radius:12px;padding:12px;color:var(--txt);min-height:350px">
           <div style="font-weight:800;margin-bottom:10px">Maze Demonstration</div><div style="font-size:12px;line-height:1.85">
-            <div>Episode: <b id="${prefix}Episode">1 / 5</b></div><div>Status: <b id="${prefix}Status">Ready</b></div><div>Goal Result: <b id="${prefix}Goal">In Progress...</b></div><div>Steps Taken: <b id="${prefix}Steps">0 / 100</b></div><div>Last Action: <b id="${prefix}Action">None</b></div><div>Exploration ε: <b id="${prefix}Epsilon">0.300</b></div>
+            <div>Hidden training success: <b id="${prefix}Train">—</b></div><div>Episode: <b id="${prefix}Episode">1 / 5</b></div><div>Status: <b id="${prefix}Status">Ready</b></div><div>Goal Result: <b id="${prefix}Goal">In Progress...</b></div><div>Steps Taken: <b id="${prefix}Steps">0 / 100</b></div><div>Last Action: <b id="${prefix}Action">None</b></div><div>Evaluation ε: <b id="${prefix}Epsilon">0.010</b></div>
             <hr style="border:0;border-top:1px solid var(--line);margin:9px 0"><div><span style="color:var(--maze-agent)">●</span> Agent</div><div><span style="color:var(--maze-goal)">●</span> Goal</div><div><span style="color:var(--maze-wall)">■</span> Walls</div><div style="margin-top:9px;color:var(--dim)">${logicNote}</div>
           </div>
         </div>
@@ -160,16 +187,17 @@
 
   function buildUI(){const host=el('sub-maze');if(!host)return;host.innerHTML=`
     <div class="card" style="padding:16px">
-      <div style="margin-bottom:12px"><h3 style="font-size:16px;margin-bottom:4px">Maze Demo — Standard vs Proposed Algorithm</h3><div class="k">Same visual environment and starting maze for a direct demonstration. The left side preserves the current standard Q-learning example; the right side uses the thesis proposed MODQL logic.</div></div>
+      <div style="margin-bottom:12px"><h3 style="font-size:16px;margin-bottom:4px">Maze Demo — Standard vs Proposed Algorithm</h3><div class="k">Both agents are trained first on copies of the same maze, then evaluated side by side using the learned policy with almost no exploration. This makes the visible run a demonstration of learned behavior instead of learning from scratch.</div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" class="maze-compare">
-        ${panel('Standard Q-Learning','STANDARD','std','mzCanvasStd','Current iboasay/sys baseline maze implementation.','Single Q-table · location-only state')}
-        ${panel('Proposed MODQL','PROPOSED','mod','mzCanvasMod','Maze visualization of the proposed Multi-Objective Double Q-Learning approach.','Q1 + Q2 · enriched state <L,D,T,H,A> analogy')}
+        ${panel('Standard Q-Learning','STANDARD','std','mzCanvasStd','Current iboasay/sys baseline maze logic with hidden pretraining.','Single Q-table · location-only state')}
+        ${panel('Proposed MODQL','PROPOSED','mod','mzCanvasMod','Proposed Multi-Objective Double Q-Learning maze analogy with hidden pretraining.','Q1 + Q2 · enriched state <L,D,T,H,A> analogy')}
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="btn p" id="mzPlay" style="flex:0 0 110px">Play</button><button class="btn g" id="mzStep" style="flex:0 0 110px">Step Both</button><button class="btn g" id="mzReset" style="flex:0 0 150px">Restart Episode</button><button class="btn k" id="mzNext" style="flex:0 0 140px">Next Episode</button></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="btn p" id="mzPlay" style="flex:0 0 110px">Play</button><button class="btn g" id="mzStep" style="flex:0 0 110px">Step Both</button><button class="btn g" id="mzReset" style="flex:0 0 150px">Restart Episode</button><button class="btn k" id="mzNext" style="flex:0 0 140px">Next Episode</button><button class="btn g" id="mzRetrain" style="flex:0 0 170px">New Maze + Retrain</button></div>
     </div>
-    <div class="note"><b>Methodology note.</b> The proposed maze is a visual analogy, not Chapter 4 evidence. It preserves the research structure of the trained MODQL implementation: two decoupled Q-tables, combined Q1+Q2 action selection, and an enriched state inspired by <span class="mono">S=&lang;L,D,T,H,A&rang;</span>. In the real routing model, D/H/A come from learner demand, historical service, and road accessibility data.</div>
+    <div class="note"><b>How to read this demo.</b> Hidden training runs for ${PRETRAIN_EPISODES} episodes before the visible evaluation. A goal is still not guaranteed every run because the environment can change, but the agents are no longer starting from zero knowledge. The proposed maze remains a visual analogy of the thesis MODQL methodology, not final Chapter 4 evidence.</div>
     <style>@media(max-width:1150px){.maze-compare{grid-template-columns:1fr!important}}@media(max-width:760px){.maze-side-layout{grid-template-columns:1fr!important}}</style>`;
-    el('mzPlay').addEventListener('click',()=>running?stopTimer():startTimer());el('mzStep').addEventListener('click',()=>{stopTimer();stepBoth();});el('mzReset').addEventListener('click',()=>{stopTimer();resetPair(false);});el('mzNext').addEventListener('click',nextEpisode);episode=1;resetPair(true);
+    el('mzPlay').addEventListener('click',()=>running?stopTimer():startTimer());el('mzStep').addEventListener('click',()=>{stopTimer();stepBoth();});el('mzReset').addEventListener('click',()=>{stopTimer();resetPair(false);});el('mzNext').addEventListener('click',nextEpisode);el('mzRetrain').addEventListener('click',retrain);
+    episode=1;baseMaze=new DynamicMazeEnvBrowser();baseMaze.reset();pretrainPair();resetPair(false);
   }
   function wireTab(){const btn=document.querySelector('#researchNav button[data-sub="maze"]');if(!btn)return;btn.addEventListener('click',()=>{document.querySelectorAll('#researchNav button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');document.querySelectorAll('.subview').forEach(s=>s.classList.remove('active'));const target=el('sub-maze');if(target)target.classList.add('active');drawAll();});}
   document.addEventListener('DOMContentLoaded',()=>{buildUI();wireTab();});
