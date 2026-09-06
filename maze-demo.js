@@ -257,6 +257,7 @@
     if (result.done && same(result.state,env.goalPos)) endEpisode(true);
     else if (stepsTaken >= MAX_STEPS || result.done) endEpisode(false);
   }
+
   function updateStats(){
     if (el('mzEpisode')) el('mzEpisode').textContent = episode+' / '+MAX_EPISODES;
     if (el('mzSteps')) el('mzSteps').textContent = stepsTaken+' / '+MAX_STEPS;
