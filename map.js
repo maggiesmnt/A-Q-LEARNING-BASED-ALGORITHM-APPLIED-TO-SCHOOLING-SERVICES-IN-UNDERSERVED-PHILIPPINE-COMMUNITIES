@@ -14,6 +14,17 @@ L.control.scale({imperial:false,position:"bottomright"}).addTo(map);
 var gRoads=L.layerGroup().addTo(map), gRoute=L.layerGroup().addTo(map),
     gNodes=L.layerGroup().addTo(map), gHaz=L.layerGroup().addTo(map);
 
+var DRIVE_ROUTE_FLOW_CLASS="drive-route-flow";
+(function installDriveRouteFlowStyle(){
+  if(document.getElementById("driveRouteFlowStyle")) return;
+  var style=document.createElement("style");
+  style.id="driveRouteFlowStyle";
+  style.textContent="@keyframes driveRouteFlow{to{stroke-dashoffset:-34;}}"+
+    ".leaflet-overlay-pane path."+DRIVE_ROUTE_FLOW_CLASS+"{animation:driveRouteFlow 3.8s linear infinite;}"+
+    "@media (prefers-reduced-motion:reduce){.leaflet-overlay-pane path."+DRIVE_ROUTE_FLOW_CLASS+"{animation:none;}}";
+  document.head.appendChild(style);
+})();
+
 function drawRoads(){
   gRoads.clearLayers();
   EDGES.forEach(function(e){
@@ -49,6 +60,11 @@ function roadIssueReason(e,A){
   if(active) return active.type.toLowerCase()+" report: "+active.note;
   if(wxFactor(e.surf)<0.9) return "rain slowed this "+SURF[e.surf].lab;
   return "accessibility A "+A.toFixed(2);
+}
+function routeLegGeom(p,i,e){
+  var g=edgeGeom(e);
+  if(!p||!p.seq||!p.seq[i]) return g;
+  return e.a===p.seq[i]?g:g.slice().reverse();
 }
 function drawNodes(){
   gNodes.clearLayers();
@@ -87,13 +103,13 @@ function drawRoute(){
     if(i<PROGRESS){
       style={color:"#5E6828",weight:5,opacity:.38,lineCap:"round",dashArray:null};
     }else if(i===PROGRESS){
-      style={color:"#B9AB6B",weight:8,opacity:.98,lineCap:"round",dashArray:"12 8"};
+      style={color:"#DCC9AF",weight:4,opacity:.96,lineCap:"round",dashArray:"10 7",className:DRIVE_ROUTE_FLOW_CLASS};
     }else{
       style={color:"#8E8655",weight:4,opacity:.34,lineCap:"round",dashArray:null};
     }
 
-    s.p.legs.forEach(function(e){
-      L.polyline(edgeGeom(e),style).addTo(gRoute);
+    s.p.legs.forEach(function(e,j){
+      L.polyline(i===PROGRESS?routeLegGeom(s.p,j,e):edgeGeom(e),style).addTo(gRoute);
     });
   });
 
@@ -102,8 +118,8 @@ function drawRoute(){
      with the active navigation route. */
   var hasNextStop=!!PLAN.stops[PROGRESS];
   if(!hasNextStop&&PLAN.ret){
-    PLAN.ret.legs.forEach(function(e){
-      L.polyline(edgeGeom(e),{color:"#7B753B",weight:6,opacity:.75,dashArray:"6 8",lineCap:"round"}).addTo(gRoute);
+    PLAN.ret.legs.forEach(function(e,j){
+      L.polyline(routeLegGeom(PLAN.ret,j,e),{color:"#7B753B",weight:4,opacity:.75,dashArray:"10 7",lineCap:"round",className:DRIVE_ROUTE_FLOW_CLASS}).addTo(gRoute);
     });
   }
 }
