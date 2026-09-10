@@ -16,6 +16,10 @@ var DRIVE_INITIAL_WX_MM=WX.mm;
 var SIM_START_DATE=new Date(Date.now());
 SIM_START_DATE.setHours(0,0,0,0);
 var SIM_DATE=new Date(SIM_START_DATE);
+var CURRENT_LOCATION="hub";
+var COMPLETED_STOPS=[];
+var DRIVE_USED_MIN=0;
+var DRIVE_WEATHER_SEQUENCE=[38,12,78,24];
 
 function isSimulationDay1(){
   return SIM_DATE.getFullYear()===SIM_START_DATE.getFullYear() &&
@@ -45,8 +49,9 @@ function ensureDriveDayControls(){
   }
 
   makeButton("nextDayBtn","Start Next Day","p");
-  makeButton("backDayBtn","Back One Day","g");
   makeButton("resetDayBtn","Reset to Day 1","reset");
+  var obsoleteBack=document.getElementById("backDayBtn");
+  if(obsoleteBack) obsoleteBack.remove();
 
   if(!document.getElementById("dayLabel")){
     var label=document.createElement("div");
@@ -69,13 +74,10 @@ function renderDrive(){
   var s=nextStop();
   var cb=document.getElementById("completeBtn");
   var nd=document.getElementById("nextDayBtn");
-  var bd=document.getElementById("backDayBtn");
   var rd=document.getElementById("resetDayBtn");
   var label=document.getElementById("dayLabel");
 
   if(label) label.textContent=SIM_DATE.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
-  if(bd) bd.disabled=isSimulationDay1();
-
   if(!s){
     document.getElementById("stopName").textContent="Return to Laiban ALS Hub";
     document.getElementById("stopTags").innerHTML='<span class="tag eq">deployment complete</span>';
@@ -85,7 +87,6 @@ function renderDrive(){
     document.getElementById("turnSub").textContent="Great, today's done. Come back tomorrow (or click 'Start Next Day')";
     cb.style.display="none";
     if(nd) nd.style.display="block";
-    if(bd) bd.style.display="block";
     if(rd) rd.style.display="block";
   }else{
     var n=N[s.id], leg=s.p.legs[0], A=accA(leg), b=band(A);
@@ -103,7 +104,6 @@ function renderDrive(){
     cb.disabled=false;
     cb.style.display="block";
     if(nd) nd.style.display="none";
-    if(bd) bd.style.display="none";
     if(rd) rd.style.display="none";
   }
 
@@ -124,7 +124,7 @@ function renderDrive(){
   }
   var pbar=document.getElementById("pbar");
   if(pbar) pbar.style.width=(100*PROGRESS/Math.max(1,PLAN.stops.length))+"%";
-  var used=0;PLAN.stops.slice(0,PROGRESS).forEach(function(st){used+=st.p.min+serviceMin(N[st.id])});
+  var used=DRIVE_USED_MIN;
   var left=Math.max(0,SHIFT_MIN-used);
   document.getElementById("shiftLeft").textContent=Math.floor(left/60)+"h "+Math.round(left%60)+"m";
   document.getElementById("wxMm").textContent=WX.mm+" mm";
@@ -153,10 +153,16 @@ document.getElementById("completeBtn").onclick=function(){
   var s=nextStop();
   if(!s) return;
   var n=N[s.id];
+
+  /* Preserve the completed leg before generating a new remaining route. */
+  COMPLETED_STOPS.push(s);
+  CURRENT_LOCATION=s.id;
+  DRIVE_USED_MIN+=s.p.min+serviceMin(n);
   n.visits30+=1;
   n.days=0;
-  PROGRESS++;
-  refresh({t:"Stop completed",b:n.name+" marked as served. Visit history and fairness metrics updated for the next replan."});
+  PROGRESS=COMPLETED_STOPS.length;
+
+  refresh({t:"Stop completed",b:n.name+" marked as served. Replanning now starts from the driver's actual current location and only considers unserved communities."});
 };
 
 /* Start a fresh deployment day without resetting the learned policy. Visit
@@ -164,21 +170,19 @@ document.getElementById("completeBtn").onclick=function(){
    conditions are sampled again for the new route. */
 document.getElementById("nextDayBtn").onclick=function(){
   SIM_DATE.setDate(SIM_DATE.getDate()+1);
+  CURRENT_LOCATION="hub";
+  COMPLETED_STOPS=[];
+  DRIVE_USED_MIN=0;
   PROGRESS=0;
   NODES.forEach(function(n){if(n.kind==="node") n.days+=1;});
   REPORTS.forEach(function(r){r.ago+=24;});
-  WX.mm=[12,38,78][Math.floor(Math.random()*3)];
-  refresh({t:"New deployment day started",b:"The Proposed MODQL route was replanned using the new day's carried-forward visit history, weather, hazards, and road accessibility."});
-};
 
-document.getElementById("backDayBtn").onclick=function(){
-  if(isSimulationDay1()){
-    this.disabled=true;
-    return;
-  }
-  SIM_DATE.setDate(SIM_DATE.getDate()-1);
-  PROGRESS=0;
-  refresh({t:"Previous deployment day",b:"The deployment date moved back one calendar day and the route was replanned for the current simulated conditions."});
+  /* Deterministic weather sequence makes repeated thesis demonstrations
+     reproducible while still showing changing road accessibility by day. */
+  var dayIndex=Math.round((SIM_DATE-SIM_START_DATE)/86400000);
+  WX.mm=DRIVE_WEATHER_SEQUENCE[dayIndex%DRIVE_WEATHER_SEQUENCE.length];
+
+  refresh({t:"New deployment day started",b:"The Proposed MODQL route was replanned from Laiban ALS Hub using carried-forward visit history, aged hazard reports, and the predefined weather scenario for this day."});
 };
 
 document.getElementById("resetDayBtn").onclick=function(){
@@ -190,22 +194,39 @@ document.getElementById("resetDayBtn").onclick=function(){
   nextRepId=4;
   WX.mm=DRIVE_INITIAL_WX_MM;
   SIM_DATE=new Date(SIM_START_DATE);
-  PROGRESS=1;
-  refresh({t:"Simulation reset",b:"The Drive simulation date, hazard reports, weather, and visit history were restored to their Day 1 starting values."});
+  CURRENT_LOCATION="hub";
+  COMPLETED_STOPS=[];
+  DRIVE_USED_MIN=0;
+  PROGRESS=0;
+  refresh({t:"Simulation reset",b:"The Drive simulation returned to an untouched Day 1: hub location, zero completed stops, original hazards, weather, and visit history."});
 };
 
 /* replan + repaint everything (operational views + analysis tabs) */
 function refresh(msg){
-  var before=PLAN.stops.map(function(s){return s.id}).join(",");
+  var before=PLAN.stops.slice(PROGRESS).map(function(s){return s.id}).join(",");
   var beforeDef=PLAN.deferred.length;
-  PLAN=planRoute();
-  if(PROGRESS>PLAN.stops.length)PROGRESS=PLAN.stops.length;
+  var servedIds=COMPLETED_STOPS.map(function(s){return s.id});
+  var remainingPlan=planRoute(CURRENT_LOCATION,servedIds,Math.max(0,SHIFT_MIN-DRIVE_USED_MIN),DRIVE_USED_MIN);
+
+  /* Keep completed legs fixed for map/history display. Only the unserved
+     suffix is replaced by the newly recommended route. */
+  PLAN={
+    stops:COMPLETED_STOPS.concat(remainingPlan.stops),
+    deferred:remainingPlan.deferred,
+    ret:remainingPlan.ret,
+    visits:remainingPlan.visits,
+    methodology:remainingPlan.methodology,
+    start:CURRENT_LOCATION,
+    remaining:remainingPlan.remaining
+  };
+  PROGRESS=COMPLETED_STOPS.length;
+
   drawRoads();drawRoute();drawNodes();drawHaz();placeUnit();renderDrive();renderStops();renderHazards();
   if(typeof renderHistory==="function") renderHistory();
   if(typeof renderAnalysis==="function") renderAnalysis();
-  var after=PLAN.stops.map(function(s){return s.id}).join(",");
+  var after=PLAN.stops.slice(PROGRESS).map(function(s){return s.id}).join(",");
   if(msg){
-    var extra = (after!==before)?" Stop order updated.":"";
+    var extra = (after!==before)?" Stop order updated from "+N[CURRENT_LOCATION].name+".":"";
     if(PLAN.deferred.length>beforeDef) extra+=" "+N[PLAN.deferred[PLAN.deferred.length-1].id].name+" deferred to the next deployment with an H-priority boost.";
     alertShow(msg.t,msg.b+extra);
   }
