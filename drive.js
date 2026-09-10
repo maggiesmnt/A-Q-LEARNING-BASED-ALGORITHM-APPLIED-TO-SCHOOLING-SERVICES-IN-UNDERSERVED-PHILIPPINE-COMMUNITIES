@@ -2,21 +2,91 @@
    DRIVE.JS — the turn-by-turn drive card, live refresh/replan, and the
    "Report road condition" bottom sheet (this is the field-facing half of
    the hazard-reporting answer to the panel's question).
+
+   Multi-day simulation controls are intentionally contained in the Drive tab.
+   They carry visit history forward so the Proposed MODQL route can replan with
+   updated fairness/history, weather, and road-accessibility conditions.
    ============================================================================ */
+
+/* ---------- Drive-only multi-day simulation state ---------- */
+var DRIVE_INITIAL_NODES=NODES.map(function(n){return Object.assign({},n)});
+var DRIVE_INITIAL_REPORTS=REPORTS.map(function(r){return Object.assign({},r)});
+var DRIVE_INITIAL_ADVISORIES=ADVISORIES.map(function(a){return Object.assign({},a)});
+var DRIVE_INITIAL_WX_MM=WX.mm;
+var SIM_START_DATE=new Date(Date.now());
+SIM_START_DATE.setHours(0,0,0,0);
+var SIM_DATE=new Date(SIM_START_DATE);
+
+function isSimulationDay1(){
+  return SIM_DATE.getFullYear()===SIM_START_DATE.getFullYear() &&
+    SIM_DATE.getMonth()===SIM_START_DATE.getMonth() &&
+    SIM_DATE.getDate()===SIM_START_DATE.getDate();
+}
+
+/* Keep the new controls inside Driver's Navigation so no other tab/layout
+   needs to be modified. */
+function ensureDriveDayControls(){
+  var complete=document.getElementById("completeBtn");
+  if(!complete) return;
+  var wrap=complete.parentElement;
+
+  function makeButton(id,text,cls){
+    var b=document.getElementById(id);
+    if(b) return b;
+    b=document.createElement("button");
+    b.id=id;
+    b.className="btn "+cls;
+    b.textContent=text;
+    b.style.width="100%";
+    b.style.display="none";
+    b.style.marginTop="8px";
+    wrap.appendChild(b);
+    return b;
+  }
+
+  makeButton("nextDayBtn","Start Next Day","p");
+  makeButton("backDayBtn","Back One Day","g");
+  makeButton("resetDayBtn","Reset to Day 1","reset");
+
+  if(!document.getElementById("dayLabel")){
+    var label=document.createElement("div");
+    label.id="dayLabel";
+    label.style.padding="10px 15px 13px";
+    label.style.textAlign="center";
+    label.style.fontSize="12px";
+    label.style.fontWeight="700";
+    label.style.opacity=".78";
+    label.style.borderTop="1px solid rgba(255,255,255,.08)";
+    document.getElementById("navCard").appendChild(label);
+  }
+}
+
+ensureDriveDayControls();
 
 function nextStop(){return PLAN.stops[PROGRESS]||null}
 function renderDrive(){
+  ensureDriveDayControls();
   var s=nextStop();
   var cb=document.getElementById("completeBtn");
+  var nd=document.getElementById("nextDayBtn");
+  var bd=document.getElementById("backDayBtn");
+  var rd=document.getElementById("resetDayBtn");
+  var label=document.getElementById("dayLabel");
+
+  if(label) label.textContent=SIM_DATE.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+  if(bd) bd.disabled=isSimulationDay1();
+
   if(!s){
     document.getElementById("stopName").textContent="Return to Laiban ALS Hub";
     document.getElementById("stopTags").innerHTML='<span class="tag eq">deployment complete</span>';
     document.getElementById("etaMin").textContent=PLAN.ret?Math.round(PLAN.ret.min):0;
     document.getElementById("etaClock").textContent="min to hub";
     document.getElementById("turnText").textContent="All scheduled stops served";
-    document.getElementById("turnSub").textContent="Head back via the returning corridor";
-    cb.textContent="Deployment complete";
-    cb.disabled=true;
+    document.getElementById("turnSub").textContent="Great, today's done. Come back tomorrow (or click 'Start Next Day')";
+    cb.style.display="none";
+    if(nd) nd.style.display="block";
+    if(bd) bd.style.display="block";
+    if(rd) rd.style.display="block";
   }else{
     var n=N[s.id], leg=s.p.legs[0], A=accA(leg), b=band(A);
     document.getElementById("stopName").textContent=n.name;
@@ -31,7 +101,12 @@ function renderDrive(){
       ' &middot; <b style="color:'+b.col+'">A '+A.toFixed(2)+" "+b.lab+"</b>";
     cb.textContent="Mark \u201c"+n.name+"\u201d as completed";
     cb.disabled=false;
+    cb.style.display="block";
+    if(nd) nd.style.display="none";
+    if(bd) bd.style.display="none";
+    if(rd) rd.style.display="none";
   }
+
   var strip=document.getElementById("routeStrip");
   if(strip){
     strip.innerHTML="";
@@ -82,6 +157,41 @@ document.getElementById("completeBtn").onclick=function(){
   n.days=0;
   PROGRESS++;
   refresh({t:"Stop completed",b:n.name+" marked as served. Visit history and fairness metrics updated for the next replan."});
+};
+
+/* Start a fresh deployment day without resetting the learned policy. Visit
+   history and hazard confidence carry forward, while weather and live
+   conditions are sampled again for the new route. */
+document.getElementById("nextDayBtn").onclick=function(){
+  SIM_DATE.setDate(SIM_DATE.getDate()+1);
+  PROGRESS=0;
+  NODES.forEach(function(n){if(n.kind==="node") n.days+=1;});
+  REPORTS.forEach(function(r){r.ago+=24;});
+  WX.mm=[12,38,78][Math.floor(Math.random()*3)];
+  refresh({t:"New deployment day started",b:"The Proposed MODQL route was replanned using the new day's carried-forward visit history, weather, hazards, and road accessibility."});
+};
+
+document.getElementById("backDayBtn").onclick=function(){
+  if(isSimulationDay1()){
+    this.disabled=true;
+    return;
+  }
+  SIM_DATE.setDate(SIM_DATE.getDate()-1);
+  PROGRESS=0;
+  refresh({t:"Previous deployment day",b:"The deployment date moved back one calendar day and the route was replanned for the current simulated conditions."});
+};
+
+document.getElementById("resetDayBtn").onclick=function(){
+  NODES.forEach(function(n,i){Object.assign(n,DRIVE_INITIAL_NODES[i])});
+  REPORTS.length=0;
+  DRIVE_INITIAL_REPORTS.forEach(function(r){REPORTS.push(Object.assign({},r))});
+  ADVISORIES.length=0;
+  DRIVE_INITIAL_ADVISORIES.forEach(function(a){ADVISORIES.push(Object.assign({},a))});
+  nextRepId=4;
+  WX.mm=DRIVE_INITIAL_WX_MM;
+  SIM_DATE=new Date(SIM_START_DATE);
+  PROGRESS=1;
+  refresh({t:"Simulation reset",b:"The Drive simulation date, hazard reports, weather, and visit history were restored to their Day 1 starting values."});
 };
 
 /* replan + repaint everything (operational views + analysis tabs) */
