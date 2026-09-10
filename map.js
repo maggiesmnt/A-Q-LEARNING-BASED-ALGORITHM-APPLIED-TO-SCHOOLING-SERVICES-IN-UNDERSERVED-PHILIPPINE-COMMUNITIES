@@ -76,16 +76,36 @@ function drawNodes(){
 }
 function drawRoute(){
   gRoute.clearLayers();
-  var cur="hub";
+
+  /* Route visual hierarchy for the Drive tab:
+     - completed legs: faded
+     - current leg to the next destination: dashed/highlighted
+     - later planned legs: thinner and less prominent
+     - return-to-hub: hidden until all scheduled stops are completed */
   PLAN.stops.forEach(function(s,i){
+    var style;
+    if(i<PROGRESS){
+      style={color:"#5E6828",weight:5,opacity:.38,lineCap:"round",dashArray:null};
+    }else if(i===PROGRESS){
+      style={color:"#B9AB6B",weight:8,opacity:.98,lineCap:"round",dashArray:"12 8"};
+    }else{
+      style={color:"#8E8655",weight:4,opacity:.34,lineCap:"round",dashArray:null};
+    }
+
     s.p.legs.forEach(function(e){
-      L.polyline(edgeGeom(e),{color:i<PROGRESS?"#5E6828":"#B9AB6B",weight:i<PROGRESS?7:8,opacity:i<PROGRESS?.55:.9,
-        lineCap:"round",dashArray:i<PROGRESS?"2 9":null}).addTo(gRoute);
+      L.polyline(edgeGeom(e),style).addTo(gRoute);
     });
-    cur=s.id;
   });
-  if(PLAN.ret) PLAN.ret.legs.forEach(function(e){
-    L.polyline(edgeGeom(e),{color:"#7B753B",weight:4,opacity:.5,dashArray:"6 8"}).addTo(gRoute);});
+
+  /* The brown dashed line is specifically the return route to Laiban ALS Hub.
+     Show it only when there is no next service stop, so it cannot be confused
+     with the active navigation route. */
+  var hasNextStop=!!PLAN.stops[PROGRESS];
+  if(!hasNextStop&&PLAN.ret){
+    PLAN.ret.legs.forEach(function(e){
+      L.polyline(edgeGeom(e),{color:"#7B753B",weight:6,opacity:.75,dashArray:"6 8",lineCap:"round"}).addTo(gRoute);
+    });
+  }
 }
 function drawHaz(){
   gHaz.clearLayers();
