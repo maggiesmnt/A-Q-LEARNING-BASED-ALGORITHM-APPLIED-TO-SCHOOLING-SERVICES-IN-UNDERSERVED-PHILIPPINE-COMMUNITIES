@@ -8,15 +8,27 @@ function nextStop(){return PLAN.stops[PROGRESS]||null}
 function renderDrive(){
   var s=nextStop();
   var cb=document.getElementById("completeBtn");
+  var nd=document.getElementById("nextDayBtn");
+  var bd=document.getElementById("backDayBtn");
+  var rd=document.getElementById("resetDayBtn");
+  var label=document.getElementById("dayLabel");
+  var travelledKm=0;
+  PLAN.stops.slice(0,PROGRESS).forEach(function(st){travelledKm+=st.p.km});
+  if(!s&&PLAN.ret) travelledKm+=PLAN.ret.km;
+  document.getElementById("travelKm").textContent=travelledKm.toFixed(1)+" km";
+  label.textContent=SIM_DATE.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+  bd.disabled=isSimulationDay1();
   if(!s){
     document.getElementById("stopName").textContent="Return to Laiban ALS Hub";
     document.getElementById("stopTags").innerHTML='<span class="tag eq">deployment complete</span>';
     document.getElementById("etaMin").textContent=PLAN.ret?Math.round(PLAN.ret.min):0;
     document.getElementById("etaClock").textContent="min to hub";
     document.getElementById("turnText").textContent="All scheduled stops served";
-    document.getElementById("turnSub").textContent="Head back via the returning corridor";
-    cb.textContent="Deployment complete";
-    cb.disabled=true;
+    document.getElementById("turnSub").textContent="Great, today's done. Come back tomorrow (or click 'Start Next Day')";
+    cb.style.display="none";
+    nd.style.display="block";
+    bd.style.display="block";
+    rd.style.display="block";
   }else{
     var n=N[s.id], leg=s.p.legs[0], A=accA(leg), b=band(A);
     document.getElementById("stopName").textContent=n.name;
@@ -31,6 +43,10 @@ function renderDrive(){
       ' &middot; <b style="color:'+b.col+'">A '+A.toFixed(2)+" "+b.lab+"</b>";
     cb.textContent="Mark \u201c"+n.name+"\u201d as completed";
     cb.disabled=false;
+    cb.style.display="block";
+    nd.style.display="none";
+    bd.style.display="none";
+    rd.style.display="none";
   }
   var strip=document.getElementById("routeStrip");strip.innerHTML="";
   PLAN.stops.forEach(function(st,i){
@@ -75,6 +91,43 @@ document.getElementById("completeBtn").onclick=function(){
   n.days=0;
   PROGRESS++;
   refresh({t:"Stop completed",b:n.name+" marked as served. Visit history and fairness metrics updated for the next replan."});
+};
+
+/* Start a fresh deployment day without resetting the learned policy. Visit
+   history and hazard confidence carry forward, while weather and live
+   conditions are sampled again for the new route. */
+document.getElementById("nextDayBtn").onclick=function(){
+  SIM_DATE.setDate(SIM_DATE.getDate()+1);
+  PROGRESS=0;
+  NODES.forEach(function(n){
+    if(n.kind==="node") n.days+=1;
+  });
+  REPORTS.forEach(function(r){r.ago+=24;});
+  WX.mm=[12,38,78][Math.floor(Math.random()*3)];
+  refresh({t:"New deployment day started",b:"The same routing algorithm replanned the deployment using today's weather and the carried-forward hazard reports."});
+};
+
+document.getElementById("backDayBtn").onclick=function(){
+  if(isSimulationDay1()){
+    this.disabled=true;
+    return;
+  }
+  SIM_DATE.setDate(SIM_DATE.getDate()-1);
+  PROGRESS=0;
+  refresh({t:"Previous deployment day",b:"The deployment date moved back one calendar day and the route was replanned for that day."});
+};
+
+document.getElementById("resetDayBtn").onclick=function(){
+  NODES.forEach(function(n,i){Object.assign(n,INITIAL_NODES[i])});
+  REPORTS.length=0;
+  INITIAL_REPORTS.forEach(function(r){REPORTS.push(Object.assign({},r))});
+  ADVISORIES.length=0;
+  INITIAL_ADVISORIES.forEach(function(a){ADVISORIES.push(Object.assign({},a))});
+  nextRepId=4;
+  WX.mm=INITIAL_WX_MM;
+  SIM_DATE=new Date(SIM_START_DATE);
+  PROGRESS=1;
+  refresh({t:"Simulation reset",b:"The date, hazard reports, weather, and visit history were restored to their Day 1 starting values."});
 };
 
 /* replan + repaint everything (operational views + analysis tabs) */

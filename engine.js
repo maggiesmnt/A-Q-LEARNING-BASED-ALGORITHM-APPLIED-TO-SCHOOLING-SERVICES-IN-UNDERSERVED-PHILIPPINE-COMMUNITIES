@@ -80,6 +80,10 @@ var REPORTS=[
 ];
 var ADVISORIES=[];   /* {edge, note} -> hard A = 0 */
 var nextRepId=4;
+var INITIAL_NODES=NODES.map(function(n){return Object.assign({},n)});
+var INITIAL_REPORTS=REPORTS.map(function(r){return Object.assign({},r)});
+var INITIAL_ADVISORIES=ADVISORIES.map(function(a){return Object.assign({},a)});
+var INITIAL_WX_MM=WX.mm;
 
 /* ---------- helpers ---------- */
 function ek(a,b){return [a,b].sort().join("|")}
@@ -141,20 +145,29 @@ function neighbors(id){var out=[];EDGES.forEach(function(e){
   if(e.a===id) out.push({to:e.b,e:e}); if(e.b===id) out.push({to:e.a,e:e});});return out}
 
 /* ---------- trained-policy lookup (Q1+Q2 from training/train_q_learning.py) ----------
-   State key must match the Python encoder exactly: current_node|visited_mask|time_bucket.
-   TRAINED_POLICY only has entries for the ~318 states actually visited during
-   training (out of ~13,824 possible) — a lookup miss is expected and normal,
-   not a bug. When it misses, planRoute() falls back to the live greedy
-   formula for that one decision, same as before. */
+   State key must match the Python encoder exactly:
+   current_node|demand_bucket|time_bucket|history_bucket|accessibility_bucket.
+   Demand, history, and accessibility are discretized for the tabular policy;
+   A < 0.20 remains a hard action-set mask for both planners. */
 var TRAINED_TIME_BUCKETS=6;
 function trainedTimeBucket(remaining){
   var frac=Math.max(0,Math.min(1,remaining/SHIFT_MIN));
   var b=Math.floor(frac*TRAINED_TIME_BUCKETS);
   return Math.min(b,TRAINED_TIME_BUCKETS-1);
 }
-function trainedQValue(cur,mask,remaining,actionId){
+function trainedStateKey(cur,mask,remaining,actionId,visits,pending){
+  var total=0,remainingDemand=0;
+  NODES.forEach(function(n){if(n.kind==="node"){total+=n.learners;if(pending.indexOf(n.id)>=0)remainingDemand+=n.learners}});
+  var demandBucket=Math.min(3,Math.round(3*remainingDemand/total));
+  var historyBucket=Math.min(3,Math.floor(Object.keys(visits).reduce(function(sum,id){return sum+visits[id]},0)/Math.max(1,Object.keys(visits).length)));
+  var outgoing=[];
+  EDGES.forEach(function(e){if(e.a===cur||e.b===cur)outgoing.push(accA(e))});
+  var accessibilityBucket=Math.min(3,Math.floor(4*(outgoing.length?Math.min.apply(null,outgoing):0)));
+  return cur+"|"+demandBucket+"|"+trainedTimeBucket(remaining)+"|"+historyBucket+"|"+accessibilityBucket;
+}
+function trainedQValue(cur,mask,remaining,actionId,visits,pending){
   if(typeof TRAINED_POLICY==="undefined") return null;   /* trained_policy.js not loaded */
-  var key=cur+"|"+mask+"|"+trainedTimeBucket(remaining);
+  var key=trainedStateKey(cur,mask,remaining,actionId,visits,pending);
   var q1=TRAINED_POLICY.q1[key], q2=TRAINED_POLICY.q2[key];
   var v1=q1&&(actionId in q1)?q1[actionId]:null;
   var v2=q2&&(actionId in q2)?q2[actionId]:null;
@@ -208,7 +221,7 @@ function planRoute(){
       NODES.forEach(function(n){if(n.kind==="node"&&pending.indexOf(n.id)<0)trial.push(visits[n.id])});
       var J=jain(trial);
       var fallbackScore=cov*J*(1/(p.min/60));      /* R = C x J x (1 / Travel Cost) */
-      var trained=trainedQValue(cur,mask,left,id);
+      var trained=trainedQValue(cur,mask,left,id,visits,pending);
       var usedPolicy=trained!==null;
       var score=usedPolicy?trained:fallbackScore;
       if(!best||score>best.score) best={id:id,p:p,score:score,J:J,cov:cov,usedPolicy:usedPolicy};
@@ -269,4 +282,13 @@ function planRouteStandard(){
    proposed algorithm's route, since that's the one actually recommended
    for dispatch. The Existing/Proposed/SOP analysis tabs compute their own
    fresh copies of both plans independently (see analysis.js). */
-var PLAN=planRoute(), PROGRESS=1;    /* stops already completed */
+/* Day 1 is always derived from the browser/system clock on a fresh load. */
+var SIM_START_DATE=new Date(Date.now());
+SIM_START_DATE.setHours(0,0,0,0);
+var SIM_DATE=new Date(SIM_START_DATE);
+function isSimulationDay1(){
+  return SIM_DATE.getFullYear()===SIM_START_DATE.getFullYear() &&
+    SIM_DATE.getMonth()===SIM_START_DATE.getMonth() &&
+    SIM_DATE.getDate()===SIM_START_DATE.getDate();
+}
+var PLAN=planRoute(), PROGRESS=1; /* stops already completed */

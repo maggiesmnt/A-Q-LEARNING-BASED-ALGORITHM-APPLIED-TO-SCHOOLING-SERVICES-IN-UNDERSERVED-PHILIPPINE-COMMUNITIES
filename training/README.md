@@ -19,6 +19,13 @@ network have been requested but not released yet. When they arrive,
 replace `NODES`/`EDGES` at the top of `train_q_learning.py`, then:
 
 ```bash
+# Windows (Python launcher)
+py -m pip install numpy pandas matplotlib
+py train_q_learning.py
+py make_sim_js.py
+
+# macOS/Linux
+python3 -m pip install numpy pandas matplotlib
 python3 train_q_learning.py
 python3 make_sim_js.py
 ```

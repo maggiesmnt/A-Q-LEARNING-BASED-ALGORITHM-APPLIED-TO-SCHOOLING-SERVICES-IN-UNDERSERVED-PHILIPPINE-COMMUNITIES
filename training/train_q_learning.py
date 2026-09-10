@@ -35,22 +35,19 @@ time budget, visit history, accessibility). For TABULAR Q-learning,
 a continuous S must be discretized into a finite table, so this script
 encodes state as:
 
-    state = (current_node, visited_mask, time_bucket)
+    state = (current_node, demand_bucket, time_bucket,
+             history_bucket, accessibility_bucket)
 
   - L (location)        -> current_node: which sitio the unit is at
-  - H (visit history)    -> visited_mask: bitmask of which sitios have
-                             already been served THIS shift (this also
-                             stands in for D, since a node still masked
-                             "unvisited" is still in demand)
+  - D (demand)           -> demand_bucket: remaining learner demand,
+                             normalized into four discrete levels
   - T (time budget)      -> time_bucket: remaining shift minutes,
                              discretized into 6 bins
-  - A (accessibility)    -> NOT stored in the state directly. Instead,
-                             exactly like engine.js's neighbors()/path(),
-                             a road with A < 0.20 is masked out of the
-                             action set for that step. This keeps A as
-                             a hard, algorithm-agnostic safety constraint
-                             rather than a table dimension, matching how
-                             the existing prototype already treats it.
+  - H (visit history)    -> history_bucket: recent visit counts,
+                             discretized into four levels
+  - A (accessibility)    -> accessibility_bucket: the most restrictive
+                             outgoing road band. Roads with A < 0.20
+                             remain hard-masked from the action set.
 
 This is a defensible simplification, not a deviation from the theory:
 full continuous-state MDPs are normally paired with function
@@ -244,8 +241,29 @@ def time_bucket(remaining):
     return min(b, TIME_BUCKETS - 1)
 
 
-def encode_state(cur, mask, remaining):
-    return (cur, mask, time_bucket(remaining))
+def state_buckets(weather, cur, mask, visits):
+    total_demand = sum(NODES[n]["learners"] for n in SERVICE_NODES)
+    remaining_demand = sum(
+        NODES[nid]["learners"]
+        for nid in SERVICE_NODES
+        if not (mask & (1 << NODE_IDX[nid]))
+    )
+    demand_bucket = min(3, int(round(3 * remaining_demand / total_demand)))
+    history_bucket = min(3, int(sum(visits.values()) / max(1, len(SERVICE_NODES))))
+    outgoing = [
+        weather.accessibility(tuple(sorted((cur, nb))))
+        for nb in ADJ[cur]
+    ]
+    accessibility_bucket = min(3, int(4 * min(outgoing, default=0.0)))
+    return demand_bucket, history_bucket, accessibility_bucket
+
+
+def encode_state(weather, cur, mask, remaining, visits):
+    demand_bucket, history_bucket, accessibility_bucket = state_buckets(
+        weather, cur, mask, visits
+    )
+    return (cur, demand_bucket, time_bucket(remaining),
+            history_bucket, accessibility_bucket)
 
 
 def reachable_actions(weather, cur, mask, remaining, visits):
@@ -333,7 +351,7 @@ def train_double_q():
             if not actions:
                 break  # terminal: no reachable, unvisited node left in budget
 
-            state = encode_state(cur, mask, remaining)
+            state = encode_state(weather, cur, mask, remaining, visits)
             action_ids = [a[0] for a in actions]
             travel_of = {a: t for a, t in actions}
 
@@ -348,7 +366,7 @@ def train_double_q():
 
             next_mask = mask | (1 << NODE_IDX[action])
             next_remaining = remaining - (travel_min + service_min(action))
-            next_state = encode_state(action, next_mask, next_remaining)
+            next_state = encode_state(weather, action, next_mask, next_remaining, visits)
             next_actions = [a for a, _ in reachable_actions(weather, action, next_mask, next_remaining, visits)]
 
             if rng.random() < 0.5:
@@ -404,7 +422,7 @@ def train_standard_q():
             if not actions:
                 break
 
-            state = encode_state(cur, mask, remaining)
+            state = encode_state(weather, cur, mask, remaining, visits)
             action_ids = [a[0] for a in actions]
             travel_of = {a: t for a, t in actions}
             action = epsilon_greedy(defaultdict(dict, {state: {a: q_get(Q, state, a) for a in action_ids}}),
@@ -415,7 +433,7 @@ def train_standard_q():
 
             next_mask = mask | (1 << NODE_IDX[action])
             next_remaining = remaining - (travel_min + service_min(action))
-            next_state = encode_state(action, next_mask, next_remaining)
+            next_state = encode_state(weather, action, next_mask, next_remaining, visits)
             next_actions = [a for a, _ in reachable_actions(weather, action, next_mask, next_remaining, visits)]
 
             best_next = max((q_get(Q, next_state, a) for a in next_actions), default=0.0)
@@ -455,7 +473,7 @@ def rollout(policy_fn, n_days=50, seed=123):
                 break
             action_ids = [a[0] for a in actions]
             travel_of = {a: t for a, t in actions}
-            state = encode_state(cur, mask, remaining)
+            state = encode_state(weather, cur, mask, remaining, visits)
             action = policy_fn(state, action_ids)
             travel_min = travel_of[action]
             travel_total += travel_min
@@ -571,7 +589,7 @@ def main():
         "q1": {f"{s[0]}|{s[1]}|{s[2]}": v for s, v in Q1.items()},
         "q2": {f"{s[0]}|{s[1]}|{s[2]}": v for s, v in Q2.items()},
         "node_bit_index": NODE_IDX,
-        "note": "state key format = current_node|visited_mask|time_bucket",
+        "note": "state key format = current_node|demand_bucket|time_bucket|history_bucket|accessibility_bucket",
     }
     policy_path = os.path.join(OUT_DIR, "final_policy_modql.json")
     with open(policy_path, "w") as f:

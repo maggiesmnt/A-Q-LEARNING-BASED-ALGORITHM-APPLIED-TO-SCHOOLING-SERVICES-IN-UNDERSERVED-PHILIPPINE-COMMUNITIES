@@ -2,8 +2,8 @@
    ANALYSIS.JS — the "kept separate from field operations" analysis section.
 
    Five sub-tabs:
-     existing  — Standard Q-Learning on its own: how it works + its own live route
-     proposed  — MODQL on its own: how it works + its own live route
+     existing  — Standard Q-Learning on its own: how it works + its own live route and maze demo
+     proposed  — MODQL on its own: how it works + its own live route and maze demo
      sop1      — SOP 1 (single-objective limitation): Existing vs Proposed
      sop2      — SOP 2 (overestimation bias): Existing vs Proposed
      sop3      — SOP 3 (limited state representation): Existing vs Proposed,
@@ -49,6 +49,125 @@ function planKPIs(plan){
   return {learners:learners,served:plan.stops.length,totalKm:totalKm,totalMin:totalMin,J:jain(vis)};
 }
 
+function evaluationKPIs(plan){
+  var distance=0,travelMin=0,learners=0;
+  plan.stops.forEach(function(s){
+    distance+=s.p.km;
+    travelMin+=s.p.min;
+    learners+=N[s.id].learners;
+  });
+  if(plan.ret){distance+=plan.ret.km;travelMin+=plan.ret.min;}
+  var visits=[];NODES.forEach(function(n){if(n.kind==="node")visits.push(plan.visits[n.id])});
+  return {
+    distance:distance,
+    travelMin:travelMin,
+    served:plan.stops.length,
+    deferred:plan.deferred.length,
+    deferredReasons:plan.deferred,
+    fairness:jain(visits),
+    learners:learners
+  };
+}
+
+function evaluationMetric(label,std,mod,format){
+  return '<tr><th>'+label+'</th><td>'+format(std)+'</td><td>'+format(mod)+'</td></tr>';
+}
+
+function evaluationSnapshot(){
+  return {
+    nodes:NODES.map(function(n){return Object.assign({},n)}),
+    reports:REPORTS.map(function(r){return Object.assign({},r)}),
+    advisories:ADVISORIES.map(function(a){return Object.assign({},a)}),
+    weather:WX.mm
+  };
+}
+
+function restoreEvaluationSnapshot(s){
+  NODES.forEach(function(n,i){Object.assign(n,s.nodes[i])});
+  REPORTS.length=0;s.reports.forEach(function(r){REPORTS.push(Object.assign({},r))});
+  ADVISORIES.length=0;s.advisories.forEach(function(a){ADVISORIES.push(Object.assign({},a))});
+  WX.mm=s.weather;
+}
+
+function multiDayEvaluation(){
+  var base=evaluationSnapshot(), days=7, weather=[];
+  for(var i=0;i<days;i++) weather.push(i===0?base.weather:[12,38,78][i%3]);
+  function run(planner){
+    restoreEvaluationSnapshot(base);
+    var fairness=[],cumulative=[],servedBy={},total=0;
+    for(var d=0;d<days;d++){
+      WX.mm=weather[d];
+      REPORTS.forEach(function(r){r.ago=base.reports[r.id-1]?base.reports[r.id-1].ago+24*d:r.ago+24*d});
+      if(d>0) NODES.forEach(function(n){if(n.kind==="node")n.days+=1});
+      var plan=planner(),visits=[];
+      NODES.forEach(function(n){if(n.kind==="node")visits.push(plan.visits[n.id])});
+      fairness.push(jain(visits));
+      plan.stops.forEach(function(s){
+        if(!servedBy[s.id]) servedBy[s.id]=[];
+        servedBy[s.id].push(d+1);total++;
+        N[s.id].visits30+=1;N[s.id].days=0;
+      });
+      cumulative.push(total);
+    }
+    return {fairness:fairness,cumulative:cumulative,servedBy:servedBy};
+  }
+  var standard=run(planRouteStandard),modql=run(planRoute);
+  restoreEvaluationSnapshot(base);
+  return {days:days,standard:standard,modql:modql};
+}
+
+function renderEvaluation(){
+  var std=evaluationKPIs(analysisStd), mod=evaluationKPIs(analysisMod);
+  var multi=multiDayEvaluation();
+  var neverStandard=[],neverModql=[];
+  NODES.filter(function(n){return n.kind==="node"}).forEach(function(n){
+    if(!multi.standard.servedBy[n.id]) neverStandard.push(n.name);
+    if(!multi.modql.servedBy[n.id]) neverModql.push(n.name);
+  });
+  var timeDelta=mod.travelMin-std.travelMin;
+  var distanceDelta=mod.distance-std.distance;
+  function reasons(k){
+    if(!k.deferredReasons.length) return '<span class="pill open">None</span>';
+    return k.deferredReasons.map(function(d){
+      return '<div class="k">'+N[d.id].name+' &mdash; '+d.reason+'</div>';
+    }).join("");
+  }
+  document.getElementById("sub-evaluation").innerHTML =
+    '<div class="algo-head mod"><div class="ic">\u0394</div><div><h2>Algorithm Evaluation Dashboard</h2>'+
+    '<p>Same simulated weather, hazards, network, and learner-demand inputs for both planners</p></div></div>'+
+    '<div class="sop-problem"><b>Simulated environment.</b> This is a read-only comparison of the existing browser planners for the current '+
+    'Laiban, Tanay Rizal scenario. It does not add scheduling, attendance, curriculum, roles, or live-deployment data.</div>'+
+    '<div class="card eval-card"><table><thead><tr><th>Metric</th><th class="std-head">Standard Q-Learning</th><th class="mod-head">MODQL</th></tr></thead><tbody>'+
+    evaluationMetric("Total travel distance",std,mod,function(k){return k.distance.toFixed(1)+" km"})+
+    evaluationMetric("Total travel time",std,mod,function(k){return Math.round(k.travelMin)+" min <span class=\"k\">("+Math.floor(k.travelMin/60)+"h "+Math.round(k.travelMin%60)+"m)</span>"})+
+    evaluationMetric("Communities served",std,mod,function(k){return k.served+" of "+(NODES.length-1)})+
+    evaluationMetric("Communities deferred",std,mod,function(k){return k.deferred})+
+    evaluationMetric("Jain&rsquo;s Fairness Index",std,mod,function(k){return k.fairness.toFixed(3)})+
+    evaluationMetric("Learners reached",std,mod,function(k){return k.learners})+
+    '</tbody></table></div>'+
+    '<div class="split2"><div class="splitcol std"><h4>Standard deferred reasons</h4>'+reasons(std)+'</div>'+
+    '<div class="splitcol mod"><h4>MODQL deferred reasons</h4>'+reasons(mod)+'</div></div>'+
+    '<div class="card"><h3>What the single-day difference means</h3>'+
+    '<div class="k">Both fairness values are independently calculated from each planner&rsquo;s resulting visit distribution. They match in this scenario even though the routes serve different six-community sets: Kabayunan and Mag-Ampon begin with the same visit-history count, so swapping one for the other leaves the final count distribution unchanged. Route order does not change Jain&rsquo;s Index.</div>'+
+    '<div class="k" style="margin-top:8px">MODQL takes '+Math.abs(Math.round(timeDelta))+' more travel minutes and '+Math.abs(distanceDelta).toFixed(1)+' '+(distanceDelta>=0?'more':'fewer')+' km in this run because its coverage/fairness score can select a farther, under-served community instead of minimizing travel time alone. This is the intended efficiency-versus-equity trade-off.</div></div>'+
+    '<div class="card"><h3>Training convergence</h3>'+
+    '<div class="k" style="margin-bottom:8px">Bundled from the generated 1,200-episode training log. These are simulated training results, not live deployment measurements.</div>'+
+    svgLine([{d:SIM.mq,c:"#0f9d58"},{d:SIM.sq,c:"#5b4fc7"}],{xs:SIM.ep,dp:2,h:210})+
+    '<div class="lg"><span><i style="background:#0f9d58"></i> MODQL reward</span><span><i style="background:#5b4fc7"></i> Standard Q-Learning reward</span></div></div>'+
+    '<div class="card"><h3>Seven-day simulated comparison</h3>'+
+    '<div class="k" style="margin-bottom:8px">Both algorithms replay the same seven weather/hazard days. This is a read-only simulated evaluation; it does not advance the Operational view.</div>'+
+    '<h4>Jain&rsquo;s Fairness Index by day</h4>'+
+    svgLine([{d:multi.standard.fairness,c:"#5b4fc7"},{d:multi.modql.fairness,c:"#0f9d58"}],{xs:[1,2,3,4,5,6,7],dp:3,h:190,min:0,max:1})+
+    '<div class="lg"><span><i style="background:#0f9d58"></i> MODQL</span><span><i style="background:#5b4fc7"></i> Standard Q-Learning</span></div>'+
+    '<div class="k eval-discussion">The fairness curves are close because Jain&rsquo;s Index summarizes the distribution of visit counts across all communities. It can remain similar even when the identity of the served communities differs. In this replay, MODQL reaches Pungo while Standard never reaches it; therefore aggregate fairness should be discussed together with the community-level service record, not as a substitute for it.</div>'+
+    '<h4 style="margin-top:16px">Cumulative communities served</h4>'+
+    '<div class="k eval-discussion">The two lines overlap exactly: both algorithms serve 6, 12, 17, 24, 30, 35, and 42 stops cumulatively. The difference is <b>which</b> communities make up those totals, so the dashed Standard line is drawn on top to make the overlap visible.</div>'+
+    svgLine([{d:multi.modql.cumulative,c:"#0f9d58"},{d:multi.standard.cumulative,c:"#5b4fc7",dash:true}],{xs:[1,2,3,4,5,6,7],dp:0,h:190,min:0})+
+    '<div class="lg"><span><i style="background:#0f9d58"></i> MODQL</span><span><i style="background:#5b4fc7"></i> Standard Q-Learning</span></div>'+
+    '<div class="split2" style="margin-top:12px"><div class="splitcol std"><h4>Never served by Standard</h4><div class="k">'+(neverStandard.length?neverStandard.join("<br>"):"None")+'</div></div>'+
+    '<div class="splitcol mod"><h4>Never served by MODQL</h4><div class="k">'+(neverModql.length?neverModql.join("<br>"):"None")+'</div></div></div></div>';
+}
+
 /* ============================ EXISTING ALGORITHM TAB ============================ */
 function renderExisting(){
   var k=planKPIs(analysisStd);
@@ -61,7 +180,7 @@ function renderExisting(){
     'Reward is a single scalar &mdash; travel efficiency only. One Q-table both <i>selects</i> the next move and '+
     '<i>evaluates</i> it, using the same max operator:</div>'+
     '<div class="k mono" style="background:var(--ink3);padding:10px 12px;border-radius:10px">Q(s,a) &larr; Q(s,a) + &alpha;[ r + &gamma;&middot;max Q(s&prime;,a&prime;) &minus; Q(s,a) ]</div>'+
-    '<div class="k" style="margin-top:9px">In this prototype the trained policy\u2019s greedy behaviour is replayed directly: at every '+
+    '<div class="k" style="margin-top:9px">In this browser baseline, the greedy behaviour is replayed as a travel-time-only policy: at every '+
     'decision point the unit simply heads to whichever reachable community is <b>closest in travel time</b>. It has no notion of how '+
     'many learners are waiting (D) or how long it\u2019s been since a community was served (H) &mdash; it will happily serve the same '+
     'easy, nearby barangay every deployment while a farther, higher-need sitio waits indefinitely.</div></div>'+
@@ -73,7 +192,8 @@ function renderExisting(){
     '</div><div style="height:12px"></div>'+
 
     '<div class="card"><h3>Route this algorithm would run right now</h3>'+stopRowsHTML(analysisStd)+'</div>'+
-    '<div class="card"><h3>Deferred</h3>'+deferredHTML(analysisStd)+'</div>';
+    '<div class="card"><h3>Deferred</h3>'+deferredHTML(analysisStd)+'</div>'+
+    '<div id="maze-existing"></div>';
 }
 
 /* ============================ PROPOSED ALGORITHM TAB ============================ */
@@ -102,6 +222,7 @@ function renderProposed(){
 
     '<div class="card"><h3>Route this algorithm would run right now</h3>'+stopRowsHTML(analysisMod)+'</div>'+
     '<div class="card"><h3>Deferred</h3>'+deferredHTML(analysisMod)+'</div>'+
+    '<div id="maze-proposed"></div>'+
     '<div class="k" style="text-align:center;margin-top:10px">This is the route currently driving the Drive / Stops tabs.</div>';
 }
 
@@ -241,9 +362,11 @@ function renderAnalysis(){
   computeAnalysisPlans();
   renderExisting();
   renderProposed();
+  renderEvaluation();
   renderSOP1();
   renderSOP2();
   renderSOP3();
+  if(typeof buildEmbeddedMazes==="function") buildEmbeddedMazes();
 }
 
 document.querySelectorAll(".rn-group button[data-sub]").forEach(function(b){

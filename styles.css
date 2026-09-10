@@ -166,7 +166,10 @@ nav#tabs .bdg{position:absolute;transform:translate(14px,-6px);background:var(--
 .btn:disabled{opacity:.45;cursor:default}
 .btn.p{background:linear-gradient(160deg,#ff9838,#f8722c);color:#fff}
 .btn.g{background:var(--ink3);border:1px solid var(--line);color:var(--dim)}
+.btn.reset{background:rgba(255,77,79,.12);border:1px solid rgba(255,77,79,.45);color:#ffabad}
 .btn.k{background:var(--go);color:#05230f}
+.travel-total{display:flex;align-items:baseline;justify-content:space-between;padding:0 15px 11px;color:var(--text);font-size:15px;font-weight:800}
+.travel-total small{color:var(--dim);font-size:10px;font-weight:700;letter-spacing:.3px;text-transform:uppercase}
 
 /* ---------- lists / cards ---------- */
 h2.sec{margin:2px 0 3px;font-size:19px;letter-spacing:-.2px}
@@ -259,6 +262,14 @@ select{background:var(--ink3);border:1px solid var(--line);color:var(--txt);bord
 .splitcol h4{margin:0 0 8px;font-size:12.5px;letter-spacing:.2px}
 .splitcol.std h4{color:#b7aef0}
 .splitcol.mod h4{color:#8ef0cf}
+.eval-card{overflow-x:auto}
+.eval-card table{min-width:560px}
+.eval-card th,.eval-card td{padding:12px 10px}
+.eval-card thead th:not(:first-child),.eval-card td{text-align:center}
+.eval-card .std-head{color:#5b4fc7}
+.eval-card .mod-head{color:#0f9d58}
+.eval-card tbody th{text-align:left;color:var(--txt);font-weight:700}
+.eval-discussion{margin-top:9px;padding:9px 11px;background:#fbf6df;border:1px solid #e6d488;border-radius:9px;color:#6b5716}
 
 .sop-problem{padding:12px 14px;border-radius:14px;background:#241019;border:1px solid #5c1f2e;color:#ffc9d4;font-size:12px;line-height:1.55;margin-bottom:14px}
 .sop-problem b{color:#fff}
@@ -295,6 +306,11 @@ select{background:var(--ink3);border:1px solid var(--line);color:var(--txt);bord
   background:var(--ink);color:var(--txt);
 }
 #view-analysis.active{display:flex;}
+.sim-env-badge{
+  padding:6px 10px;border-radius:6px;
+  background:#f4e2b8;color:#7a5b12;font-size:10.5px;letter-spacing:.3px;font-weight:750;
+}
+.day-label{padding:8px 15px 10px;text-align:center;color:var(--dim);font-size:11px;font-weight:700;}
 .research-shell{display:flex;width:100%;min-height:100%;}
 .research-nav{
   width:236px;flex:0 0 auto;background:#141d2e;color:#c3cee2;

@@ -25,6 +25,7 @@
 <div class="chip rain" id="wxChip"><span class="dot"></span>Rain <b id="wxMm">38 mm</b>/24h</div>
 <div class="chip" id="shiftChip"><span class="dot"></span>Shift <b id="shiftLeft">6h 20m</b> left</div>
 <div class="chip alert" id="hzChip"><span class="dot"></span><b id="hzCount">2</b> road alerts</div>
+<div class="sim-env-badge">Simulated Environment &mdash; Laiban, Tanay Rizal</div>
 </header>
 <main>
 <!-- ============ DRIVE ============ -->
@@ -77,11 +78,16 @@ REPORT
 <div class="mt" id="stopTags"></div>
 </div>
 </div>
+<div class="travel-total"><span id="travelKm">0.0 km</span><small>travelled today</small></div>
 <div style="padding:0 15px 12px">
 <button class="btn k" id="completeBtn" style="width:100%">Mark stop as completed</button>
+<button class="btn p" id="nextDayBtn" style="width:100%;display:none;margin-top:8px">Start Next Day</button>
+<button class="btn g" id="backDayBtn" style="width:100%;display:none;margin-top:8px">Back One Day</button>
+<button class="btn reset" id="resetDayBtn" style="width:100%;display:none;margin-top:8px">Reset to Day 1</button>
 </div>
 <div class="strip" id="routeStrip"></div>
 <div class="pbar"><i id="pbar" style="width:18%"></i></div>
+<div class="day-label" id="dayLabel"></div>
 </div>
 </section>
 <!-- ============ STOPS ============ -->
@@ -151,10 +157,10 @@ This is exactly the &ldquo;structural amnesia&rdquo; that location-only standard
 <div class="rn-label">Algorithms</div>
 <button data-sub="existing" class="on">Existing Algorithm</button>
 <button data-sub="proposed">Proposed Algorithm</button>
-<button data-sub="maze">Maze Demo</button>
 </div>
 <div class="rn-group">
 <div class="rn-label">Statement of the Problem</div>
+<button data-sub="evaluation">Algorithm Evaluation</button>
 <button data-sub="sop1">SOP 1 &mdash; Objective</button>
 <button data-sub="sop2">SOP 2 &mdash; Overestimation</button>
 <button data-sub="sop3">SOP 3 &mdash; State &amp; Hazards</button>
@@ -163,12 +169,12 @@ This is exactly the &ldquo;structural amnesia&rdquo; that location-only standard
 <div class="research-content">
 <div class="badge-sim">SIMULATED DATA &mdash; FOR SYSTEM DEMONSTRATION</div>
 <div class="note"><b>Placeholder values, where marked.</b> Route KPIs and stop lists on every tab below are computed live by this
-prototype's own routing engine. Multi-episode training curves (marked "illustrative") are produced by a built-in demonstration
-curve generator so the panel can see the reporting layout &mdash; replace those specific curves with your Chapter 4 logs from the
-Python / Google Colab runs (500&ndash;2,000 episodes).</div>
+prototype's routing engine. Multi-episode training curves are generated from the Python training run and bundled into the
+prototype for offline demonstration. Node coordinates, learner demand, and road geometry remain simulation placeholders until
+the OSM and DepEd datasets are available.</div>
 <div class="subview active" id="sub-existing"></div>
 <div class="subview" id="sub-proposed"></div>
-<div class="subview" id="sub-maze"></div>
+<div class="subview" id="sub-evaluation"></div>
 <div class="subview" id="sub-sop1"></div>
 <div class="subview" id="sub-sop2"></div>
 <div class="subview" id="sub-sop3"></div>
@@ -210,7 +216,7 @@ Base map &copy; OpenStreetMap contributors. Node coordinates, learner demand and
 <script src="drive.js"></script>
 <script src="stops.js"></script>
 <script src="hazards.js"></script>
-<script src="analysis.js"></script>
+<script src="analysis.js?v=multiday-evaluation"></script>
 <script src="app.js"></script>
 <script src="maze-demo.js"></script>
 </body>

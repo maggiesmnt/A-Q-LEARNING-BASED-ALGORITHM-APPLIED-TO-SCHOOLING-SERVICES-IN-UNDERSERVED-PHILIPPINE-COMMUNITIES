@@ -1,11 +1,8 @@
 /* ============================================================
    Maze Demo — browser port of simple_maze_demo.py
    -----------------------------------------------------------
-   Renders the maze-navigation visualization inside the existing
-   "Research & Analysis" view, as a new sub-tab next to Existing
-   Algorithm / Proposed Algorithm / SOP 1-3 (see index.html: new
-   <button data-sub="maze"> in #researchNav, new <div id="sub-maze">
-   in .research-content).
+   Renders maze-navigation visualizations inside both algorithm panels
+   in the "Research & Analysis" view.
 
    IMPORTANT — placeholder policy:
    dynamic_maze_env.py, baseline_confidence_agent.py and
@@ -243,3 +240,108 @@
     wireTab();
   });
 })();
+
+/* The original maze behavior is instantiated once inside each algorithm panel,
+   using prefixed IDs so both demos remain independent. */
+function buildEmbeddedMazes() {
+  ['existing', 'proposed'].forEach(function (kind) {
+    var host = document.getElementById('maze-' + kind);
+    if (!host || host.getAttribute('data-ready') === 'true') return;
+    host.setAttribute('data-ready', 'true');
+    var p = 'mz-' + kind;
+    host.innerHTML =
+      '<div class="card maze-card"><h3>Maze Demo &mdash; ' +
+      (kind === 'existing' ? 'Existing Algorithm' : 'Proposed Algorithm') + '</h3>' +
+      '<p class="k" style="margin-bottom:10px">Ported from <span class="mono">simple_maze_demo.py</span>. ' +
+      'Red = agent, green = goal, yellow = blocked cell, faint dots = path history. The maze mutates every ' +
+      '20 steps, matching <span class="mono">DynamicMazeEnv</span>.</p>' +
+      '<canvas id="' + p + '-canvas" width="360" height="360" style="width:100%;max-width:360px;border-radius:8px;display:block;margin:0 auto 14px"></canvas>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:10px">' +
+      '<button class="btn p" id="' + p + '-play">Play</button>' +
+      '<button class="btn g" id="' + p + '-step">Step</button>' +
+      '<button class="btn g" id="' + p + '-new">New Episode</button></div>' +
+      '<div class="g3" style="text-align:center"><div><div class="k">Episode</div><b id="' + p + '-episode">1</b></div>' +
+      '<div><div class="k">Steps</div><b id="' + p + '-steps">0 / 100</b></div>' +
+      '<div><div class="k">Status</div><b id="' + p + '-status">Press Play</b></div></div></div>';
+    createEmbeddedMaze(p);
+  });
+}
+
+function createEmbeddedMaze(prefix) {
+  var size = 10, maze, start, goal, agent, path, pathIndex, steps, episode = 1, timer = null, history = [];
+  var get = function (suffix) { return document.getElementById(prefix + suffix); };
+  var key = function (pos) { return pos[0] + ',' + pos[1]; };
+  function findPath(m, start, finish) {
+    var queue = [start], previous = {}; previous[key(start)] = null;
+    for (var qi = 0; qi < queue.length; qi++) {
+      var cur = queue[qi], curKey = key(cur);
+      if (cur[0] === finish[0] && cur[1] === finish[1]) {
+        var result = [], cursor = curKey;
+        while (cursor !== null) { result.unshift(cursor.split(',').map(Number)); cursor = previous[cursor]; }
+        return result;
+      }
+      [[-1,0],[1,0],[0,-1],[0,1]].forEach(function (d) {
+        var row = cur[0] + d[0], col = cur[1] + d[1], next = [row, col], nextKey = key(next);
+        if (row >= 0 && col >= 0 && row < size && col < size && !m[row][col] && !(nextKey in previous)) {
+          previous[nextKey] = curKey; queue.push(next);
+        }
+      });
+    }
+    return null;
+  }
+  function reset() {
+    var built, tries = 0;
+    do {
+      maze = Array.from({length:size}, function () {
+        return Array.from({length:size}, function () { return Math.random() < .25 ? 1 : 0; });
+      });
+      start = [0,0]; goal = [size-1,size-1]; maze[0][0] = maze[9][9] = 0;
+      path = findPath(maze, start, goal);
+      tries++;
+    } while (!path && tries < 50);
+    agent = start.slice(); pathIndex = 0; steps = 0; history = [];
+    get('-status').textContent = 'In progress'; get('-steps').textContent = '0 / 100'; draw();
+  }
+  function mutateMaze() {
+    for (var n = 0; n < 3; n++) {
+      var row = Math.floor(Math.random() * size), col = Math.floor(Math.random() * size);
+      var endpoint = (row === start[0] && col === start[1]) ||
+        (row === goal[0] && col === goal[1]) ||
+        (row === agent[0] && col === agent[1]);
+      if (!endpoint) maze[row][col] = maze[row][col] ? 0 : 1;
+    }
+  }
+  function draw() {
+    var canvas = get('-canvas'), ctx = canvas.getContext('2d'), cell = canvas.width / size;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    for (var r=0;r<size;r++) for (var c=0;c<size;c++) {
+      ctx.fillStyle = maze[r][c] ? '#ffb020' : '#0f1720'; ctx.fillRect(c*cell,r*cell,cell,cell);
+      ctx.strokeStyle = 'rgba(255,255,255,.08)'; ctx.strokeRect(c*cell,r*cell,cell,cell);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,.25)';
+    history.slice(0, -1).forEach(function (pos) {
+      ctx.beginPath(); ctx.arc(pos[1]*cell+cell/2,pos[0]*cell+cell/2,cell*.12,0,Math.PI*2); ctx.fill();
+    });
+    ctx.fillStyle='#25d07a'; ctx.beginPath(); ctx.arc(9.5*cell,9.5*cell,cell*.3,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#ff4d4f'; ctx.beginPath(); ctx.arc((agent[1]+.5)*cell,(agent[0]+.5)*cell,cell*.3,0,Math.PI*2); ctx.fill();
+  }
+  function step() {
+    if (pathIndex >= path.length - 1) { stop(); get('-status').textContent = 'Goal reached'; return; }
+    if (steps > 0 && steps % 20 === 0) {
+      mutateMaze();
+      path = findPath(maze, agent, goal);
+      if (path) { pathIndex = 0; } else { stop(); get('-status').textContent = 'No path'; return; }
+    }
+    pathIndex++; agent = path[pathIndex]; history.push(agent.slice()); steps++;
+    get('-steps').textContent = steps + ' / 100'; draw();
+    if (agent[0] === goal[0] && agent[1] === goal[1]) { stop(); get('-status').textContent = 'Goal reached'; }
+    if (steps >= 100) { stop(); get('-status').textContent = 'Timed out'; }
+  }
+  function stop() { if (timer) clearInterval(timer); timer = null; get('-play').textContent = 'Play'; }
+  get('-play').onclick = function () { if (timer) stop(); else { get('-play').textContent='Pause'; timer=setInterval(step,220); } };
+  get('-step').onclick = function () { stop(); step(); };
+  get('-new').onclick = function () { stop(); episode++; get('-episode').textContent=episode; reset(); };
+  reset();
+}
+
+document.addEventListener('DOMContentLoaded', buildEmbeddedMazes);

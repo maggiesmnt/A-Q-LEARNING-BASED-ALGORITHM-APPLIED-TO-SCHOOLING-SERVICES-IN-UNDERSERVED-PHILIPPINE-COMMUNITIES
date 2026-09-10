@@ -7,8 +7,9 @@ running the real trained agent locally, outside the browser.
 
 ## Status
 
-The live app now has its own **Maze Demo** tab (Research & Analysis →
-Algorithms → Maze Demo), built in `maze-demo.js` at the project root.
+The live app now includes a **Maze Demo** inside both Research & Analysis
+algorithm panels (Existing Algorithm and Proposed Algorithm), built in
+`maze-demo.js` at the project root.
 It reproduces the same visual — a ball moving through a 10x10 grid
 from start to goal, walls, a dynamically-mutating maze — directly in
 the browser with plain Canvas, no Python/pygame required.
