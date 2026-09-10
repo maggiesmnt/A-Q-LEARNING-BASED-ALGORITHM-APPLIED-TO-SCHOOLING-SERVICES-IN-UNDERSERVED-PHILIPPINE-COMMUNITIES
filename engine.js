@@ -130,10 +130,18 @@ function learnedMODQLAction(stateKey){
    from argmax_a[Q1(s,a)+Q2(s,a)] after training. If the exact discretized live
    state was not visited during training, the methodology-consistent reward is
    used only as a transparent fallback for that decision. */
-function planRoute(){
- var pending=SERVICE_IDS.slice(),visits={};pending.forEach(function(id){visits[id]=N[id].visits30});
- var maxL=Math.max.apply(null,pending.map(function(id){return N[id].learners}));
- var cur="hub",left=SHIFT_MIN,stops=[],deferred=[],hh=CLOCK.h,mm=CLOCK.m,mask=0;
+function planRoute(startId,servedIds,remainingMinutes,elapsedMinutes){
+ /* Optional runtime context is used by the Drive tab when replanning mid-day.
+    Calls with no arguments preserve the full-day behavior used by Analysis. */
+ startId=startId||"hub";
+ servedIds=Array.isArray(servedIds)?servedIds.slice():[];
+ var servedSet={};servedIds.forEach(function(id){servedSet[id]=true});
+ var pending=SERVICE_IDS.filter(function(id){return !servedSet[id]});
+ var visits={};SERVICE_IDS.forEach(function(id){visits[id]=N[id].visits30});
+ var maxL=Math.max.apply(null,SERVICE_IDS.map(function(id){return N[id].learners}));
+ var cur=startId,left=(remainingMinutes==null?SHIFT_MIN:Math.max(0,remainingMinutes));
+ var elapsed=Math.max(0,elapsedMinutes||0),stops=[],deferred=[],hh=CLOCK.h,mm=CLOCK.m+elapsed,mask=0;
+ servedIds.forEach(function(id){if(BITIDX[id]!==undefined)mask|=(1<<BITIDX[id])});
  while(pending.length){
   var feasible=[];
   pending.forEach(function(id){var p=path(cur,id);if(!p)return;var need=p.min+serviceMin(N[id]);if(need<=left)feasible.push({id:id,p:p})});
@@ -149,8 +157,8 @@ function planRoute(){
   stops.push({id:best.id,p:best.p,arrive:t0,score:best.score,J:best.J,usedPolicy:best.usedPolicy,stateKey:best.stateKey});
   var adv=best.p.min+serviceMin(N[best.id]);mm+=adv;left-=adv;visits[best.id]++;cur=best.id;mask|=(1<<BITIDX[best.id]);pending.splice(pending.indexOf(best.id),1);
  }
- pending.forEach(function(id){var p=path("hub",id);deferred.push({id:id,reason:p?"outside remaining time budget":"no open corridor — all approaches masked (A < 0.20)"})});
- return {stops:stops,deferred:deferred,ret:path(cur,"hub"),visits:visits,methodology:"MODQL <L,D,T,H,A>"};
+ pending.forEach(function(id){var p=path(cur,id);deferred.push({id:id,reason:p?"outside remaining time budget":"no open corridor — all approaches masked (A < 0.20)"})});
+ return {stops:stops,deferred:deferred,ret:path(cur,"hub"),visits:visits,methodology:"MODQL <L,D,T,H,A>",start:startId,remaining:left};
 }
 
 /* Existing/control route. Runtime replays the policy learned by Standard
@@ -173,4 +181,4 @@ function planRouteStandard(){
 }
 
 /* Operational views always display the Proposed MODQL recommendation. */
-var PLAN=planRoute(), PROGRESS=1;
+var PLAN=planRoute(), PROGRESS=0;
