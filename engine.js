@@ -15,7 +15,12 @@
 
    Both algorithms use the same road graph and the same hard feasibility rules.
    Roads with A < 0.20 are unavailable to both. The Operational PLAN is the
-   Proposed MODQL route. Data values remain simulation placeholders.
+   Proposed MODQL route.
+
+   TEMPORARY DATA TEST (Sep 2026):
+   Official DepEd ALS SY 2025-2026 learner demand is overlaid only where a
+   conservative CLC/community match is available. Road geometry, most locations,
+   visit history, and hazards remain simulated until the pending datasets arrive.
    ============================================================================ */
 
 function rng(seed){var s=seed;return function(){s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff}}
@@ -32,6 +37,43 @@ var NODES=[
  {id:"amp", name:"Sitio Mag-Ampon",     kind:"node",  lat:14.6018, lng:121.3548, learners:29, days:18, visits30:1, sitios:"Ridge cluster"}
 ];
 var N={};NODES.forEach(function(n){N[n.id]=n});
+
+/* ---------- temporary official DepEd ALS demand overlay ----------
+   This is intentionally conservative: it does NOT remap the road graph or
+   replace routing coordinates, because the current trained policy and edges
+   were built against the prototype node graph. Verified coordinates are kept
+   as metadata for later migration once the real road network is available. */
+var DEPED_ALS_TEST_OVERLAY={
+ dar:{
+   clc_id:"12301819",
+   clc_name:"SCHOOL-109505 / Daraetan (Daraitan) Elementary School CLC",
+   learners:32,
+   verified_lat:14.60541,
+   verified_lng:121.42830,
+   location_status:"verified reference coordinate; routing coordinate still prototype",
+   source:"DepEd ALS SY 2025-2026"
+ },
+ inz:{
+   clc_id:"32001152",
+   clc_name:"STA. INES BRGY. COMMUNITY LIBRARY",
+   learners:30,
+   verified_lat:null,
+   verified_lng:null,
+   location_status:"exact CLC coordinate pending; routing coordinate still prototype",
+   source:"DepEd ALS SY 2025-2026"
+ }
+};
+Object.keys(DEPED_ALS_TEST_OVERLAY).forEach(function(id){
+  if(!N[id]) return;
+  var d=DEPED_ALS_TEST_OVERLAY[id];
+  N[id].learners=d.learners;
+  N[id].officialClcId=d.clc_id;
+  N[id].officialClcName=d.clc_name;
+  N[id].dataSource=d.source;
+  N[id].locationStatus=d.location_status;
+  N[id].referenceLat=d.verified_lat;
+  N[id].referenceLng=d.verified_lng;
+});
 var SERVICE_IDS=NODES.filter(function(n){return n.kind==="node"}).map(function(n){return n.id});
 var BITIDX=(typeof TRAINED_POLICY!=="undefined"&&TRAINED_POLICY.node_bit_index)?TRAINED_POLICY.node_bit_index:(function(){var x={};SERVICE_IDS.forEach(function(id,i){x[id]=i});return x})();
 
