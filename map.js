@@ -33,9 +33,7 @@ function drawRoads(){
       dashArray:e.surf==="dirt"?"9 7":e.surf==="ford"?"3 8":null,lineCap:"round"}).addTo(gRoads);
     line.bindPopup("<b>"+N[e.a].name+" &harr; "+N[e.b].name+"</b><br>"+SURF[e.surf].lab+
       "<br>"+e.km.toFixed(1)+" km &middot; ~"+Math.round(edgeMin(e))+" min"+
-      "<br>A = <b>"+A.toFixed(2)+"</b> &mdash; "+b.lab+
-      "<br><span style='font-size:11px;color:var(--dim)'>surface "+SURF[e.surf].a.toFixed(2)+
-      " &times; weather "+wxFactor(e.surf).toFixed(2)+" &times; reports "+reportFactor(e.key).toFixed(2)+"</span>");
+      "<br>Road condition: <b>"+b.lab.charAt(0)+b.lab.slice(1).toLowerCase()+"</b>");
     if(A<0.20){
       var g=edgeGeom(e),mid=g[Math.floor(g.length/2)];
       L.marker(mid,{icon:L.divIcon({className:"",iconSize:[30,30],iconAnchor:[15,15],
@@ -46,7 +44,7 @@ function drawRoads(){
       var marker=L.marker([p[0]-0.0026,p[1]+0.0024],{icon:L.divIcon({className:"restriction-marker",iconSize:[28,28],iconAnchor:[14,14],
         html:"<div class='rm "+b.k+"'>!</div>"})}).addTo(gRoads);
       marker.bindPopup("<b>"+b.lab+" road segment</b><br>"+N[e.a].name+" &harr; "+N[e.b].name+
-        "<br>"+reason+"<br>Accessibility: <b>"+A.toFixed(2)+"</b>");
+        "<br>"+reason+"<br>Road condition: <b>"+b.lab.charAt(0)+b.lab.slice(1).toLowerCase()+"</b>");
       marker.on("mouseover",function(){this.openPopup()});
       marker.on("mouseout",function(){this.closePopup()});
     }
@@ -59,7 +57,7 @@ function roadIssueReason(e,A){
     .sort(function(a,b){return confidence(b)-confidence(a)})[0];
   if(active) return active.type.toLowerCase()+" report: "+active.note;
   if(wxFactor(e.surf)<0.9) return "rain slowed this "+SURF[e.surf].lab;
-  return "accessibility A "+A.toFixed(2);
+  return "road conditions changed";
 }
 function routeLegGeom(p,i,e){
   var g=edgeGeom(e);
@@ -89,7 +87,7 @@ function drawNodes(){
         (n.locationStatus?"<br><span>Location Status:</span> "+n.locationStatus:"")+
         "<br><span>Last Served:</span> <b>"+n.days+" days ago</b>"+
         "<br><span>Visits This Month:</span> "+n.visits30+
-        (def?"<br><span>Status:</span> <b style='color:#A24D42'>Deferred today</b>":idx>=0?"<br><span>Stop Order:</span> <b>#"+(idx+1)+"</b><br><span>Estimated Arrival:</span> <b>"+PLAN.stops[idx].arrive+"</b>":"<br><span>Status:</span> Not scheduled today"));
+        (def?"<br><span>Status:</span> <b style='color:#A24D42'>Deferred today</b>":idx>=0?"<br><span>Stop Order:</span> <b>#"+(idx+1)+"</b><br><span>Estimated Arrival:</span> <b>"+formatOperationalTime(PLAN.stops[idx].arrive)+"</b>":"<br><span>Status:</span> Not scheduled today"));
   });
 }
 function drawRoute(){
@@ -136,7 +134,7 @@ function drawHaz(){
       html:"<div style='width:32px;height:32px;border-radius:11px 11px 11px 3px;background:#8A633F;border:2px solid #F4EAD8;display:grid;place-items:center;font-size:15px;box-shadow:0 4px 12px rgba(0,0,0,.5)'>"+r.em+"</div>"})})
       .addTo(gHaz).bindPopup("<b>"+r.type+"</b><br>"+N[e.a].name+" &harr; "+N[e.b].name+
         "<br>"+r.who+" &middot; "+(r.ago<1?Math.round(r.ago*60)+" min":r.ago.toFixed(1)+" h")+" ago"+
-        "<br>Confidence <b>"+(confidence(r)*100).toFixed(0)+"%</b> &rarr; A = "+accA(e).toFixed(2)+
+        "<br>Report confidence <b>"+(confidence(r)*100).toFixed(0)+"%</b>"+
         "<br><i>"+r.note+"</i>");
     hz.on("mouseover",function(){this.openPopup()});
     hz.on("mouseout",function(){this.closePopup()});

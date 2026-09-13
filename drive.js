@@ -4,8 +4,8 @@
    the hazard-reporting answer to the panel's question).
 
    Multi-day simulation controls are intentionally contained in the Drive tab.
-   They carry visit history forward so the Proposed MODQL route can replan with
-   updated fairness/history, weather, and road-accessibility conditions.
+   They carry visit history forward so the route can update with the latest
+   service records, weather, and road conditions.
    ============================================================================ */
 
 /* ---------- Drive-only multi-day simulation state ---------- */
@@ -25,6 +25,15 @@ function isSimulationDay1(){
   return SIM_DATE.getFullYear()===SIM_START_DATE.getFullYear() &&
     SIM_DATE.getMonth()===SIM_START_DATE.getMonth() &&
     SIM_DATE.getDate()===SIM_START_DATE.getDate();
+}
+
+function formatOperationalTime(value){
+  var m=String(value||"").match(/^(\d{1,2}):(\d{2})$/);
+  if(!m) return value||"";
+  var h=parseInt(m[1],10), min=m[2], suffix=h>=12?"PM":"AM";
+  h=h%12;
+  if(h===0) h=12;
+  return h+":"+min+" "+suffix;
 }
 
 /* Keep the new controls inside Driver's Navigation so no other tab/layout
@@ -80,11 +89,11 @@ function renderDrive(){
   if(label) label.textContent=SIM_DATE.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
   if(!s){
     document.getElementById("stopName").textContent="Return to Laiban ALS Hub";
-    document.getElementById("stopTags").innerHTML='<span class="tag eq">deployment complete</span>';
+    document.getElementById("stopTags").innerHTML='<span class="tag eq">all stops completed</span>';
     document.getElementById("etaMin").textContent=PLAN.ret?Math.round(PLAN.ret.min):0;
     document.getElementById("etaClock").textContent="min to hub";
     document.getElementById("turnText").textContent="All scheduled stops served";
-    document.getElementById("turnSub").textContent="Great, today's done. Come back tomorrow (or click 'Start Next Day')";
+    document.getElementById("turnSub").textContent="Good work. Return to the hub, or start the next day when ready.";
     cb.style.display="none";
     if(nd) nd.style.display="block";
     if(rd) rd.style.display="block";
@@ -96,10 +105,10 @@ function renderDrive(){
       '<span class="tag'+(n.days>=20?' hot':'')+'">last served '+n.days+'d ago</span>'+
       '<span class="tag eq">'+s.p.km.toFixed(1)+' km</span>';
     document.getElementById("etaMin").textContent=Math.round(s.p.min);
-    document.getElementById("etaClock").textContent="min &middot; arrive "+s.arrive;
+    document.getElementById("etaClock").textContent="min - arrive "+formatOperationalTime(s.arrive);
     document.getElementById("turnText").textContent="Continue on "+N[leg.a].name.replace("Sitio ","")+"\u2013"+N[leg.b].name.replace("Sitio ","")+" road";
     document.getElementById("turnSub").innerHTML=leg.km.toFixed(1)+" km &middot; "+SURF[leg.surf].lab+
-      ' &middot; <b style="color:'+b.col+'">A '+A.toFixed(2)+" "+b.lab+"</b>";
+      ' &middot; <b style="color:'+b.col+'">Road condition: '+b.lab.charAt(0)+b.lab.slice(1).toLowerCase()+"</b>";
     cb.textContent="Mark \u201c"+n.name+"\u201d as completed";
     cb.disabled=false;
     cb.style.display="block";
@@ -113,7 +122,7 @@ function renderDrive(){
     PLAN.stops.forEach(function(st,i){
       var d=document.createElement("div");
       d.className="s "+(i<PROGRESS?"done":i===PROGRESS?"now":"");
-      d.innerHTML="<b>"+(i+1)+". "+N[st.id].name.replace("Sitio ","")+"</b>"+st.arrive+" &middot; "+N[st.id].learners+" learners";
+      d.innerHTML="<b>"+(i+1)+". "+N[st.id].name.replace("Sitio ","")+"</b>"+formatOperationalTime(st.arrive)+" &middot; "+N[st.id].learners+" learners";
       strip.appendChild(d);
     });
     PLAN.deferred.forEach(function(df){
@@ -146,8 +155,8 @@ document.getElementById("alertClose").onclick=function(){document.getElementById
 
 /* ============================ MARK STOP AS COMPLETED ============================
    Advances PROGRESS by one, records the visit against that node's
-   visits30/days (so the NEXT replan's Jain's-fairness term reflects what
-   actually got served today, not just the static seed data), then
+   visits30/days (so the next route update reflects what actually got served
+   today, not just the static seed data), then
    replans/repaints everything the same way a hazard report does. */
 document.getElementById("completeBtn").onclick=function(){
   var s=nextStop();
@@ -162,7 +171,7 @@ document.getElementById("completeBtn").onclick=function(){
   n.days=0;
   PROGRESS=COMPLETED_STOPS.length;
 
-  refresh({t:"Stop completed",b:n.name+" marked as served. Replanning now starts from the driver's actual current location and only considers unserved communities."});
+  refresh({t:"Stop completed",b:n.name+" has been marked as served. The remaining stops were updated from your current location."});
 };
 
 /* Start a fresh deployment day without resetting the learned policy. Visit
@@ -182,7 +191,7 @@ document.getElementById("nextDayBtn").onclick=function(){
   var dayIndex=Math.round((SIM_DATE-SIM_START_DATE)/86400000);
   WX.mm=DRIVE_WEATHER_SEQUENCE[dayIndex%DRIVE_WEATHER_SEQUENCE.length];
 
-  refresh({t:"New deployment day started",b:"The Proposed MODQL route was replanned from Laiban ALS Hub using carried-forward visit history, aged hazard reports, and the predefined weather scenario for this day."});
+  refresh({t:"New deployment day started",b:"Today's route was updated from Laiban ALS Hub using the latest service history, road reports, and weather for the day."});
 };
 
 document.getElementById("resetDayBtn").onclick=function(){
@@ -198,7 +207,7 @@ document.getElementById("resetDayBtn").onclick=function(){
   COMPLETED_STOPS=[];
   DRIVE_USED_MIN=0;
   PROGRESS=0;
-  refresh({t:"Simulation reset",b:"The Drive simulation returned to an untouched Day 1: hub location, zero completed stops, original hazards, weather, and visit history."});
+  refresh({t:"Day 1 restored",b:"The route demo is back to Day 1 with no completed stops and the original road, weather, and service records."});
 };
 
 /* replan + repaint everything (operational views + analysis tabs) */
@@ -227,7 +236,7 @@ function refresh(msg){
   var after=PLAN.stops.slice(PROGRESS).map(function(s){return s.id}).join(",");
   if(msg){
     var extra = (after!==before)?" Stop order updated from "+N[CURRENT_LOCATION].name+".":"";
-    if(PLAN.deferred.length>beforeDef) extra+=" "+N[PLAN.deferred[PLAN.deferred.length-1].id].name+" deferred to the next deployment with an H-priority boost.";
+    if(PLAN.deferred.length>beforeDef) extra+=" "+N[PLAN.deferred[PLAN.deferred.length-1].id].name+" was moved to a later service day.";
     alertShow(msg.t,msg.b+extra);
   }
 }
@@ -266,5 +275,5 @@ document.getElementById("repSend").onclick=function(){
     who:"You (mobile unit)",note:"Reported from the field just now."});
   closeSheet();
   var e=EK[window.__seg];
-  refresh({t:h.t+" reported",b:"Logged on "+N[e.a].name+" &harr; "+N[e.b].name+". Accessibility A recomputed to <b>"+accA(e).toFixed(2)+"</b>."});
+  refresh({t:h.t+" reported",b:"Logged on "+N[e.a].name+" &harr; "+N[e.b].name+". Road condition is now marked <b>"+band(accA(e)).lab.charAt(0)+band(accA(e)).lab.slice(1).toLowerCase()+"</b>."});
 };
