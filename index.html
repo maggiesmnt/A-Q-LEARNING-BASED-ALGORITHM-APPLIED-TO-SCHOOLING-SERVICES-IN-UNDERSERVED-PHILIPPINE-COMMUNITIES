@@ -53,7 +53,7 @@
 <button id="btnCenter" title="Re-center on unit">
 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
 </button>
-<button id="btnRain" title="Rain telemetry" aria-label="Toggle rain telemetry">
+<button id="btnRain" title="Rain and road conditions" aria-label="Show or hide rain and road conditions">
 <svg viewBox="0 0 24 24"><path d="M6 14a4 4 0 010-8 5 5 0 019.6-1A4 4 0 1117 14z"/><path d="M9 17v2M13 17v3M17 17v2"/></svg>
 </button>
 </div>
@@ -64,7 +64,7 @@ REPORT
 <div id="navCard">
 <div class="panel-title">
 <span>Driver&rsquo;s Navigation</span>
-<small>Live route and road access</small>
+<small>Next stop and road conditions</small>
 </div>
 <div class="turn">
 <div class="arrow"><svg viewBox="0 0 24 24" id="turnIcon"><path d="M12 20V7M12 7l-5 5M12 7l5 5"/></svg></div>
@@ -76,7 +76,7 @@ REPORT
 <div class="body">
 <div class="eta">
 <div class="big" id="etaMin">24</div>
-<div class="sub" id="etaClock">min &middot; 09:12</div>
+<div class="sub" id="etaClock">min &middot; arrive 9:12 AM</div>
 </div>
 </div>
 <div style="padding:0 15px 12px">
@@ -87,8 +87,8 @@ REPORT
 <div class="nm" id="stopName">Sitio Kabayunan</div>
 <div class="mt" id="stopTags"></div>
 </div>
-<div id="legend" class="accessibility-legend" aria-label="Road Accessibility Legend">
-<h3>Road Accessibility Legend</h3>
+<div id="legend" class="accessibility-legend" aria-label="Road condition guide">
+<h3>Road Condition Guide</h3>
 <div><i style="background:#25d07a"></i><b>Open</b><span>Normal road, drive as usual</span></div>
 <div><i style="background:#ffb020"></i><b>Caution</b><span>Passable, but slower going</span></div>
 <div><i style="background:#ff8a3d"></i><b>Restricted</b><span>Needs supervisor approval to use</span></div>
@@ -98,13 +98,11 @@ REPORT
 </section>
 <!-- ============ STOPS ============ -->
 <section class="view pad" id="view-stops">
-<h1 class="sec">Stops / Deployment</h1>
-<!--<p class="lede">Stop order produced by the trained policy, then re-checked against live road accessibility before dispatch.
-A community that becomes unreachable is <b>deferred, not dropped</b> &mdash; its visit-history index (H) carries a priority boost into the next run so equity is not silently lost.</p>-->
+<h1 class="sec">Today's Stops</h1>
 <div class="g3" id="dayKpis"></div>
 <div style="height:12px"></div>
 <div class="card">
-<h3>Generated weekly route sequence</h3>
+<h3>Stop order</h3>
 <div class="k" id="weeklySequence"></div>
 </div>
 <div class="card">
@@ -113,7 +111,7 @@ A community that becomes unreachable is <b>deferred, not dropped</b> &mdash; its
 </div>
 <div id="stopsList"></div>
 <div class="card">
-<h3>Deferred / carried forward</h3>
+<h3>Stops to try another day</h3>
 <div class="k" id="deferList">None &mdash; every scheduled community is reachable under current conditions.</div>
 </div>
 </section>
