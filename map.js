@@ -85,6 +85,8 @@ function drawNodes(){
       html:"<div style='width:26px;height:26px;border-radius:50%;background:"+col+";color:#1F2612;display:grid;place-items:center;font-size:12px;font-weight:800;border:2px solid rgba(255,255,255,.85);box-shadow:0 3px 9px rgba(0,0,0,.45)'>"+lbl+"</div>"})})
       .addTo(gNodes).bindPopup("<b>"+n.name+"</b><br><span>Community:</span> "+n.sitios+
         "<br><span>Learners to Serve:</span> <b>"+n.learners+"</b>"+
+        (n.dataSource?"<br><span>Demand Source:</span> <b>"+n.dataSource+"</b><br><span>CLC:</span> "+n.officialClcName+" ("+n.officialClcId+")":"<br><span>Demand Source:</span> Simulated placeholder")+
+        (n.locationStatus?"<br><span>Location Status:</span> "+n.locationStatus:"")+
         "<br><span>Last Served:</span> <b>"+n.days+" days ago</b>"+
         "<br><span>Visits This Month:</span> "+n.visits30+
         (def?"<br><span>Status:</span> <b style='color:#A24D42'>Deferred today</b>":idx>=0?"<br><span>Stop Order:</span> <b>#"+(idx+1)+"</b><br><span>Estimated Arrival:</span> <b>"+PLAN.stops[idx].arrive+"</b>":"<br><span>Status:</span> Not scheduled today"));
