@@ -1,15 +1,15 @@
 /* ============================================================================
    HAZARDS.JS — "Road & hazard status" view: the plain-language answer to
    "how do we know a road is unavailable due to hazard/disaster" plus the
-   live, editable list of active reports feeding the A coefficient.
+   live list of active reports from external or official sources.
    ============================================================================ */
 
 function renderHazards(){
   var closed=0,caut=0;
   EDGES.forEach(function(e){var A=accA(e);if(A<0.20)closed++;else if(A<0.75)caut++});
   document.getElementById("hzSummary").innerHTML=
-    '<div class="kpi"><div class="lab">Segments closed (A &lt; 0.20)</div><div class="v" style="color:var(--bad)">'+closed+'</div><div class="d">masked out of the action set</div></div>'+
-    '<div class="kpi"><div class="lab">Degraded segments</div><div class="v" style="color:var(--warn)">'+caut+'</div><div class="d">travel cost penalised by 1/A</div></div>';
+    '<div class="kpi"><div class="lab">Closed roads</div><div class="v" style="color:var(--bad)">'+closed+'</div><div class="d">not passable right now</div></div>'+
+    '<div class="kpi"><div class="lab">Roads needing caution</div><div class="v" style="color:var(--warn)">'+caut+'</div><div class="d">still passable, but slower</div></div>';
 
   var box=document.getElementById("hazardList");box.innerHTML="";
   var all=REPORTS.slice().sort(function(a,b){return a.ago-b.ago});
@@ -24,22 +24,7 @@ function renderHazards(){
       '<div class="k" style="text-align:right">'+(r.ago<1?Math.round(r.ago*60)+' min':r.ago.toFixed(1)+' h')+' ago<br>'+r.who+'</div></div>'+
       '<div class="k" style="margin-top:9px">&ldquo;'+r.note+'&rdquo;</div>'+
       '<div class="meter"><i style="width:'+(c*100).toFixed(0)+'%;background:'+(c>0.6?"var(--bad)":c>0.3?"var(--warn)":"var(--dim2)")+'"></i></div>'+
-      '<div class="k">Confidence <b>'+(c*100).toFixed(0)+'%</b> ('+r.reporters+' reporter'+(r.reporters>1?'s':'')+
-      ', '+r.src+', 6 h half-life) &rarr; resulting <b class="mono">A = '+A.toFixed(2)+'</b>'+
-      ' <span style="color:var(--dim2)">= surface '+SURF[e.surf].a.toFixed(2)+' &times; weather '+wxFactor(e.surf).toFixed(2)+' &times; reports '+reportFactor(e.key).toFixed(2)+'</span></div>'+
-      '<div class="btnrow" style="margin-top:12px">'+
-      '<button class="btn g" data-still="'+r.id+'" style="padding:10px;font-size:12.5px">Still there</button>'+
-      '<button class="btn '+(r.cleared?'g':'k')+'" data-clear="'+r.id+'" style="padding:10px;font-size:12.5px">'+(r.cleared?'Cleared \u2713':'Mark cleared')+'</button></div>';
+      '<div class="k">Source: official or external road data &middot; confidence <b>'+(c*100).toFixed(0)+'%</b></div>';
     box.appendChild(d);
-  });
-  box.querySelectorAll("[data-still]").forEach(function(btn){
-    btn.onclick=function(){var r=REPORTS.filter(function(x){return x.id==btn.getAttribute("data-still")})[0];
-      r.reporters++;r.ago=0;r.cleared=false;
-      refresh({t:"Hazard re-confirmed",b:r.type+" corroborated by another reporter. Confidence raised, accessibility recomputed."});};
-  });
-  box.querySelectorAll("[data-clear]").forEach(function(btn){
-    btn.onclick=function(){var r=REPORTS.filter(function(x){return x.id==btn.getAttribute("data-clear")})[0];
-      r.cleared=!r.cleared;
-      refresh({t:r.cleared?"Hazard marked cleared":"Hazard re-opened",b:r.type+" \u2014 confidence dropped to 10%, the segment returns to the action set as soon as A rises above 0.20."});};
   });
 }

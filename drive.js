@@ -1,7 +1,5 @@
 /* ============================================================================
-   DRIVE.JS — the turn-by-turn drive card, live refresh/replan, and the
-   "Report road condition" bottom sheet (this is the field-facing half of
-   the hazard-reporting answer to the panel's question).
+   DRIVE.JS - the turn-by-turn drive card and live refresh/replan behavior.
 
    Multi-day simulation controls are intentionally contained in the Drive tab.
    They carry visit history forward so the route can update with the latest
@@ -34,6 +32,21 @@ function formatOperationalTime(value){
   h=h%12;
   if(h===0) h=12;
   return h+":"+min+" "+suffix;
+}
+
+function weatherLabel(){
+  if(WX.mm<10) return "Clear";
+  if(WX.mm<30) return "Light Rain";
+  if(WX.mm<60) return "Heavy Rain";
+  return "Severe Rain";
+}
+
+function formatTimeRemaining(mins){
+  mins=Math.max(0,Math.round(mins));
+  var h=Math.floor(mins/60), m=mins%60, parts=[];
+  if(h) parts.push(h+" hour"+(h===1?"":"s"));
+  if(m) parts.push(m+" minute"+(m===1?"":"s"));
+  return parts.join(" ")||"0 minutes";
 }
 
 /* Keep the new controls inside Driver's Navigation so no other tab/layout
@@ -135,8 +148,9 @@ function renderDrive(){
   if(pbar) pbar.style.width=(100*PROGRESS/Math.max(1,PLAN.stops.length))+"%";
   var used=DRIVE_USED_MIN;
   var left=Math.max(0,SHIFT_MIN-used);
-  document.getElementById("shiftLeft").textContent=Math.floor(left/60)+"h "+Math.round(left%60)+"m";
-  document.getElementById("wxMm").textContent=WX.mm+" mm";
+  document.getElementById("shiftLeft").textContent=formatTimeRemaining(left);
+  document.getElementById("wxStatus").textContent=weatherLabel();
+  document.getElementById("wxChip").className="chip"+(WX.mm>=30?" rain":"");
   var live=REPORTS.filter(function(r){return !r.cleared&&confidence(r)>=0.15}).length+ADVISORIES.length;
   document.getElementById("hzCount").textContent=live;
   var tabBdg=document.getElementById("tabBdg");
@@ -155,9 +169,7 @@ document.getElementById("alertClose").onclick=function(){document.getElementById
 
 /* ============================ MARK STOP AS COMPLETED ============================
    Advances PROGRESS by one, records the visit against that node's
-   visits30/days (so the next route update reflects what actually got served
-   today, not just the static seed data), then
-   replans/repaints everything the same way a hazard report does. */
+   visits30/days, then replans/repaints the operational views. */
 document.getElementById("completeBtn").onclick=function(){
   var s=nextStop();
   if(!s) return;
@@ -241,39 +253,3 @@ function refresh(msg){
   }
 }
 
-/* ============================ REPORT SHEET ============================ */
-var HZTYPES=[{t:"Landslide",em:"\u26F0"},{t:"Flooding",em:"\uD83D\uDCA6"},{t:"Washout",em:"\uD83D\uDD73"},{t:"Fallen tree",em:"\uD83C\uDF32"},
-             {t:"Mud / slippery",em:"\uD83D\uDFEB"},{t:"Bridge damage",em:"\uD83C\uDF09"},{t:"River rising",em:"\uD83C\uDF0A"},{t:"Impassable",em:"\u26D4"}];
-var pickType=0,pickSev="major";
-(function(){
-  var g=document.getElementById("hzGrid");
-  HZTYPES.forEach(function(h,i){
-    var b=document.createElement("button");b.className="hz"+(i===0?" on":"");
-    b.innerHTML='<span class="em">'+h.em+'</span>'+h.t;
-    b.onclick=function(){pickType=i;g.querySelectorAll(".hz").forEach(function(x){x.classList.remove("on")});b.classList.add("on")};
-    g.appendChild(b);
-  });
-  document.querySelectorAll("#sevSegs button").forEach(function(b){
-    b.onclick=function(){pickSev=b.getAttribute("data-sev");
-      document.querySelectorAll("#sevSegs button").forEach(function(x){x.classList.remove("on")});b.classList.add("on")};
-  });
-})();
-function openSheet(){
-  var s=nextStop(),leg=s?s.p.legs[0]:EDGES[0];
-  window.__seg=leg.key;
-  document.getElementById("sheetSeg").innerHTML="Segment ahead: <b>"+N[leg.a].name+" &harr; "+N[leg.b].name+"</b> &middot; "+SURF[leg.surf].lab;
-  document.getElementById("veil").classList.add("show");
-  document.getElementById("sheetReport").classList.add("show");
-}
-function closeSheet(){document.getElementById("veil").classList.remove("show");document.getElementById("sheetReport").classList.remove("show")}
-document.getElementById("fab").onclick=openSheet;
-document.getElementById("veil").onclick=closeSheet;
-document.getElementById("repCancel").onclick=closeSheet;
-document.getElementById("repSend").onclick=function(){
-  var h=HZTYPES[pickType];
-  REPORTS.push({id:nextRepId++,edge:window.__seg,type:h.t,em:h.em,sev:pickSev,src:"driver",reporters:1,ago:0,cleared:false,
-    who:"You (mobile unit)",note:"Reported from the field just now."});
-  closeSheet();
-  var e=EK[window.__seg];
-  refresh({t:h.t+" reported",b:"Logged on "+N[e.a].name+" &harr; "+N[e.b].name+". Road condition is now marked <b>"+band(accA(e)).lab.charAt(0)+band(accA(e)).lab.slice(1).toLowerCase()+"</b>."});
-};

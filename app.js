@@ -1,7 +1,6 @@
 /* ============================================================================
-   APP.JS — chrome: the Operational/Research mode toggle, the operational
-   bottom tab bar (Drive/Stops/Hazards), map layer toggle, weather toggle,
-   and the boot sequence.
+   APP.JS - chrome: the Operational/Research mode toggle, the operational
+   bottom tab bar, map layer toggle, and boot sequence.
    ============================================================================ */
 
 var MODE = "operational";
@@ -74,12 +73,6 @@ document.getElementById("btnLayer").onclick=function(){
 };
 document.getElementById("btnLayer").classList.add("on");
 document.getElementById("btnCenter").onclick=function(){map.setView(unit.getLatLng(),13)};
-document.getElementById("btnRain").onclick=function(){
-  WX.mm = WX.mm>=60?12:WX.mm<30?38:78;
-  this.classList.toggle("on",WX.mm>=60);
-  document.getElementById("wxChip").className="chip"+(WX.mm>=30?" rain":"");
-  refresh({t:"Weather telemetry updated",b:"Rainfall now <b>"+WX.mm+" mm/24h</b>. Accessibility coefficients rescaled &mdash; unpaved mountain paths and the river ford degrade first."});
-};
 
 /* boot */
 drawRoads();drawRoute();drawNodes();drawHaz();placeUnit();renderDrive();renderStops();renderHazards();renderHistory();renderAnalysis();
