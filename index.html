@@ -30,9 +30,9 @@
 <button data-mode="research">Research &amp; Analysis</button>
 </div>
 <div class="spacer"></div>
-<div class="chip rain" id="wxChip"><span class="dot"></span>Rain <b id="wxMm">38 mm</b>/24h</div>
-<div class="chip" id="shiftChip"><span class="dot"></span>Shift <b id="shiftLeft">6h 20m</b> left</div>
-<div class="chip alert" id="hzChip"><span class="dot"></span><b id="hzCount">2</b> road alerts</div>
+<div class="chip rain" id="wxChip"><span class="dot"></span>Weather: <b id="wxStatus">Heavy Rain</b></div>
+<div class="chip" id="shiftChip"><span class="dot"></span>Time Remaining: <b id="shiftLeft">8 hours</b></div>
+<div class="chip alert" id="hzChip"><span class="dot"></span>Road Alerts: <b id="hzCount">3</b></div>
 </header>
 <main>
 <!-- ============ DRIVE ============ -->
@@ -53,14 +53,7 @@
 <button id="btnCenter" title="Re-center on unit">
 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
 </button>
-<button id="btnRain" title="Rain and road conditions" aria-label="Show or hide rain and road conditions">
-<svg viewBox="0 0 24 24"><path d="M6 14a4 4 0 010-8 5 5 0 019.6-1A4 4 0 1117 14z"/><path d="M9 17v2M13 17v3M17 17v2"/></svg>
-</button>
 </div>
-<button id="fab">
-<svg viewBox="0 0 24 24"><path d="M12 3v11M12 18.5v.5"/><path d="M4.5 20h15L12 4.5z" style="stroke-width:1.7"/></svg>
-REPORT
-</button>
 <div id="navCard">
 <div class="panel-title">
 <span>Driver&rsquo;s Navigation</span>
@@ -117,7 +110,7 @@ REPORT
 </section>
 <!-- ============ HISTORY ============ -->
 <section class="view pad" id="view-history">
-<h2 class="sec">History</h1>
+<h1 class="sec">History</h1>
 <p class="lede">Completed deployment records are structured so each run can later feed the visit-history term <span class="mono">H</span> in the next planning cycle.</p>
 <div id="historyList"></div>
 </section>
@@ -129,7 +122,7 @@ coefficient <b>A</b> &mdash; the fifth term of the state vector <span class="mon
 it is fused from four independent signals, each of which decays over time unless it is re-confirmed.</p>
 <div class="g2" id="hzSummary"></div>
 <div style="height:6px"></div>
-<h3 style="font-size:13px;color:var(--dim);letter-spacing:.4px;margin:16px 0 9px">ACTIVE &amp; RECENT REPORTS</h3>
+<h3 style="font-size:13px;color:var(--dim);letter-spacing:.4px;margin:16px 0 9px">ACTIVE ROAD ALERTS</h3>
 <div id="hazardList"></div>
 <div class="card">
 <h3>How A is computed</h3>
@@ -139,14 +132,14 @@ The band A falls into decides whether the segment stays in the agent&rsquo;s act
 <thead><tr><th>Signal</th><th>Where it comes from</th><th>Effect on A</th></tr></thead>
 <tbody>
 <tr><td><b>Surface baseline</b></td><td>OpenStreetMap road class &mdash; concrete provincial road, gravel barangay road, unimproved mountain path, river crossing</td><td>Sets the ceiling: 1.00 / 0.85 / 0.65 / 0.50</td></tr>
-<tr><td><b>Weather telemetry</b></td><td>Rainfall &amp; seasonal pattern feed (Dynamic Weather and Road Accessibility Telemetry dataset)</td><td>Scales unpaved segments hardest: &times;1.00 dry, &times;0.85 light, &times;0.60 heavy, &times;0.35 extreme</td></tr>
-<tr><td><b>Field / community report</b></td><td>Driver or barangay tap on the REPORT button: landslide, flooding, washout, fallen tree, impassable</td><td>Pulls A toward the severity floor, weighted by confidence</td></tr>
+<tr><td><b>Weather feed</b></td><td>Automatic rainfall and seasonal condition input</td><td>Scales unpaved segments hardest: &times;1.00 dry, &times;0.85 light, &times;0.60 heavy, &times;0.35 extreme</td></tr>
+<tr><td><b>External road alert</b></td><td>Official or partner source: landslide, flooding, washout, fallen tree, impassable</td><td>Pulls A toward the severity floor, weighted by confidence</td></tr>
 <tr><td><b>Official advisory</b></td><td>LGU / DPWH / MDRRMO closure notice</td><td>Hard override: A = 0 until lifted</td></tr>
 <tr><td><b>Unit telemetry</b></td><td>Mobile unit turns back or stalls on a segment mid-route</td><td>Auto-raises a low-confidence suspected-blockage report</td></tr>
 </tbody>
 </table>
-<div class="k" style="margin-top:11px"><b>Confidence &amp; decay.</b> A single unverified report starts at 0.45 confidence; each corroboration from a different reporter adds 0.2; an official advisory is 1.0.
-Confidence halves every 6 hours, so a segment re-opens on its own once nobody re-confirms the hazard &mdash; and any user can mark it <i>Cleared</i>, which drops confidence to 0.1 immediately.</div>
+<div class="k" style="margin-top:11px"><b>Confidence &amp; decay.</b> A single unverified external alert starts at 0.45 confidence; each corroboration adds 0.2; an official advisory is 1.0.
+Confidence halves every 6 hours, so a segment re-opens on its own once no external source re-confirms the hazard.</div>
 </div>
 <div class="card">
 <h3>What the algorithm does with each band</h3>
@@ -220,21 +213,6 @@ Base map &copy; OpenStreetMap contributors. Node coordinates, learner demand and
 <button data-view="stops"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Stops</button>
 <button data-view="history"><svg viewBox="0 0 24 24"><path d="M12 8v5l3 2"/><path d="M3.05 11a9 9 0 113.4 7"/><path d="M3 18v-5h5"/></svg>History</button>
 </nav>
-</div>
-<div id="veil"></div>
-<div class="sheet" id="sheetReport">
-<h3>Report road condition</h3>
-<p class="sub" id="sheetSeg">Segment: &mdash;</p>
-<div class="grid4" id="hzGrid"></div>
-<div class="segs" id="sevSegs">
-<button data-sev="minor">Passable<br>with care</button>
-<button data-sev="major" class="on">Barely<br>passable</button>
-<button data-sev="impassable">Impassable</button>
-</div>
-<div class="btnrow">
-<button class="btn g" id="repCancel">Cancel</button>
-<button class="btn p" id="repSend">Send report</button>
-</div>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="trained_policy.js"></script>
