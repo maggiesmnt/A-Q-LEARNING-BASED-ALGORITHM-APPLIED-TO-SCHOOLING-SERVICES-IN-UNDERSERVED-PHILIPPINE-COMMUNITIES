@@ -11,6 +11,7 @@ function renderDrive(){
   var nd=document.getElementById("nextDayBtn");
   var bd=document.getElementById("backDayBtn");
   var rd=document.getElementById("resetDayBtn");
+  var fab=document.getElementById("fab");
   var label=document.getElementById("dayLabel");
   var travelledKm=0;
   PLAN.stops.slice(0,PROGRESS).forEach(function(st){travelledKm+=st.p.km});
@@ -19,6 +20,8 @@ function renderDrive(){
   label.textContent=SIM_DATE.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
   bd.disabled=isSimulationDay1();
   if(!s){
+    fab.disabled=true;
+    fab.setAttribute("aria-label","Report road condition unavailable after deployment completion");
     document.getElementById("stopName").textContent="Return to Laiban ALS Hub";
     document.getElementById("stopTags").innerHTML='<span class="tag eq">deployment complete</span>';
     document.getElementById("etaMin").textContent=PLAN.ret?Math.round(PLAN.ret.min):0;
@@ -30,6 +33,8 @@ function renderDrive(){
     bd.style.display="block";
     rd.style.display="block";
   }else{
+    fab.disabled=false;
+    fab.removeAttribute("aria-label");
     var n=N[s.id], leg=s.p.legs[0], A=accA(leg), b=band(A);
     document.getElementById("stopName").textContent=n.name;
     document.getElementById("stopTags").innerHTML=
@@ -164,6 +169,7 @@ var pickType=0,pickSev="major";
   });
 })();
 function openSheet(){
+  if(document.getElementById("fab").disabled) return;
   var s=nextStop(),leg=s?s.p.legs[0]:EDGES[0];
   window.__seg=leg.key;
   document.getElementById("sheetSeg").innerHTML="Segment ahead: <b>"+N[leg.a].name+" &harr; "+N[leg.b].name+"</b> &middot; "+SURF[leg.surf].lab;

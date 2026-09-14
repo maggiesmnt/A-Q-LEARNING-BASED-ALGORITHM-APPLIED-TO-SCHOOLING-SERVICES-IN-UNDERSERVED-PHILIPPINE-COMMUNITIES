@@ -19,14 +19,13 @@ would produce.
 
 DATA NOTE
 -------------------------------------------------------------------------
-DepEd enrollment/registry data and the real OSM road network have been
-requested but not yet released. Until that data arrives, this script
-trains on the SAME placeholder node/edge data already used in the
-prototype's engine.js (the Laiban / Tanay / Rizal sitios), so the
-numbers produced here are illustrative, not final results. When the
-real data comes in, only the NODES / EDGES / weather-report tables at
-the top of this file need to be swapped -- the state design, reward
-function, and training loop underneath do not change.
+Confirmed DepEd SY 2025-2026 enrollment is now used for Laiban (hub)
+and Sta. Inez. The other seven service-node counts and the real OSM
+road network remain representative/placeholder data, so the numbers
+produced here are still illustrative rather than final deployment
+results. When additional official data arrives, only the NODES / EDGES /
+weather-report tables at the top of this file need to be updated -- the
+state design, reward function, and training loop underneath do not change.
 
 STATE / ACTION / REWARD DESIGN (documented for the defense)
 -------------------------------------------------------------------------
@@ -83,16 +82,19 @@ OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # =============================================================================
-# 1. ENVIRONMENT -- ported directly from engine.js (same placeholder data)
+# 1. ENVIRONMENT -- ported directly from engine.js
 # =============================================================================
 
+ # Enrollment provenance: hub (Laiban) = confirmed DepEd SY 2025-2026, 16 learners;
+ # Sta. Inez (source spelling: STA. INES BRGY. COMMUNITY LIBRARY) = confirmed,
+ # 30 learners. The other seven service-node counts remain representative estimates.
 NODES = {
-    "hub": dict(name="Laiban ALS Hub",       kind="depot", lat=14.5762, lng=121.3828, learners=0,  visits30=0),
+    "hub": dict(name="Laiban ALS Hub",       kind="depot", lat=14.5762, lng=121.3828, learners=16,  visits30=0),
     "mah": dict(name="Sitio Mahabang Lalim",  kind="node",  lat=14.5921, lng=121.4026, learners=48, visits30=2),
     "kab": dict(name="Sitio Kabayunan",       kind="node",  lat=14.5606, lng=121.4131, learners=63, visits30=1),
     "dar": dict(name="Daraitan Proper",       kind="node",  lat=14.6108, lng=121.4315, learners=87, visits30=3),
     "tin": dict(name="Sitio Tinipak",         kind="node",  lat=14.6204, lng=121.4402, learners=41, visits30=0),
-    "inz": dict(name="Sta. Inez",             kind="node",  lat=14.5512, lng=121.3562, learners=72, visits30=2),
+    "inz": dict(name="Sta. Inez",             kind="node",  lat=14.5512, lng=121.3562, learners=30, visits30=2),
     "cay": dict(name="Cayabu",                kind="node",  lat=14.5292, lng=121.3396, learners=56, visits30=2),
     "pun": dict(name="Sitio Pungo",           kind="node",  lat=14.5446, lng=121.4288, learners=34, visits30=0),
     "amp": dict(name="Sitio Mag-Ampon",       kind="node",  lat=14.6018, lng=121.3548, learners=29, visits30=1),
@@ -574,10 +576,9 @@ def main():
             "rollout_avg_stops": float(std_days["stops"].mean()),
             "rollout_avg_deferred": float(std_days["deferred"].mean()),
         },
-        "data_note": ("Trained on placeholder node/edge data from engine.js "
-                      "(DepEd registry and OSM road data requested, not yet received). "
-                      "Re-run this script unchanged once real data is available -- "
-                      "only NODES/EDGES need to be replaced."),
+        "data_note": ("Laiban (hub) and Sta. Inez learner counts use confirmed DepEd ALS "
+                      "SY 2025-2026 data. The other seven learner counts and the road "
+                      "network remain representative simulation inputs."),
     }
     summary_path = os.path.join(OUT_DIR, "comparison_summary.json")
     with open(summary_path, "w") as f:

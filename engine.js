@@ -28,13 +28,16 @@
 function rng(seed){var s=seed;return function(){s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff}}
 
 /* ---------- environment: Laiban, Tanay, Rizal (simulated nodes) ---------- */
+/* Enrollment provenance: hub (Laiban) = confirmed DepEd SY 2025-2026, 16 learners;
+   Sta. Inez (DepEd source spelling: STA. INES BRGY. COMMUNITY LIBRARY) = confirmed,
+   30 learners. The other seven service-node counts remain representative estimates. */
 var NODES=[
- {id:"hub", name:"Laiban ALS Hub",      kind:"depot", lat:14.5762, lng:121.3828, learners:0,  days:0,  visits30:0, sitios:"Deployment origin / motor pool"},
+ {id:"hub", name:"Laiban ALS Hub",      kind:"depot", lat:14.5762, lng:121.3828, learners:16, days:0,  visits30:0, sitios:"Deployment origin / motor pool"},
  {id:"mah", name:"Sitio Mahabang Lalim",kind:"node",  lat:14.5921, lng:121.4026, learners:48, days:9,  visits30:2, sitios:"Riverside cluster"},
  {id:"kab", name:"Sitio Kabayunan",     kind:"node",  lat:14.5606, lng:121.4131, learners:63, days:21, visits30:1, sitios:"Upland cluster"},
  {id:"dar", name:"Daraitan Proper",     kind:"node",  lat:14.6108, lng:121.4315, learners:87, days:6,  visits30:3, sitios:"Barangay center"},
  {id:"tin", name:"Sitio Tinipak",       kind:"node",  lat:14.6204, lng:121.4402, learners:41, days:27, visits30:0, sitios:"River crossing required"},
- {id:"inz", name:"Sta. Inez",           kind:"node",  lat:14.5512, lng:121.3562, learners:72, days:11, visits30:2, sitios:"Barangay center"},
+ {id:"inz", name:"Sta. Inez",           kind:"node",  lat:14.5512, lng:121.3562, learners:30, days:11,  visits30:2, sitios:"Barangay center"},
  {id:"cay", name:"Cayabu",              kind:"node",  lat:14.5292, lng:121.3396, learners:56, days:14, visits30:2, sitios:"Barangay center"},
  {id:"pun", name:"Sitio Pungo",         kind:"node",  lat:14.5446, lng:121.4288, learners:34, days:33, visits30:0, sitios:"Most isolated node"},
  {id:"amp", name:"Sitio Mag-Ampon",     kind:"node",  lat:14.6018, lng:121.3548, learners:29, days:18, visits30:1, sitios:"Ridge cluster"}

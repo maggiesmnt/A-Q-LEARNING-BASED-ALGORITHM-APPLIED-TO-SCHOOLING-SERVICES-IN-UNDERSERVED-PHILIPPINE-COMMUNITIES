@@ -113,6 +113,8 @@ nav#tabs .bdg{position:absolute;transform:translate(14px,-6px);background:var(--
   background:linear-gradient(160deg,#ff9838,#f8722c);box-shadow:0 12px 26px rgba(248,114,44,.42);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.3px}
 #fab svg{width:23px;height:23px;stroke:#fff;fill:none;stroke-width:2.2;stroke-linecap:round}
+#fab:disabled{background:#566174;box-shadow:none;color:#b8c1d1;cursor:not-allowed}
+#fab:disabled svg{stroke:#b8c1d1}
 
 #legend{position:absolute;left:12px;bottom:216px;z-index:505;background:rgba(13,20,32,.9);border:1px solid var(--line);
   border-radius:13px;padding:9px 11px;font-size:10.5px;color:var(--dim);box-shadow:var(--sh)}
@@ -222,6 +224,24 @@ svg.chart{width:100%;height:auto;display:block}
 .lg{display:flex;gap:14px;font-size:10.5px;color:var(--dim);margin-top:8px;flex-wrap:wrap}
 .lg span{display:flex;align-items:center;gap:6px}
 .lg i{width:14px;height:3px;border-radius:2px;display:inline-block}
+.std-route-graph{width:100%;height:auto;background:#f4f7fb;border:1px solid #cbd5e1;border-radius:12px}
+.std-route-graph .graph-background{fill:#f4f7fb}
+.std-route-graph .road-edge{stroke:#64748b;stroke-width:3;opacity:.85}
+.std-route-graph .route-edge{stroke:#6846d9;stroke-width:6;opacity:1}
+.std-route-graph .route-edge.hazard-edge{stroke:#f59e0b;stroke-width:7;stroke-dasharray:10 6}
+.std-route-graph .hazard-edge{stroke:#f59e0b;stroke-width:4;stroke-dasharray:8 5}
+.std-route-graph .closed-edge{stroke:#ef4444;stroke-width:4;stroke-dasharray:4 5}
+.std-route-graph .hub-node{fill:#0ea5e9;stroke:#0f172a;stroke-width:2}
+.std-route-graph .served-node{fill:#16a34a;stroke:#0f172a;stroke-width:1.5}
+.std-route-graph .deferred-node{fill:#ef4444;stroke:#7f1d1d;stroke-width:3}
+.std-route-graph .node{fill:#94a3b8;stroke:#0f172a;stroke-width:1.5}
+.std-route-graph .graph-label{fill:#0f172a;font-size:11px;font-weight:700;text-anchor:middle}
+.std-route-graph .edge-label{fill:#334155;font-size:10px;text-anchor:middle}
+.std-route-graph .route-marker{fill:#facc15;stroke:#0f172a;stroke-width:3;filter:drop-shadow(0 0 5px #facc15)}
+.graph-controls{display:flex;gap:8px;margin:12px 0 8px}
+.graph-controls .btn{flex:0 1 auto;padding:9px 14px;font-size:12px}
+.graph-controls{flex-wrap:wrap}
+.graph-status{color:#ffec80;margin-bottom:8px}
 select,input[type=range]{width:100%}
 select{background:var(--ink3);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:9px 10px;font-size:12.5px}
 .sv{display:grid;grid-template-columns:34px 1fr auto;gap:9px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}

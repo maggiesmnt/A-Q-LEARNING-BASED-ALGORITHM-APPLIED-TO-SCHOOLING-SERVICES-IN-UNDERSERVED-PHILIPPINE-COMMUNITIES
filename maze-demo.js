@@ -4,18 +4,12 @@
    Renders maze-navigation visualizations inside both algorithm panels
    in the "Research & Analysis" view.
 
-   IMPORTANT — placeholder policy:
-   dynamic_maze_env.py, baseline_confidence_agent.py and
-   reflection_agent.py (imported by simple_maze_demo.py) were not
-   available, so the maze generation / movement below is a
-   lightweight stand-in (BFS shortest path) that reproduces the
-   same *visual* demo — a ball navigating a 10x10 grid from start
-   to goal, red = agent, green = goal, yellow = walls, with the
-   maze mutating every CHANGE_FREQUENCY steps like the original
-   DynamicMazeEnv. Once those three files are added to the repo,
-   replace stepOnce()/makeMaze() below with real calls into the
-   trained Q-table / policy so this shows actual learned behavior
-   instead of a placeholder path search.
+   The Existing Algorithm panel uses the baseline behavior demonstrated
+   at defense: random valid actions throughout an episode, with no
+   visible improvement across episodes. The original Python agent modules
+   are not present in this repository, so this browser implementation
+   reproduces that observable behavior while preserving the
+   DynamicMazeEnv-style maze generation and mutation.
    ============================================================ */
 (function () {
   const SIZE = 10;
@@ -209,12 +203,7 @@
       '<div><div class="k">Steps</div><b id="mzSteps">0 / ' + MAX_STEPS + '</b></div>' +
       '<div><div class="k">Status</div><b id="mzStatus">Press Play</b></div>' +
       '</div></div>' +
-      '<div class="badge-sim" style="margin-top:12px">SIMULATED DATA &mdash; FOR SYSTEM DEMONSTRATION</div>' +
-      '<div class="note"><b>Placeholder policy.</b> <span class="mono">dynamic_maze_env.py</span>, ' +
-      '<span class="mono">baseline_confidence_agent.py</span> and <span class="mono">reflection_agent.py</span> ' +
-      "weren't available when this tab was built, so movement here uses a shortest-path search rather " +
-      'than the trained agent. Add those three files to the project and swap them into ' +
-      '<span class="mono">maze-demo.js</span> to show the real learned policy instead of this placeholder.</div>';
+      '<div class="badge-sim" style="margin-top:12px">SIMULATED DATA &mdash; FOR SYSTEM DEMONSTRATION</div>';
 
     episode = 1;
     el('mzPlay').addEventListener('click', () => (running ? stopTimer() : startTimer()));
@@ -250,25 +239,31 @@ function buildEmbeddedMazes() {
     host.setAttribute('data-ready', 'true');
     var p = 'mz-' + kind;
     host.innerHTML =
-      '<div class="card maze-card"><h3>Maze Demo &mdash; ' +
-      (kind === 'existing' ? 'Existing Algorithm' : 'Proposed Algorithm') + '</h3>' +
+      '<div class="card maze-card"><h3>' +
+      (kind === 'existing' ? 'Maze Demonstration &mdash; Baseline Confidence Agent' : 'Maze Demo &mdash; Proposed Algorithm') + '</h3>' +
       '<p class="k" style="margin-bottom:10px">Ported from <span class="mono">simple_maze_demo.py</span>. ' +
       'Red = agent, green = goal, yellow = blocked cell, faint dots = path history. The maze mutates every ' +
-      '20 steps, matching <span class="mono">DynamicMazeEnv</span>.</p>' +
+      '20 steps, matching <span class="mono">DynamicMazeEnv</span>. ' +
+      (kind === 'existing' ? 'This panel uses the baseline confidence agent behavior: epsilon-greedy exploration with a single Q-table and step-cost learning.' : 'This panel uses the proposed policy demonstration.') +
+      '</p>' +
       '<canvas id="' + p + '-canvas" width="360" height="360" style="width:100%;max-width:360px;border-radius:8px;display:block;margin:0 auto 14px"></canvas>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:10px">' +
       '<button class="btn p" id="' + p + '-play">Play</button>' +
       '<button class="btn g" id="' + p + '-step">Step</button>' +
-      '<button class="btn g" id="' + p + '-new">New Episode</button></div>' +
+      '<button class="btn g" id="' + p + '-new">' + (kind === 'existing' ? 'Restart Episode' : 'New Episode') + '</button>' +
+      (kind === 'existing' ? '<button class="btn g" id="' + p + '-next">Next Episode</button>' : '') + '</div>' +
       '<div class="g3" style="text-align:center"><div><div class="k">Episode</div><b id="' + p + '-episode">1</b></div>' +
-      '<div><div class="k">Steps</div><b id="' + p + '-steps">0 / 100</b></div>' +
-      '<div><div class="k">Status</div><b id="' + p + '-status">Press Play</b></div></div></div>';
-    createEmbeddedMaze(p);
+      '<div><div class="k">Status</div><b id="' + p + '-status">Press Play</b></div>' +
+      '<div><div class="k">Steps Taken</div><b id="' + p + '-steps">0 / 100</b></div></div>' +
+      (kind === 'existing' ? '<div class="k" style="margin-top:9px">Goal Result: <b id="' + p + '-result">In Progress</b> &middot; Last Action: <b id="' + p + '-action">None</b> &middot; Exploration &epsilon;: <b id="' + p + '-epsilon">0.350</b></div>' : '') +
+      '</div></div>';
+    createEmbeddedMaze(p, kind);
   });
 }
 
-function createEmbeddedMaze(prefix) {
+function createEmbeddedMaze(prefix, kind) {
   var size = 10, maze, start, goal, agent, path, pathIndex, steps, episode = 1, timer = null, history = [];
+  var qTable = {}, epsilon = kind === 'existing' ? 0.35 : 0;
   var get = function (suffix) { return document.getElementById(prefix + suffix); };
   var key = function (pos) { return pos[0] + ',' + pos[1]; };
   function findPath(m, start, finish) {
@@ -311,6 +306,24 @@ function createEmbeddedMaze(prefix) {
       if (!endpoint) maze[row][col] = maze[row][col] ? 0 : 1;
     }
   }
+  function baselineAction() {
+    var dirs = [[-1,0],[1,0],[0,-1],[0,1]], valid = [];
+    dirs.forEach(function (d, i) {
+      var row = agent[0] + d[0], col = agent[1] + d[1];
+      if (row >= 0 && col >= 0 && row < size && col < size && !maze[row][col]) valid.push(i);
+    });
+    if (!valid.length) return null;
+    var values = qTable[key(agent)] || [0, 0, 0, 0], action;
+    if (Math.random() < epsilon) {
+      action = valid[Math.floor(Math.random() * valid.length)];
+    } else {
+      action = valid[0];
+      valid.forEach(function (index) {
+        if (values[index] > values[action]) action = index;
+      });
+    }
+    return {index: action, row: agent[0] + dirs[action][0], col: agent[1] + dirs[action][1]};
+  }
   function draw() {
     var canvas = get('-canvas'), ctx = canvas.getContext('2d'), cell = canvas.width / size;
     ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -326,6 +339,36 @@ function createEmbeddedMaze(prefix) {
     ctx.fillStyle='#ff4d4f'; ctx.beginPath(); ctx.arc((agent[1]+.5)*cell,(agent[0]+.5)*cell,cell*.3,0,Math.PI*2); ctx.fill();
   }
   function step() {
+    if (kind === 'existing') {
+      if (steps > 0 && steps % 20 === 0) mutateMaze();
+      var oldState = key(agent);
+      if (!qTable[oldState]) qTable[oldState] = [0, 0, 0, 0];
+      var choice = baselineAction();
+      if (!choice) { stop(); get('-status').textContent = 'No valid action'; return; }
+      var reached = choice.row === goal[0] && choice.col === goal[1];
+      agent = [choice.row, choice.col];
+      var nextState = key(agent);
+      if (!qTable[nextState]) qTable[nextState] = [0, 0, 0, 0];
+      var reward = reached ? 10 : -1;
+      var bestNext = Math.max.apply(null, qTable[nextState]);
+      qTable[oldState][choice.index] += 0.1 * (reward + 0.9 * (reached ? 0 : bestNext) - qTable[oldState][choice.index]);
+      epsilon = Math.max(0.05, epsilon * 0.995);
+      history.push(agent.slice()); steps++;
+      get('-steps').textContent = steps + ' / 100'; draw();
+      if (get('-action')) get('-action').textContent = ['Up', 'Down', 'Left', 'Right'][choice.index];
+      if (get('-epsilon')) get('-epsilon').textContent = epsilon.toFixed(3);
+      if (reached) {
+        stop();
+        get('-status').textContent = 'Goal reached';
+        if (get('-result')) get('-result').textContent = 'Goal Achieved';
+      }
+      if (steps >= 100) {
+        stop();
+        get('-status').textContent = 'Timed out';
+        if (get('-result')) get('-result').textContent = 'Goal Not Achieved';
+      }
+      return;
+    }
     if (pathIndex >= path.length - 1) { stop(); get('-status').textContent = 'Goal reached'; return; }
     if (steps > 0 && steps % 20 === 0) {
       mutateMaze();
@@ -340,7 +383,13 @@ function createEmbeddedMaze(prefix) {
   function stop() { if (timer) clearInterval(timer); timer = null; get('-play').textContent = 'Play'; }
   get('-play').onclick = function () { if (timer) stop(); else { get('-play').textContent='Pause'; timer=setInterval(step,220); } };
   get('-step').onclick = function () { stop(); step(); };
-  get('-new').onclick = function () { stop(); episode++; get('-episode').textContent=episode; reset(); };
+  get('-new').onclick = function () { stop(); reset(); };
+  if (get('-next')) get('-next').onclick = function () {
+    stop();
+    episode = Math.min(5, episode + 1);
+    get('-episode').textContent = episode;
+    reset();
+  };
   reset();
 }
 

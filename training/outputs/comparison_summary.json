@@ -8,18 +8,18 @@
     "eps_decay": 0.995
   },
   "modql": {
-    "final_30ep_avg_reward": 11.76070848965209,
-    "rollout_avg_travel_min": 178.37903590510362,
-    "rollout_avg_fairness": 0.7431267420909142,
-    "rollout_avg_stops": 5.72,
-    "rollout_avg_deferred": 2.28
+    "final_30ep_avg_reward": 7.4962752434798405,
+    "rollout_avg_travel_min": 176.63436454043546,
+    "rollout_avg_fairness": 0.7608174825849597,
+    "rollout_avg_stops": 5.94,
+    "rollout_avg_deferred": 2.06
   },
   "standard": {
-    "final_30ep_avg_reward": 23.1247674346521,
-    "rollout_avg_travel_min": 173.27267077424534,
-    "rollout_avg_fairness": 0.7395133686644324,
-    "rollout_avg_stops": 5.92,
-    "rollout_avg_deferred": 2.08
+    "final_30ep_avg_reward": 24.52668451148566,
+    "rollout_avg_travel_min": 180.8022203116842,
+    "rollout_avg_fairness": 0.7648727237048668,
+    "rollout_avg_stops": 6.38,
+    "rollout_avg_deferred": 1.62
   },
-  "data_note": "Trained on placeholder node/edge data from engine.js (DepEd registry and OSM road data requested, not yet received). Re-run this script unchanged once real data is available -- only NODES/EDGES need to be replaced."
+  "data_note": "Laiban (hub) and Sta. Inez learner counts use confirmed DepEd ALS SY 2025-2026 data. The other seven learner counts and the road network remain representative simulation inputs."
 }

@@ -161,7 +161,9 @@ function renderEvaluation(){
     '<div class="lg"><span><i style="background:#0f9d58"></i> MODQL</span><span><i style="background:#5b4fc7"></i> Standard Q-Learning</span></div>'+
     '<div class="k eval-discussion">The fairness curves are close because Jain&rsquo;s Index summarizes the distribution of visit counts across all communities. It can remain similar even when the identity of the served communities differs. In this replay, MODQL reaches Pungo while Standard never reaches it; therefore aggregate fairness should be discussed together with the community-level service record, not as a substitute for it.</div>'+
     '<h4 style="margin-top:16px">Cumulative communities served</h4>'+
-    '<div class="k eval-discussion">The two lines overlap exactly: both algorithms serve 6, 12, 17, 24, 30, 35, and 42 stops cumulatively. The difference is <b>which</b> communities make up those totals, so the dashed Standard line is drawn on top to make the overlap visible.</div>'+
+    '<div class="k eval-discussion">The cumulative totals are '+multi.standard.cumulative.join(", ")+
+    ' for Standard and '+multi.modql.cumulative.join(", ")+' for MODQL. The difference is <b>which</b> communities make up those totals, '+
+    'so the dashed Standard line remains visually distinct even where the curves overlap.</div>'+
     svgLine([{d:multi.modql.cumulative,c:"#0f9d58"},{d:multi.standard.cumulative,c:"#5b4fc7",dash:true}],{xs:[1,2,3,4,5,6,7],dp:0,h:190,min:0})+
     '<div class="lg"><span><i style="background:#0f9d58"></i> MODQL</span><span><i style="background:#5b4fc7"></i> Standard Q-Learning</span></div>'+
     '<div class="split2" style="margin-top:12px"><div class="splitcol std"><h4>Never served by Standard</h4><div class="k">'+(neverStandard.length?neverStandard.join("<br>"):"None")+'</div></div>'+
@@ -169,6 +171,47 @@ function renderEvaluation(){
 }
 
 /* ============================ EXISTING ALGORITHM TAB ============================ */
+var STANDARD_GRAPH_SCENARIOS=[
+  {title:"Nearest stop wins",note:"The closest node is also the fastest option.",nodes:[["Hub",90,155],["A",235,90],["B",455,210],["C",560,80]],edges:[["Hub","A",8,0],["Hub","B",22,0],["A","C",18,0]],route:["Hub","A","C","Hub"]},
+  {title:"Farther node, clear road",note:"The nearest community is reachable, while the farther node takes longer.",nodes:[["Hub",90,155],["Near",245,120],["Far",535,185],["Side",350,60]],edges:[["Hub","Near",7,0],["Hub","Far",31,0],["Near","Side",12,0],["Side","Far",15,0]],route:["Hub","Near","Side","Far","Hub"]},
+  {title:"Hazard is not an objective",note:"The nearest node is selected even though its road displays a hazard; Standard does not optimize hazard severity.",nodes:[["Hub",90,155],["Near",280,80],["Safe",520,210],["Ridge",390,280]],edges:[["Hub","Near",8,18],["Hub","Safe",14,0],["Near","Ridge",10,0],["Ridge","Safe",12,0]],route:["Hub","Near","Ridge","Hub"]},
+];
+
+function standardRouteGraphHTML(scenarioIndex){
+  var s=STANDARD_GRAPH_SCENARIOS[scenarioIndex||0], W=640,H=320;
+  function node(id){return s.nodes.filter(function(n){return n[0]===id})[0]}
+  function line(e,route){
+    var a=node(e[0]),b=node(e[1]),selected=route&&e[3]<50,
+      kind=e[3]>=50?"closed-edge":e[3]?"hazard-edge":"road-edge",
+      label=e[3]?"base "+e[2]+" + hazard "+e[3]:"base "+e[2];
+    var markup='<line x1="'+a[1]+'" y1="'+a[2]+'" x2="'+b[1]+'" y2="'+b[2]+'" class="'+(selected?"route-edge ":"")+kind+'"/>';
+    return markup+'<text x="'+((a[1]+b[1])/2)+'" y="'+((a[2]+b[2])/2-6)+'" class="edge-label">'+label+'</text>';
+  }
+  var svg='<svg id="std-route-graph" class="std-route-graph" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Fictional Standard Q-Learning route simulation"><rect width="100%" height="100%" class="graph-background"/>';
+  s.edges.forEach(function(e){svg+=line(e,s.route.indexOf(e[0])>=0&&s.route.indexOf(e[1])===s.route.indexOf(e[0])+1)});
+  s.nodes.forEach(function(n){
+    var order=s.route.indexOf(n[0]),label=n[0]==="Hub"?"Hub":(order>=0?"Stop "+order+" — ":"")+n[0];
+    svg+='<circle id="std-node-'+n[0]+'" cx="'+n[1]+'" cy="'+n[2]+'" r="10" class="'+(n[0]==="Hub"?"hub-node":s.deferred&&s.deferred.indexOf(n[0])>=0?"deferred-node":"node")+'"/><text x="'+n[1]+'" y="'+(n[2]+28)+'" class="graph-label">'+label+'</text>';
+  });
+  svg+='<circle id="std-route-marker" cx="'+s.nodes[0][1]+'" cy="'+s.nodes[0][2]+'" r="9" class="route-marker"/></svg>';
+  return '<div class="card"><h3>Node-Graph Simulation &mdash; Standard Q-Learning</h3><p class="k">Fictional presentation scenarios, not live Laiban data. The location-only Standard policy chooses the lowest base travel-time option and does not optimize fairness, learner demand, or hazard severity. Hazard markings remain visible even when the closest selected route passes through them; closed corridors remain unavailable. Node labels show the selected visit order.</p><div class="graph-controls"><button class="btn p" id="std-graph-play">Play Route</button><button class="btn g" id="std-graph-reset">Reset Simulation</button><button class="btn g" id="std-graph-next">Next Simulation</button></div><div id="std-graph-status" class="k graph-status"></div>'+svg+'<div class="lg"><span><i style="background:#6846d9"></i> Selected route</span><span><i style="background:#facc15"></i> Moving unit</span><span><i style="background:#64748b"></i> Open road</span><span><i style="background:#f59e0b"></i> Selected hazardous road</span><span><i style="background:#ef4444"></i> Deferred/closed</span></div></div>';
+}
+
+function initStandardGraphPlayback(){
+  var scenario=0,index=0,timer=null;
+  function render(){
+    var host=document.getElementById("std-route-graph"),s=STANDARD_GRAPH_SCENARIOS[scenario],marker=document.getElementById("std-route-marker"),status=document.getElementById("std-graph-status");
+    if(!host||!marker||!status)return;
+    var ids=s.route;marker.setAttribute("cx",s.nodes.filter(function(n){return n[0]===ids[index]})[0][1]);marker.setAttribute("cy",s.nodes.filter(function(n){return n[0]===ids[index]})[0][2]);
+    status.textContent="Simulation "+(scenario+1)+" of "+STANDARD_GRAPH_SCENARIOS.length+" — "+s.title+" · "+(index===ids.length-1?"Route complete": "At "+ids[index]+" · "+s.note);
+  }
+  function next(){var s=STANDARD_GRAPH_SCENARIOS[scenario];if(index<s.route.length-1){index++;render();}else{clearInterval(timer);timer=null;document.getElementById("std-graph-play").textContent="Play Route";}}
+  document.getElementById("std-graph-play").onclick=function(){if(timer){clearInterval(timer);timer=null;this.textContent="Play Route";return;}this.textContent="Pause Route";timer=setInterval(next,700);};
+  document.getElementById("std-graph-reset").onclick=function(){if(timer)clearInterval(timer);timer=null;index=0;document.getElementById("std-graph-play").textContent="Play Route";render();};
+  document.getElementById("std-graph-next").onclick=function(){if(timer)clearInterval(timer);timer=null;scenario=(scenario+1)%3;index=0;document.getElementById("std-route-graph").outerHTML=standardRouteGraphHTML(scenario).match(/<svg[\s\S]*<\/svg>/)[0];render();};
+  render();
+}
+
 function renderExisting(){
   var k=planKPIs(analysisStd);
   document.getElementById("sub-existing").innerHTML =
