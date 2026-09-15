@@ -31,8 +31,14 @@ This folder contains the research experiment used to compare the Chapter 3 contr
 
 The current Laiban/Tanay nodes, learner counts, and road network are **simulation placeholders**. The current results are for implementation validation only and must not be presented as final Chapter 4 evidence. Once the official DepEd/OSM/weather datasets are available, replace the environment data and re-run:
 
-```bash
-python train_q_learning.py
-```
+\`\`\`bash
+# Windows (Python launcher)
+py -m pip install numpy pandas matplotlib
+py train_q_learning.py
+
+# macOS/Linux
+python3 -m pip install numpy pandas matplotlib
+python3 train_q_learning.py
+\`\`\`
 
 The current placeholder run does **not** establish that MODQL is superior to Standard Q-Learning on all metrics. That is a valid experimental finding and should remain visible until the real-data experiment is completed.
