@@ -30,19 +30,22 @@ function drawRoads(){
   EDGES.forEach(function(e){
     var A=accA(e), b=band(A);
     var isQa=e.graph_status==="qa_connector";
+    var isInferred=e.graph_status==="inferred_connector";
     var line=L.polyline(edgeGeom(e),{
       color:b.col,
-      weight:isQa?3:(A<0.20?6:5),
-      opacity:isQa?0.42:(A<0.20?0.95:0.72),
-      dashArray:isQa?"5 8":e.surf==="dirt"?"9 7":e.surf==="ford"?"3 8":null,
+      weight:isQa?3:isInferred?4:(A<0.20?6:5),
+      opacity:isQa?0.34:isInferred?0.52:(A<0.20?0.95:0.76),
+      dashArray:isQa?"4 9":isInferred?"8 7":e.surf==="dirt"?"9 7":e.surf==="ford"?"3 8":null,
       lineCap:"round"
     }).addTo(gRoads);
     line.bindPopup("<b>"+N[e.a].name+" &harr; "+N[e.b].name+"</b><br>"+SURF[e.surf].lab+
       "<br>"+e.km.toFixed(1)+" km &middot; ~"+Math.round(edgeMin(e))+" min"+
       "<br>Road condition: <b>"+b.lab.charAt(0)+b.lab.slice(1).toLowerCase()+"</b>"+
       (e.note?"<br><span>Local context:</span> "+e.note:"")+
-      "<br><span>Road graph basis:</span> <b>"+(e.graph_status==="stakeholder_supported"?"Stakeholder-supported (provisional)":"QA-only connector")+"</b>"+
-      "<br><span>Source:</span> "+(e.source||"System QA assumption")+
+      "<br><span>Road graph basis:</span> <b>"+
+        (e.graph_status==="best_supported"?"Best-supported (provisional)":e.graph_status==="inferred_connector"?"Inferred QA connector":"QA-only connector")+
+      "</b>"+
+      "<br><span>Evidence:</span> "+((e.source_keys||[]).length?(e.source_keys||[]).map(function(k){return ROAD_GRAPH_SOURCES[k]?ROAD_GRAPH_SOURCES[k].label:k}).join("; "):"No verified topology source yet")+
       "<br><span>Verification:</span> "+(e.verification||"provisional"));
     if(A<0.20){
       var g=edgeGeom(e),mid=g[Math.floor(g.length/2)];
