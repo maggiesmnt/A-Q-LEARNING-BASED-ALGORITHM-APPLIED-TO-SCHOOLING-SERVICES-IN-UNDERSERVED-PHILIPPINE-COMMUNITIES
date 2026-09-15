@@ -42,6 +42,7 @@ function drawRoads(){
       "<br>"+e.km.toFixed(1)+" km &middot; ~"+Math.round(edgeMin(e))+" min"+
       "<br>Road condition: <b>"+b.lab.charAt(0)+b.lab.slice(1).toLowerCase()+"</b>"+
       (e.note?"<br><span>Local context:</span> "+e.note:"")+
+      "<br><span>Accessibility basis:</span> "+accessibilityReason(e)+
       "<br><span>Road graph basis:</span> <b>"+
         (e.graph_status==="best_supported"?"Best-supported (provisional)":e.graph_status==="inferred_connector"?"Inferred QA connector":"QA-only connector")+
       "</b>"+
@@ -69,6 +70,8 @@ function roadIssueReason(e,A){
   var active=REPORTS.filter(function(r){return r.edge===e.key&&!r.cleared&&confidence(r)>=0.06})
     .sort(function(a,b){return confidence(b)-confidence(a)})[0];
   if(active) return active.type.toLowerCase()+" report: "+active.note;
+  var risk=accessibilityReason(e);
+  if(risk&&risk!=="normal road accessibility") return risk;
   if(wxFactor(e.surf)<0.9) return "rain slowed this "+SURF[e.surf].lab;
   return "road conditions changed";
 }
