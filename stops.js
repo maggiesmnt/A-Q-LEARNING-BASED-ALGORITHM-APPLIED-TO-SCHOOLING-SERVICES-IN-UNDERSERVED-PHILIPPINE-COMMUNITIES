@@ -88,13 +88,13 @@ function renderHistory(){
       missed:deferred
     },
     {
-      week:"Week of Aug 30, 2026",
-      date:"Completed",
-      communities:["Mahabang Lalim","Daraitan Proper","Sta. Inez","Cayabu"],
-      learners:263,
-      route:"Laiban ALS Hub → Mahabang Lalim → Daraitan Proper → Sta. Inez → Cayabu → Laiban ALS Hub",
-      travel:"186 min travel",
-      missed:["Tinipak (deferred by ford level)","Pungo (outside remaining time budget)"]
+      week:"QA reference history",
+      date:"Simulated",
+      communities:["Maysawa","Toyang","Old Laiban","Banatas"],
+      learners:154,
+      route:"Laiban Proper / ALS Hub → Toyang → Maysawa → Banatas → Old Laiban → Laiban Proper / ALS Hub",
+      travel:"simulated QA travel record",
+      missed:["Ibucao (weather/accessibility constraint)","Manggahan (outside remaining time budget)"]
     }
   ];
   box.innerHTML=records.map(function(r){
