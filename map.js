@@ -12,7 +12,8 @@ var layerTerrain=true;
 L.control.scale({imperial:false,position:"bottomright"}).addTo(map);
 
 var gRoads=L.layerGroup().addTo(map), gRoute=L.layerGroup().addTo(map),
-    gNodes=L.layerGroup().addTo(map), gHaz=L.layerGroup().addTo(map);
+    gNodes=L.layerGroup().addTo(map), gHaz=L.layerGroup().addTo(map),
+    gQaSitios=L.layerGroup().addTo(map);
 
 var DRIVE_ROUTE_FLOW_CLASS="drive-route-flow";
 (function installDriveRouteFlowStyle(){
@@ -24,6 +25,26 @@ var DRIVE_ROUTE_FLOW_CLASS="drive-route-flow";
     "@media (prefers-reduced-motion:reduce){.leaflet-overlay-pane path."+DRIVE_ROUTE_FLOW_CLASS+"{animation:none;}}";
   document.head.appendChild(style);
 })();
+
+function drawQaSitios(){
+  gQaSitios.clearLayers();
+  if(typeof LAIBAN_SITIO_REGISTRY==="undefined") return;
+  LAIBAN_SITIO_REGISTRY.forEach(function(s){
+    if(typeof s.lat!=="number"||typeof s.lng!=="number") return;
+    var isDummy=s.coordinate_status==="dummy_for_qa";
+    var marker=L.marker([s.lat,s.lng],{icon:L.divIcon({
+      className:"",
+      iconSize:[24,24],
+      iconAnchor:[12,12],
+      html:"<div style='width:24px;height:24px;border-radius:6px;background:"+(isDummy?"#D8C9A5":"#B8C6A3")+";border:2px dashed #333D1C;display:grid;place-items:center;font-size:10px;font-weight:900;color:#1F2612;box-shadow:0 2px 8px rgba(0,0,0,.35)'>QA</div>"
+    })}).addTo(gQaSitios);
+    marker.bindPopup("<b>"+s.name+"</b><br><span>Coordinate Status:</span> <b>"+(isDummy?"Dummy for QA":"Public reference - unverified")+"</b>"+
+      "<br><span>Coordinate:</span> "+s.lat.toFixed(5)+", "+s.lng.toFixed(5)+
+      "<br><span>Coordinate Source:</span> "+s.coordinate_source+
+      "<br><span>Routing Status:</span> "+s.routing_status+
+      "<br><i>Reference marker only. Not yet used by either routing algorithm.</i>");
+  });
+}
 
 function drawRoads(){
   gRoads.clearLayers();
