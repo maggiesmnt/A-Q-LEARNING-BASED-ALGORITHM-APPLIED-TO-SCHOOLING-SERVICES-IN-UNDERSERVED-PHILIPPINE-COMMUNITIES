@@ -119,30 +119,30 @@ var EDGES=[
     no reliable public/topological source was found for its exact road link. */
 
  /* Public route notes + SK both support the western approach into Laiban. */
- {a:"hub",b:"toyang",surf:"ford",bend:[[14.6148,121.3857],[14.6117,121.3834]],graph_status:"best_supported",source_keys:["trail_route"],verification:"provisional_topology",note:"Public trail notes describe Sitio Tuyang as the junction to Barangay Laiban via a rough/downhill dirt road with nine river crossings."},
- {a:"hub",b:"ibucao",surf:"ford",bend:[[14.6128,121.3872],[14.6074,121.3858]],graph_status:"best_supported",source_keys:["barangay_sk"],verification:"provisional_topology",note:"SK reports the Ibucao-Laiban approach as landslide-prone, mountainous, and involving multiple river crossings."},
+ {a:"hub",b:"toyang",surf:"ford",bend:[[14.6148,121.3857],[14.6117,121.3834]],graph_status:"best_supported",source_keys:["trail_route"],verification:"provisional_topology",access_profile:"multi_river",note:"Public trail notes describe Sitio Tuyang as the junction to Barangay Laiban via a rough/downhill dirt road with nine river crossings."},
+ {a:"hub",b:"ibucao",surf:"ford",bend:[[14.6128,121.3872],[14.6074,121.3858]],graph_status:"best_supported",source_keys:["barangay_sk"],verification:"provisional_topology",access_profile:"landslide_river",note:"SK reports the Ibucao-Laiban approach as landslide-prone, mountainous, and involving multiple river crossings."},
 
  /* Public route notes explicitly describe a trail near the Barangay Hall to Maysawa. */
- {a:"hub",b:"maysawa",surf:"dirt",bend:[[14.6118,121.3820],[14.6048,121.3695]],graph_status:"best_supported",source_keys:["trail_route","osm_refs"],verification:"provisional_topology",note:"Public route description places a trail toward Sitio Maysawa just before the Laiban Barangay Hall; exact geometry remains unverified."},
+ {a:"hub",b:"maysawa",surf:"dirt",bend:[[14.6118,121.3820],[14.6048,121.3695]],graph_status:"best_supported",source_keys:["trail_route","osm_refs"],verification:"provisional_topology",access_profile:"mountain_path",note:"Public route description places a trail toward Sitio Maysawa just before the Laiban Barangay Hall; exact geometry remains unverified."},
 
  /* Old Laiban has an official provincial road-concreting record. */
- {a:"hub",b:"old_laiban",surf:"concrete",bend:[[14.6183,121.3932]],graph_status:"best_supported",source_keys:["old_laiban_road","barangay_sk"],verification:"provisional_topology",note:"Official provincial record confirms Old Laiban Road; SK route account links Old Laiban onward toward Kilabuwan."},
+ {a:"hub",b:"old_laiban",surf:"concrete",bend:[[14.6183,121.3932]],graph_status:"best_supported",source_keys:["old_laiban_road","barangay_sk"],verification:"provisional_topology",access_profile:"normal_road",note:"Official provincial record confirms Old Laiban Road; SK route account links Old Laiban onward toward Kilabuwan."},
 
  /* Banatas creek condition is directly from the SK account. */
- {a:"hub",b:"banatas",surf:"ford",bend:[[14.6136,121.3950]],graph_status:"best_supported",source_keys:["barangay_sk"],verification:"provisional_topology",note:"SK reports that reaching Banatas requires crossing a creek."},
+ {a:"hub",b:"banatas",surf:"ford",bend:[[14.6136,121.3950]],graph_status:"best_supported",source_keys:["barangay_sk"],verification:"provisional_topology",access_profile:"creek_crossing",note:"SK reports that reaching Banatas requires crossing a creek."},
 
  /* Exact Iwi-Iw road topology remains unresolved. */
- {a:"hub",b:"iwi_iw",surf:"gravel",bend:[[14.6231,121.3904]],graph_status:"qa_connector",source_keys:[],verification:"dummy",note:"Temporary QA-only connector. Exact Iwi-Iw road connection remains unresolved."},
+ {a:"hub",b:"iwi_iw",surf:"gravel",bend:[[14.6231,121.3904]],graph_status:"qa_connector",source_keys:[],verification:"dummy",access_profile:"unknown_qa",note:"Temporary QA-only connector. Exact Iwi-Iw road connection remains unresolved."},
 
  /* SK describes the Old Laiban -> Kilabuwan -> Manggahan sequence. */
- {a:"old_laiban",b:"kilabuwan",surf:"ford",bend:[[14.6202,121.4001]],graph_status:"best_supported",source_keys:["barangay_sk"],verification:"provisional_topology",note:"SK reports several river crossings from Old Laiban toward Kilabuwan."},
- {a:"kilabuwan",b:"manggahan",surf:"ford",bend:[[14.6249,121.4095]],graph_status:"best_supported",source_keys:["barangay_sk","osm_refs"],verification:"provisional_topology",note:"SK reports several river crossings along Kilabuwan toward Manggahan; Manggahan is also supported by the public Magata-Manggahan area reference."},
+ {a:"old_laiban",b:"kilabuwan",surf:"ford",bend:[[14.6202,121.4001]],graph_status:"best_supported",source_keys:["barangay_sk"],verification:"provisional_topology",access_profile:"multi_river",note:"SK reports several river crossings from Old Laiban toward Kilabuwan."},
+ {a:"kilabuwan",b:"manggahan",surf:"ford",bend:[[14.6249,121.4095]],graph_status:"best_supported",source_keys:["barangay_sk","osm_refs"],verification:"provisional_topology",access_profile:"multi_river",note:"SK reports several river crossings along Kilabuwan toward Manggahan; Manggahan is also supported by the public Magata-Manggahan area reference."},
 
  /* Manggahan-Magata locality pair is supported by the SK account and school/locality references. */
- {a:"manggahan",b:"magata",surf:"ford",bend:[[14.6290,121.4183]],graph_status:"best_supported",source_keys:["barangay_sk","osm_refs"],verification:"provisional_topology",note:"SK reports a possible boat alternative between/for the Manggahan-Magata area when conditions permit; exact landing and road geometry are unverified."},
+ {a:"manggahan",b:"magata",surf:"ford",bend:[[14.6290,121.4183]],graph_status:"best_supported",source_keys:["barangay_sk","osm_refs"],verification:"provisional_topology",access_profile:"boat_river",note:"SK reports a possible boat alternative between/for the Manggahan-Magata area when conditions permit; exact landing and road geometry are unverified."},
 
  /* Keep limited local redundancy for routing QA, but mark it explicitly as inferred rather than official. */
- {a:"banatas",b:"old_laiban",surf:"gravel",bend:[[14.6147,121.3982]],graph_status:"inferred_connector",source_keys:["barangay_sk"],verification:"inferred_for_qa",note:"Inferred local connector used for QA continuity; the SK account supports both areas but did not explicitly state this direct road."}
+ {a:"banatas",b:"old_laiban",surf:"gravel",bend:[[14.6147,121.3982]],graph_status:"inferred_connector",source_keys:["barangay_sk"],verification:"inferred_for_qa",access_profile:"unknown_qa",note:"Inferred local connector used for QA continuity; the SK account supports both areas but did not explicitly state this direct road."}
 ];
 
 var WX={mm:38};
@@ -170,16 +170,50 @@ var ROAD_GRAPH_COUNTS={
  qa_connector:EDGES.filter(function(e){return e.graph_status==="qa_connector"}).length
 };
 
+function rainBand(mm){return mm<10?0:mm<30?1:mm<60?2:3}
 function wxFactor(surf){
- var mm=WX.mm,paved=surf==="concrete",b=mm<10?0:mm<30?1:mm<60?2:3;
+ var b=rainBand(WX.mm),paved=surf==="concrete";
  if(paved)return [1,1,.95,.85][b];
  if(surf==="ford")return [1,.85,.45,.15][b];
  return [1,.85,.60,.35][b];
 }
+
+/* Step 4: stakeholder-informed accessibility profile.
+   This profile is applied inside accA(), so Standard Q-Learning and MODQL
+   always receive the exact same road condition for a given scenario. */
+function localRiskFactor(e){
+ var b=rainBand(WX.mm),p=e.access_profile||"normal_road";
+ if(p==="normal_road") return [1.00,1.00,.95,.85][b];
+ if(p==="mountain_path") return [1.00,.90,.65,.30][b];
+ if(p==="creek_crossing") return [1.00,.80,.45,.05][b];
+ if(p==="multi_river") return [1.00,.75,.35,.05][b];
+ if(p==="landslide_river") return [1.00,.70,.25,.00][b];
+ if(p==="boat_river"){
+   /* SK notes boats may be an alternative in this area, but severe rain can
+      still make access impossible. Moderate rain keeps a reduced connection. */
+   return [1.00,.85,.55,.00][b];
+ }
+ if(p==="unknown_qa") return [1.00,.85,.60,.35][b];
+ return 1;
+}
+function accessibilityReason(e){
+ var p=e.access_profile||"normal_road",b=rainBand(WX.mm);
+ if(p==="landslide_river") return b>=3?"severe rain: landslide/river route closed":b>=2?"heavy rain: high landslide and river-crossing risk":"landslide-prone, river-sensitive route";
+ if(p==="multi_river") return b>=3?"severe rain/flooding: river crossings closed":b>=2?"heavy rain: multiple river crossings strongly restricted":"multiple river crossings";
+ if(p==="creek_crossing") return b>=3?"severe rain: creek crossing closed":b>=2?"heavy rain: creek crossing restricted":"creek crossing";
+ if(p==="boat_river") return b>=3?"severe rain: road/boat access unavailable":b>=2?"heavy rain: conditional boat/river access only":"conditional boat alternative where safe";
+ if(p==="mountain_path") return b>=3?"severe rain: mountain path highly unsafe":b>=2?"heavy rain: slippery mountain path":"mountain/unimproved path";
+ if(p==="unknown_qa") return "QA-only accessibility assumption";
+ return "normal road accessibility";
+}
 function sevFloor(s){return s==="impassable"?.05:s==="major"?.40:.72}
 function confidence(r){if(r.cleared)return .10;var b=r.src==="advisory"?1:r.src==="driver"?.55:.45;b+=(r.reporters-1)*.20;if(r.src==="telemetry")b=.35;b=Math.min(1,b);return b*Math.pow(.5,r.ago/6)}
 function reportFactor(k){var f=1;REPORTS.forEach(function(r){if(r.edge!==k)return;var c=confidence(r),fl=sevFloor(r.sev);f=Math.min(f,fl+(1-c)*(1-fl))});return f}
-function accA(e){for(var i=0;i<ADVISORIES.length;i++)if(ADVISORIES[i].edge===e.key)return 0;var v=SURF[e.surf].a*wxFactor(e.surf)*reportFactor(e.key);return Math.max(0,Math.min(1,v))}
+function accA(e){
+ for(var i=0;i<ADVISORIES.length;i++) if(ADVISORIES[i].edge===e.key) return 0;
+ var v=SURF[e.surf].a*wxFactor(e.surf)*localRiskFactor(e)*reportFactor(e.key);
+ return Math.max(0,Math.min(1,v));
+}
 function band(A){return A>=.75?{k:"open",lab:"OPEN",col:"#7B753B"}:A>=.45?{k:"caut",lab:"CAUTION",col:"#A77A2D"}:A>=.20?{k:"rest",lab:"RESTRICTED",col:"#9A633B"}:{k:"cls",lab:"CLOSED",col:"#A24D42"}}
 function speed(s){return s==="concrete"?38:s==="gravel"?24:s==="ford"?12:16}
 function edgeMin(e){var A=accA(e);return (e.km/speed(e.surf))*60/Math.max(A,.08)}
