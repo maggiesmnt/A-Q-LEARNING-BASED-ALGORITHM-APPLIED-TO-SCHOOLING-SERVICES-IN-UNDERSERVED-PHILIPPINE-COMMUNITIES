@@ -80,22 +80,32 @@ var SURF={
  ford:{a:0.50,lab:"river crossing / ford"}
 };
 
+var ROAD_GRAPH_META={
+ version:"laiban-step3-provisional-v1",
+ status:"provisional_for_qa",
+ location_scope:"Barangay Laiban, Tanay, Rizal",
+ stakeholder_source:"Barangay Laiban SK local stakeholder information",
+ verification_note:"Exact road geometry, road class, distances, and unsupported connections remain pending official/field verification."
+};
+
 var EDGES=[
- /* Stakeholder-informed/provisional QA graph. Geometry is temporary until the
-    sitio road network is verified. Accessibility conditions reflect the SK
-    descriptions where available; unsupported links are QA-only connectors. */
- {a:"hub",b:"ibucao",surf:"ford",bend:[[14.6128,121.3872],[14.6074,121.3858]],data_status:"stakeholder-informed QA edge",note:"River-side approach; landslide and multiple river-crossing exposure"},
- {a:"hub",b:"toyang",surf:"concrete",bend:[[14.6145,121.3858]],data_status:"QA connector"},
- {a:"hub",b:"old_laiban",surf:"concrete",bend:[[14.6183,121.3932]],data_status:"stakeholder-informed QA edge"},
- {a:"hub",b:"banatas",surf:"ford",bend:[[14.6136,121.3950]],data_status:"stakeholder-informed QA edge",note:"Creek crossing"},
- {a:"hub",b:"iwi_iw",surf:"gravel",bend:[[14.6231,121.3904]],data_status:"QA connector"},
- {a:"toyang",b:"maysawa",surf:"gravel",bend:[[14.6045,121.3680]],data_status:"QA connector"},
- {a:"ibucao",b:"maysawa",surf:"dirt",bend:[[14.6001,121.3690]],data_status:"QA connector"},
- {a:"old_laiban",b:"kilabuwan",surf:"ford",bend:[[14.6202,121.4001]],data_status:"stakeholder-informed QA edge",note:"Several river crossings toward Kilabuwan"},
- {a:"kilabuwan",b:"manggahan",surf:"ford",bend:[[14.6249,121.4095]],data_status:"stakeholder-informed QA edge",note:"Several river crossings toward Manggahan"},
- {a:"manggahan",b:"magata",surf:"ford",bend:[[14.6290,121.4183]],data_status:"stakeholder-informed QA edge",note:"Boat may be an alternative when conditions permit"},
- {a:"banatas",b:"old_laiban",surf:"gravel",bend:[[14.6147,121.3982]],data_status:"QA connector"},
- {a:"iwi_iw",b:"old_laiban",surf:"gravel",bend:[[14.6236,121.3950]],data_status:"QA connector"}
+ /* Step 3 road graph.
+    - stakeholder_supported: connection/path direction is supported by the SK account.
+    - qa_connector: temporary connection added only to keep all nine sitios reachable
+      during system QA; it must not be cited as an official road connection.
+    All bend geometry and calculated distances remain provisional until verified. */
+ {a:"hub",b:"ibucao",surf:"ford",bend:[[14.6128,121.3872],[14.6074,121.3858]],graph_status:"stakeholder_supported",source:"Barangay Laiban SK",verification:"provisional",note:"Ibucao approach toward Laiban Proper; landslide-prone, mountainous approach, and multiple river crossings reported."},
+ {a:"hub",b:"toyang",surf:"concrete",bend:[[14.6145,121.3858]],graph_status:"qa_connector",source:"System QA assumption",verification:"dummy",note:"Temporary connector for QA; exact road connection pending verification."},
+ {a:"hub",b:"old_laiban",surf:"concrete",bend:[[14.6183,121.3932]],graph_status:"stakeholder_supported",source:"Barangay Laiban SK",verification:"provisional",note:"Laiban Proper to Old Laiban corridor used as the entry to the reported Old Laiban–Kilabuwan–Manggahan sequence."},
+ {a:"hub",b:"banatas",surf:"ford",bend:[[14.6136,121.3950]],graph_status:"stakeholder_supported",source:"Barangay Laiban SK",verification:"provisional",note:"Travel to Banatas requires crossing a creek."},
+ {a:"hub",b:"iwi_iw",surf:"gravel",bend:[[14.6231,121.3904]],graph_status:"qa_connector",source:"System QA assumption",verification:"dummy",note:"Temporary connector for QA; exact road connection pending verification."},
+ {a:"toyang",b:"maysawa",surf:"gravel",bend:[[14.6045,121.3680]],graph_status:"qa_connector",source:"System QA assumption",verification:"dummy",note:"Temporary connector for QA; exact road connection pending verification."},
+ {a:"ibucao",b:"maysawa",surf:"dirt",bend:[[14.6001,121.3690]],graph_status:"qa_connector",source:"System QA assumption",verification:"dummy",note:"Temporary connector for QA; exact road connection pending verification."},
+ {a:"old_laiban",b:"kilabuwan",surf:"ford",bend:[[14.6202,121.4001]],graph_status:"stakeholder_supported",source:"Barangay Laiban SK",verification:"provisional",note:"Several river crossings were reported from Old Laiban toward Kilabuwan."},
+ {a:"kilabuwan",b:"manggahan",surf:"ford",bend:[[14.6249,121.4095]],graph_status:"stakeholder_supported",source:"Barangay Laiban SK",verification:"provisional",note:"Several river crossings were reported along the Kilabuwan toward Manggahan route."},
+ {a:"manggahan",b:"magata",surf:"ford",bend:[[14.6290,121.4183]],graph_status:"stakeholder_supported",source:"Barangay Laiban SK",verification:"provisional",note:"Manggahan and Magata were reported to have a possible boat alternative when conditions permit; exact landing points are unverified."},
+ {a:"banatas",b:"old_laiban",surf:"gravel",bend:[[14.6147,121.3982]],graph_status:"qa_connector",source:"System QA assumption",verification:"dummy",note:"Temporary connector for QA; exact road connection pending verification."},
+ {a:"iwi_iw",b:"old_laiban",surf:"gravel",bend:[[14.6236,121.3950]],graph_status:"qa_connector",source:"System QA assumption",verification:"dummy",note:"Temporary connector for QA; exact road connection pending verification."}
 ];
 
 var WX={mm:38};
@@ -117,6 +127,10 @@ function edgeGeom(e){var pts=[[N[e.a].lat,N[e.a].lng]];(e.bend||[]).forEach(func
 function edgeKm(e){var g=edgeGeom(e),d=0;for(var i=1;i<g.length;i++)d+=hav({lat:g[i-1][0],lng:g[i-1][1]},{lat:g[i][0],lng:g[i][1]});return d}
 EDGES.forEach(function(e){e.key=ek(e.a,e.b);e.km=edgeKm(e)});
 var EK={};EDGES.forEach(function(e){EK[e.key]=e});
+var ROAD_GRAPH_COUNTS={
+ stakeholder_supported:EDGES.filter(function(e){return e.graph_status==="stakeholder_supported"}).length,
+ qa_connector:EDGES.filter(function(e){return e.graph_status==="qa_connector"}).length
+};
 
 function wxFactor(surf){
  var mm=WX.mm,paved=surf==="concrete",b=mm<10?0:mm<30?1:mm<60?2:3;
