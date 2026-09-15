@@ -75,17 +75,6 @@ document.getElementById("btnLayer").classList.add("on");
 document.getElementById("btnCenter").onclick=function(){map.setView(unit.getLatLng(),13)};
 
 /* boot */
-drawRoads();drawRoute();drawNodes();drawQaSitios();drawHaz();placeUnit();renderDrive();renderStops();renderHazards();renderHistory();renderAnalysis();
-var bootBounds=NODES.map(function(n){return [n.lat,n.lng]});
-if(typeof LAIBAN_SITIO_REGISTRY!=="undefined"){
-  LAIBAN_SITIO_REGISTRY.forEach(function(s){
-    if(typeof s.lat==="number"&&typeof s.lng==="number") bootBounds.push([s.lat,s.lng]);
-  });
-}
-map.fitBounds(L.latLngBounds(bootBounds).pad(0.12));
-setTimeout(function(){
-  var e=EK["kab|pun"];
-  alertShow("Path closed &mdash; Kabayunan \u2192 Pungo",
-    "Landslide confirmed by 3 residents. <b>A = "+accA(e).toFixed(2)+"</b>, below the 0.20 threshold, so the segment is masked out of the action set. "+
-    "Sitio Pungo is reachable only via Cayabu &mdash; the route was re-sequenced.");
-},900);
+drawRoads();drawRoute();drawNodes();drawHaz();placeUnit();renderDrive();renderStops();renderHazards();renderHistory();renderAnalysis();
+map.fitBounds(L.latLngBounds(NODES.map(function(n){return [n.lat,n.lng]})).pad(0.12));
+
