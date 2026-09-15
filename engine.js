@@ -80,6 +80,29 @@ var SURF={
  ford:{a:0.50,lab:"river crossing / ford"}
 };
 
+var ROAD_GRAPH_SOURCES={
+ barangay_sk:{
+   label:"Barangay Laiban SK local stakeholder account (Sep 2026)",
+   type:"local stakeholder / key informant",
+   supports:["Ibucao landslide and river exposure","Banatas creek crossing","Old Laiban-Kilabuwan-Manggahan river crossings","Manggahan-Magata conditional boat access"]
+ },
+ trail_route:{
+   label:"Conquer Trail Adventure route notes (public route description)",
+   type:"public route reference",
+   supports:["Sitio Tuyang to Barangay Laiban rough/downhill dirt road","nine Laiban/Malinaw river crossings","trail near Barangay Hall toward Sitio Maysawa"]
+ },
+ old_laiban_road:{
+   label:"Provincial Government of Rizal - Concreting of Old Laiban Road (2021)",
+   type:"official public works record",
+   supports:["existence of Old Laiban Road"]
+ },
+ osm_refs:{
+   label:"OpenStreetMap-derived public references",
+   type:"public map reference",
+   supports:["Laiban Barangay Hall anchor","Maysawa reference point","Magata-Manggahan area reference"]
+ }
+};
+
 var ROAD_GRAPH_META={
  version:"laiban-step3-provisional-v1",
  status:"provisional_for_qa",
@@ -89,23 +112,37 @@ var ROAD_GRAPH_META={
 };
 
 var EDGES=[
- /* Step 3 road graph.
-    - stakeholder_supported: connection/path direction is supported by the SK account.
-    - qa_connector: temporary connection added only to keep all nine sitios reachable
-      during system QA; it must not be cited as an official road connection.
-    All bend geometry and calculated distances remain provisional until verified. */
- {a:"hub",b:"ibucao",surf:"ford",bend:[[14.6128,121.3872],[14.6074,121.3858]],graph_status:"stakeholder_supported",source:"Barangay Laiban SK",verification:"provisional",note:"Ibucao approach toward Laiban Proper; landslide-prone, mountainous approach, and multiple river crossings reported."},
- {a:"hub",b:"toyang",surf:"concrete",bend:[[14.6145,121.3858]],graph_status:"qa_connector",source:"System QA assumption",verification:"dummy",note:"Temporary connector for QA; exact road connection pending verification."},
- {a:"hub",b:"old_laiban",surf:"concrete",bend:[[14.6183,121.3932]],graph_status:"stakeholder_supported",source:"Barangay Laiban SK",verification:"provisional",note:"Laiban Proper to Old Laiban corridor used as the entry to the reported Old Laiban–Kilabuwan–Manggahan sequence."},
- {a:"hub",b:"banatas",surf:"ford",bend:[[14.6136,121.3950]],graph_status:"stakeholder_supported",source:"Barangay Laiban SK",verification:"provisional",note:"Travel to Banatas requires crossing a creek."},
- {a:"hub",b:"iwi_iw",surf:"gravel",bend:[[14.6231,121.3904]],graph_status:"qa_connector",source:"System QA assumption",verification:"dummy",note:"Temporary connector for QA; exact road connection pending verification."},
- {a:"toyang",b:"maysawa",surf:"gravel",bend:[[14.6045,121.3680]],graph_status:"qa_connector",source:"System QA assumption",verification:"dummy",note:"Temporary connector for QA; exact road connection pending verification."},
- {a:"ibucao",b:"maysawa",surf:"dirt",bend:[[14.6001,121.3690]],graph_status:"qa_connector",source:"System QA assumption",verification:"dummy",note:"Temporary connector for QA; exact road connection pending verification."},
- {a:"old_laiban",b:"kilabuwan",surf:"ford",bend:[[14.6202,121.4001]],graph_status:"stakeholder_supported",source:"Barangay Laiban SK",verification:"provisional",note:"Several river crossings were reported from Old Laiban toward Kilabuwan."},
- {a:"kilabuwan",b:"manggahan",surf:"ford",bend:[[14.6249,121.4095]],graph_status:"stakeholder_supported",source:"Barangay Laiban SK",verification:"provisional",note:"Several river crossings were reported along the Kilabuwan toward Manggahan route."},
- {a:"manggahan",b:"magata",surf:"ford",bend:[[14.6290,121.4183]],graph_status:"stakeholder_supported",source:"Barangay Laiban SK",verification:"provisional",note:"Manggahan and Magata were reported to have a possible boat alternative when conditions permit; exact landing points are unverified."},
- {a:"banatas",b:"old_laiban",surf:"gravel",bend:[[14.6147,121.3982]],graph_status:"qa_connector",source:"System QA assumption",verification:"dummy",note:"Temporary connector for QA; exact road connection pending verification."},
- {a:"iwi_iw",b:"old_laiban",surf:"gravel",bend:[[14.6236,121.3950]],graph_status:"qa_connector",source:"System QA assumption",verification:"dummy",note:"Temporary connector for QA; exact road connection pending verification."}
+ /* Step 3 completed best-supported road graph.
+    The topology below prioritizes links supported by SK/local evidence,
+    public route descriptions, and an official Old Laiban road record.
+    Only Iwi-Iw remains attached by an explicitly QA-only connector because
+    no reliable public/topological source was found for its exact road link. */
+
+ /* Public route notes + SK both support the western approach into Laiban. */
+ {a:"hub",b:"toyang",surf:"ford",bend:[[14.6148,121.3857],[14.6117,121.3834]],graph_status:"best_supported",source_keys:["trail_route"],verification:"provisional_topology",note:"Public trail notes describe Sitio Tuyang as the junction to Barangay Laiban via a rough/downhill dirt road with nine river crossings."},
+ {a:"hub",b:"ibucao",surf:"ford",bend:[[14.6128,121.3872],[14.6074,121.3858]],graph_status:"best_supported",source_keys:["barangay_sk"],verification:"provisional_topology",note:"SK reports the Ibucao-Laiban approach as landslide-prone, mountainous, and involving multiple river crossings."},
+
+ /* Public route notes explicitly describe a trail near the Barangay Hall to Maysawa. */
+ {a:"hub",b:"maysawa",surf:"dirt",bend:[[14.6118,121.3820],[14.6048,121.3695]],graph_status:"best_supported",source_keys:["trail_route","osm_refs"],verification:"provisional_topology",note:"Public route description places a trail toward Sitio Maysawa just before the Laiban Barangay Hall; exact geometry remains unverified."},
+
+ /* Old Laiban has an official provincial road-concreting record. */
+ {a:"hub",b:"old_laiban",surf:"concrete",bend:[[14.6183,121.3932]],graph_status:"best_supported",source_keys:["old_laiban_road","barangay_sk"],verification:"provisional_topology",note:"Official provincial record confirms Old Laiban Road; SK route account links Old Laiban onward toward Kilabuwan."},
+
+ /* Banatas creek condition is directly from the SK account. */
+ {a:"hub",b:"banatas",surf:"ford",bend:[[14.6136,121.3950]],graph_status:"best_supported",source_keys:["barangay_sk"],verification:"provisional_topology",note:"SK reports that reaching Banatas requires crossing a creek."},
+
+ /* Exact Iwi-Iw road topology remains unresolved. */
+ {a:"hub",b:"iwi_iw",surf:"gravel",bend:[[14.6231,121.3904]],graph_status:"qa_connector",source_keys:[],verification:"dummy",note:"Temporary QA-only connector. Exact Iwi-Iw road connection remains unresolved."},
+
+ /* SK describes the Old Laiban -> Kilabuwan -> Manggahan sequence. */
+ {a:"old_laiban",b:"kilabuwan",surf:"ford",bend:[[14.6202,121.4001]],graph_status:"best_supported",source_keys:["barangay_sk"],verification:"provisional_topology",note:"SK reports several river crossings from Old Laiban toward Kilabuwan."},
+ {a:"kilabuwan",b:"manggahan",surf:"ford",bend:[[14.6249,121.4095]],graph_status:"best_supported",source_keys:["barangay_sk","osm_refs"],verification:"provisional_topology",note:"SK reports several river crossings along Kilabuwan toward Manggahan; Manggahan is also supported by the public Magata-Manggahan area reference."},
+
+ /* Manggahan-Magata locality pair is supported by the SK account and school/locality references. */
+ {a:"manggahan",b:"magata",surf:"ford",bend:[[14.6290,121.4183]],graph_status:"best_supported",source_keys:["barangay_sk","osm_refs"],verification:"provisional_topology",note:"SK reports a possible boat alternative between/for the Manggahan-Magata area when conditions permit; exact landing and road geometry are unverified."},
+
+ /* Keep limited local redundancy for routing QA, but mark it explicitly as inferred rather than official. */
+ {a:"banatas",b:"old_laiban",surf:"gravel",bend:[[14.6147,121.3982]],graph_status:"inferred_connector",source_keys:["barangay_sk"],verification:"inferred_for_qa",note:"Inferred local connector used for QA continuity; the SK account supports both areas but did not explicitly state this direct road."}
 ];
 
 var WX={mm:38};
@@ -128,7 +165,8 @@ function edgeKm(e){var g=edgeGeom(e),d=0;for(var i=1;i<g.length;i++)d+=hav({lat:
 EDGES.forEach(function(e){e.key=ek(e.a,e.b);e.km=edgeKm(e)});
 var EK={};EDGES.forEach(function(e){EK[e.key]=e});
 var ROAD_GRAPH_COUNTS={
- stakeholder_supported:EDGES.filter(function(e){return e.graph_status==="stakeholder_supported"}).length,
+ best_supported:EDGES.filter(function(e){return e.graph_status==="best_supported"}).length,
+ inferred_connector:EDGES.filter(function(e){return e.graph_status==="inferred_connector"}).length,
  qa_connector:EDGES.filter(function(e){return e.graph_status==="qa_connector"}).length
 };
 
