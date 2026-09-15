@@ -28,6 +28,80 @@ function planKPIs(plan){
   var km=0,min=0,learners=0;plan.stops.forEach(function(s){km+=s.p.km;min+=s.p.min+serviceMin(N[s.id]);learners+=N[s.id].learners});if(plan.ret)km+=plan.ret.km;
   var v=[];NODES.forEach(function(n){if(n.kind==='node')v.push(plan.visits[n.id])});return{learners:learners,served:plan.stops.length,totalKm:km,totalMin:min,J:jain(v)}
 }
+
+function evaluationKPIs(plan){
+  var distance=0,travelMin=0,learners=0;
+  plan.stops.forEach(function(s){
+    distance+=s.p.km;
+    travelMin+=s.p.min;
+    learners+=N[s.id].learners;
+  });
+  if(plan.ret){distance+=plan.ret.km;travelMin+=plan.ret.min;}
+  var visits=[];NODES.forEach(function(n){if(n.kind==="node")visits.push(plan.visits[n.id])});
+  return {distance:distance,travelMin:travelMin,served:plan.stops.length,deferred:plan.deferred.length,deferredReasons:plan.deferred,fairness:jain(visits),learners:learners};
+}
+function evaluationMetric(label,std,mod,format){return '<tr><th>'+label+'</th><td>'+format(std)+'</td><td>'+format(mod)+'</td></tr>'}
+function evaluationSnapshot(){return {nodes:NODES.map(function(n){return Object.assign({},n)}),reports:REPORTS.map(function(r){return Object.assign({},r)}),advisories:ADVISORIES.map(function(a){return Object.assign({},a)}),weather:WX.mm}}
+function restoreEvaluationSnapshot(s){
+  NODES.forEach(function(n,i){Object.assign(n,s.nodes[i])});
+  REPORTS.length=0;s.reports.forEach(function(r){REPORTS.push(Object.assign({},r))});
+  ADVISORIES.length=0;s.advisories.forEach(function(a){ADVISORIES.push(Object.assign({},a))});
+  WX.mm=s.weather;
+}
+function multiDayEvaluation(){
+  var base=evaluationSnapshot(),days=7,weather=[];
+  for(var i=0;i<days;i++)weather.push(i===0?base.weather:[12,38,78][i%3]);
+  function run(planner){
+    restoreEvaluationSnapshot(base);
+    var fairness=[],cumulative=[],servedBy={},total=0;
+    for(var d=0;d<days;d++){
+      WX.mm=weather[d];
+      REPORTS.forEach(function(r){r.ago=base.reports[r.id-1]?base.reports[r.id-1].ago+24*d:r.ago+24*d});
+      if(d>0)NODES.forEach(function(n){if(n.kind==="node")n.days+=1});
+      var plan=planner(),visits=[];
+      NODES.forEach(function(n){if(n.kind==="node")visits.push(plan.visits[n.id])});
+      fairness.push(jain(visits));
+      plan.stops.forEach(function(s){if(!servedBy[s.id])servedBy[s.id]=[];servedBy[s.id].push(d+1);total++;N[s.id].visits30+=1;N[s.id].days=0});
+      cumulative.push(total);
+    }
+    return {fairness:fairness,cumulative:cumulative,servedBy:servedBy};
+  }
+  var standard=run(planRouteStandard),modql=run(planRoute);
+  restoreEvaluationSnapshot(base);
+  return {days:days,standard:standard,modql:modql};
+}
+function renderEvaluation(){
+  var std=evaluationKPIs(analysisStd),mod=evaluationKPIs(analysisMod),multi=multiDayEvaluation(),neverStandard=[],neverModql=[];
+  NODES.filter(function(n){return n.kind==="node"}).forEach(function(n){
+    if(!multi.standard.servedBy[n.id])neverStandard.push(n.name);
+    if(!multi.modql.servedBy[n.id])neverModql.push(n.name);
+  });
+  function reasons(k){if(!k.deferredReasons.length)return '<span class="pill open">None</span>';return k.deferredReasons.map(function(d){return '<div class="k">'+N[d.id].name+' &mdash; '+d.reason+'</div>'}).join("")}
+  document.getElementById("sub-evaluation").innerHTML=
+    '<div class="algo-head mod"><div class="ic">&Delta;</div><div><h2>Algorithm Evaluation Dashboard</h2><p>Same simulated weather, hazards, network, and learner-demand inputs for both planners</p></div></div>'+
+    '<div class="sop-problem"><b>Simulated environment.</b> This is a read-only comparison of the Standard Q-Learning and MODQL planners under the same current prototype conditions.</div>'+
+    '<div class="card eval-card"><table><thead><tr><th>Metric</th><th class="std-head">Standard Q-Learning</th><th class="mod-head">MODQL</th></tr></thead><tbody>'+
+    evaluationMetric("Total travel distance",std,mod,function(k){return k.distance.toFixed(1)+" km"})+
+    evaluationMetric("Total travel time",std,mod,function(k){return Math.round(k.travelMin)+" min"})+
+    evaluationMetric("Communities served",std,mod,function(k){return k.served+" of "+(NODES.length-1)})+
+    evaluationMetric("Communities deferred",std,mod,function(k){return k.deferred})+
+    evaluationMetric("Jain&rsquo;s Fairness Index",std,mod,function(k){return k.fairness.toFixed(3)})+
+    evaluationMetric("Learners reached",std,mod,function(k){return k.learners})+
+    '</tbody></table></div>'+
+    '<div class="split2"><div class="splitcol std"><h4>Standard deferred reasons</h4>'+reasons(std)+'</div><div class="splitcol mod"><h4>MODQL deferred reasons</h4>'+reasons(mod)+'</div></div>'+
+    '<div class="card"><h3>Training convergence</h3><div class="k" style="margin-bottom:8px">Bundled from the generated 1,200-episode training log. These are simulated training results, not live deployment measurements.</div>'+
+    svgLine([{d:SIM.mq,c:"#0f9d58"},{d:SIM.sq,c:"#5b4fc7"}],{xs:SIM.ep,dp:2,h:210})+
+    '<div class="lg"><span><i style="background:#0f9d58"></i> MODQL reward</span><span><i style="background:#5b4fc7"></i> Standard Q-Learning reward</span></div></div>'+
+    '<div class="card"><h3>Seven-day simulated comparison</h3><div class="k" style="margin-bottom:8px">Both algorithms replay the same seven weather/hazard days. This evaluation does not advance the Operational view.</div>'+
+    '<h4>Jain&rsquo;s Fairness Index by day</h4>'+
+    svgLine([{d:multi.standard.fairness,c:"#5b4fc7"},{d:multi.modql.fairness,c:"#0f9d58"}],{xs:[1,2,3,4,5,6,7],dp:3,h:190,min:0,max:1})+
+    '<div class="lg"><span><i style="background:#0f9d58"></i> MODQL</span><span><i style="background:#5b4fc7"></i> Standard Q-Learning</span></div>'+
+    '<h4 style="margin-top:16px">Cumulative communities served</h4>'+
+    '<div class="k eval-discussion">Standard: '+multi.standard.cumulative.join(", ")+' &middot; MODQL: '+multi.modql.cumulative.join(", ")+'</div>'+
+    svgLine([{d:multi.modql.cumulative,c:"#0f9d58"},{d:multi.standard.cumulative,c:"#5b4fc7",dash:true}],{xs:[1,2,3,4,5,6,7],dp:0,h:190,min:0})+
+    '<div class="split2" style="margin-top:12px"><div class="splitcol std"><h4>Never served by Standard</h4><div class="k">'+(neverStandard.length?neverStandard.join("<br>"):"None")+'</div></div><div class="splitcol mod"><h4>Never served by MODQL</h4><div class="k">'+(neverModql.length?neverModql.join("<br>"):"None")+'</div></div></div></div>';
+}
+
 function resultCard(title,r,label){return '<div class="card"><h3>'+title+'</h3><div class="g3"><div class="kpi"><div class="lab">Avg learner coverage</div><div class="v">'+r.coverage.toFixed(1)+'</div><div class="d">'+label+'</div></div><div class="kpi"><div class="lab">Avg Jain&rsquo;s J</div><div class="v">'+r.fairness.toFixed(3)+'</div><div class="d">100 held-out scenarios</div></div><div class="kpi"><div class="lab">Avg travel time</div><div class="v">'+r.travel_min.toFixed(1)+'<span style="font-size:13px"> min</span></div><div class="d">simulation rollout</div></div></div></div>'}
 function evidenceNote(){return '<div class="note"><b>Validation status.</b> These training numbers come from the corrected 1,200-episode experiment using placeholder Laiban/Tanay data. They are useful for implementation verification, but they are <b>not final Chapter 4 evidence</b> until the official datasets are inserted and the experiment is re-run.</div>'}
 
@@ -83,5 +157,5 @@ function updateSV(id){
 }
 function sv(sym,nm,desc,val,col){return '<div class="sv"><div class="sym" style="color:'+col+'">'+sym+'</div><div class="nm"><b>'+nm+'</b>'+desc+'</div><div class="vv" style="color:'+col+'">'+val+'</div></div>'}
 
-function renderAnalysis(){computeAnalysisPlans();renderExisting();renderProposed();renderSOP1();renderSOP2();renderSOP3()}
+function renderAnalysis(){computeAnalysisPlans();renderExisting();renderProposed();renderEvaluation();renderSOP1();renderSOP2();renderSOP3()}
 document.querySelectorAll('.rn-group button[data-sub]').forEach(function(b){b.onclick=function(){document.querySelectorAll('.rn-group button[data-sub]').forEach(function(x){x.classList.remove('on')});b.classList.add('on');document.querySelectorAll('.subview').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('sub-'+b.getAttribute('data-sub'));if(target)target.classList.add('active')}})
