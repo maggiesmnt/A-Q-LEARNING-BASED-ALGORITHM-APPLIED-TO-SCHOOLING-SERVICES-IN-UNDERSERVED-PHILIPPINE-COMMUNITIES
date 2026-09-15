@@ -1078,3 +1078,13 @@ header#top{
     bottom:286px;
   }
 }
+
+
+.eval-card{overflow-x:auto}
+.eval-card table{min-width:560px}
+.eval-card th,.eval-card td{padding:12px 10px}
+.eval-card thead th:not(:first-child),.eval-card td{text-align:center}
+.eval-card .std-head{color:#5b4fc7}
+.eval-card .mod-head{color:#0f9d58}
+.eval-card tbody th{text-align:left;color:var(--txt);font-weight:700}
+.eval-discussion{margin-top:9px;padding:9px 11px;background:var(--panel-soft,#fbf6df);border:1px solid var(--line);border-radius:9px}
