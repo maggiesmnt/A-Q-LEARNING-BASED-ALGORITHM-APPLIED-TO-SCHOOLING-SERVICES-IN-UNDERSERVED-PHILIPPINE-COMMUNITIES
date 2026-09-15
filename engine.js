@@ -47,56 +47,31 @@ var LAIBAN_SITIO_REGISTRY=[
 ];
 
 var NODES=[
- {id:"hub", name:"Laiban ALS Hub",       kind:"depot", lat:14.5762, lng:121.3828, learners:0,  days:0,  visits30:0, sitios:"Deployment origin / motor pool"},
- {id:"mah", name:"Sitio Mahabang Lalim",kind:"node",  lat:14.5921, lng:121.4026, learners:48, days:9,  visits30:2, sitios:"Riverside cluster"},
- {id:"kab", name:"Sitio Kabayunan",     kind:"node",  lat:14.5606, lng:121.4131, learners:63, days:21, visits30:1, sitios:"Upland cluster"},
- {id:"dar", name:"Daraitan Proper",     kind:"node",  lat:14.6108, lng:121.4315, learners:87, days:6,  visits30:3, sitios:"Barangay center"},
- {id:"tin", name:"Sitio Tinipak",       kind:"node",  lat:14.6204, lng:121.4402, learners:41, days:27, visits30:0, sitios:"River crossing required"},
- {id:"inz", name:"Sta. Inez",           kind:"node",  lat:14.5512, lng:121.3562, learners:72, days:11, visits30:2, sitios:"Barangay center"},
- {id:"cay", name:"Cayabu",              kind:"node",  lat:14.5292, lng:121.3396, learners:56, days:14, visits30:2, sitios:"Barangay center"},
- {id:"pun", name:"Sitio Pungo",         kind:"node",  lat:14.5446, lng:121.4288, learners:34, days:33, visits30:0, sitios:"Most isolated node"},
- {id:"amp", name:"Sitio Mag-Ampon",     kind:"node",  lat:14.6018, lng:121.3548, learners:29, days:18, visits30:1, sitios:"Ridge cluster"}
+ {id:"hub",name:"Laiban Proper / ALS Hub",kind:"depot",lat:14.61785,lng:121.38961,learners:0,days:0,visits30:0,sitios:"Deployment origin / Laiban Proper",coordinate_status:"public_reference_unverified"},
+ {id:"maysawa",name:"Sitio Maysawa",kind:"node",lat:14.59780,lng:121.35114,learners:42,days:12,visits30:1,sitios:"Barangay Laiban",coordinate_status:"public_reference_unverified",dataSource:"Simulated QA learner allocation"},
+ {id:"toyang",name:"Sitio Toyang",kind:"node",lat:14.61080,lng:121.38180,learners:35,days:18,visits30:1,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated QA learner allocation"},
+ {id:"ibucao",name:"Sitio Ibucao",kind:"node",lat:14.60220,lng:121.38480,learners:51,days:24,visits30:0,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated QA learner allocation"},
+ {id:"kilabuwan",name:"Sitio Kilabuwan",kind:"node",lat:14.62260,lng:121.40360,learners:39,days:27,visits30:0,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated QA learner allocation"},
+ {id:"banatas",name:"Sitio Banatas",kind:"node",lat:14.60940,lng:121.39940,learners:33,days:16,visits30:1,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated QA learner allocation"},
+ {id:"iwi_iw",name:"Sitio Iwi-Iw",kind:"node",lat:14.62800,lng:121.39170,learners:28,days:21,visits30:0,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated QA learner allocation"},
+ {id:"old_laiban",name:"Sitio Old Laiban",kind:"node",lat:14.61880,lng:121.39700,learners:44,days:9,visits30:2,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated QA learner allocation"},
+ {id:"manggahan",name:"Sitio Manggahan",kind:"node",lat:14.62679,lng:121.41616,learners:47,days:30,visits30:0,sitios:"Barangay Laiban",coordinate_status:"public_area_reference_unverified",dataSource:"Simulated QA learner allocation"},
+ {id:"magata",name:"Sitio Magata",kind:"node",lat:14.63140,lng:121.42020,learners:31,days:26,visits30:0,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated QA learner allocation"}
 ];
 var N={};NODES.forEach(function(n){N[n.id]=n});
-
-/* ---------- temporary official DepEd ALS demand overlay ----------
-   This is intentionally conservative: it does NOT remap the road graph or
-   replace routing coordinates, because the current trained policy and edges
-   were built against the prototype node graph. Verified coordinates are kept
-   as metadata for later migration once the real road network is available. */
-var DEPED_ALS_TEST_OVERLAY={
- dar:{
-   clc_id:"12301819",
-   clc_name:"SCHOOL-109505 / Daraetan (Daraitan) Elementary School CLC",
-   learners:32,
-   verified_lat:14.60541,
-   verified_lng:121.42830,
-   location_status:"verified reference coordinate; routing coordinate still prototype",
-   source:"DepEd ALS SY 2025-2026"
- },
- inz:{
-   clc_id:"32001152",
-   clc_name:"STA. INES BRGY. COMMUNITY LIBRARY",
-   learners:30,
-   verified_lat:null,
-   verified_lng:null,
-   location_status:"exact CLC coordinate pending; routing coordinate still prototype",
-   source:"DepEd ALS SY 2025-2026"
- }
-};
-Object.keys(DEPED_ALS_TEST_OVERLAY).forEach(function(id){
-  if(!N[id]) return;
-  var d=DEPED_ALS_TEST_OVERLAY[id];
-  N[id].learners=d.learners;
-  N[id].officialClcId=d.clc_id;
-  N[id].officialClcName=d.clc_name;
-  N[id].dataSource=d.source;
-  N[id].locationStatus=d.location_status;
-  N[id].referenceLat=d.verified_lat;
-  N[id].referenceLng=d.verified_lng;
-});
 var SERVICE_IDS=NODES.filter(function(n){return n.kind==="node"}).map(function(n){return n.id});
-var BITIDX=(typeof TRAINED_POLICY!=="undefined"&&TRAINED_POLICY.node_bit_index)?TRAINED_POLICY.node_bit_index:(function(){var x={};SERVICE_IDS.forEach(function(id,i){x[id]=i});return x})();
+
+/* The policy bundled in trained_policy.js was trained on the previous prototype
+   graph. Until retraining is completed for the Laiban sitio graph, use a fresh
+   bit index and let both planners use their methodology-consistent fallback
+   objectives instead of replaying incompatible actions. */
+function trainedPolicyMatchesCurrentGraph(){
+ if(typeof TRAINED_POLICY==="undefined"||!TRAINED_POLICY.node_bit_index) return false;
+ var ids=Object.keys(TRAINED_POLICY.node_bit_index);
+ return ids.length===SERVICE_IDS.length&&SERVICE_IDS.every(function(id){return ids.indexOf(id)>=0});
+}
+var POLICY_MATCHES_GRAPH=trainedPolicyMatchesCurrentGraph();
+var BITIDX=(function(){var x={};SERVICE_IDS.forEach(function(id,i){x[id]=i});return x})();
 
 var SURF={
  concrete:{a:1.00,lab:"concrete provincial road"},
@@ -106,17 +81,21 @@ var SURF={
 };
 
 var EDGES=[
- {a:"hub",b:"inz",surf:"concrete",bend:[[14.5651,121.3712]]},
- {a:"inz",b:"cay",surf:"concrete",bend:[[14.5402,121.3455]]},
- {a:"hub",b:"amp",surf:"gravel",bend:[[14.5885,121.3665]]},
- {a:"hub",b:"mah",surf:"gravel",bend:[[14.5828,121.3931]]},
- {a:"amp",b:"dar",surf:"dirt",bend:[[14.6082,121.3915]]},
- {a:"mah",b:"dar",surf:"gravel",bend:[[14.6015,121.4198]]},
- {a:"dar",b:"tin",surf:"ford",bend:[[14.6168,121.4372]]},
- {a:"mah",b:"kab",surf:"dirt",bend:[[14.5748,121.4102]]},
- {a:"kab",b:"pun",surf:"dirt",bend:[[14.5518,121.4225]]},
- {a:"inz",b:"kab",surf:"dirt",bend:[[14.5548,121.3862],[14.5572,121.4005]]},
- {a:"cay",b:"pun",surf:"dirt",bend:[[14.5325,121.3820],[14.5372,121.4090]]}
+ /* Stakeholder-informed/provisional QA graph. Geometry is temporary until the
+    sitio road network is verified. Accessibility conditions reflect the SK
+    descriptions where available; unsupported links are QA-only connectors. */
+ {a:"hub",b:"ibucao",surf:"ford",bend:[[14.6128,121.3872],[14.6074,121.3858]],data_status:"stakeholder-informed QA edge",note:"River-side approach; landslide and multiple river-crossing exposure"},
+ {a:"hub",b:"toyang",surf:"concrete",bend:[[14.6145,121.3858]],data_status:"QA connector"},
+ {a:"hub",b:"old_laiban",surf:"concrete",bend:[[14.6183,121.3932]],data_status:"stakeholder-informed QA edge"},
+ {a:"hub",b:"banatas",surf:"ford",bend:[[14.6136,121.3950]],data_status:"stakeholder-informed QA edge",note:"Creek crossing"},
+ {a:"hub",b:"iwi_iw",surf:"gravel",bend:[[14.6231,121.3904]],data_status:"QA connector"},
+ {a:"toyang",b:"maysawa",surf:"gravel",bend:[[14.6045,121.3680]],data_status:"QA connector"},
+ {a:"ibucao",b:"maysawa",surf:"dirt",bend:[[14.6001,121.3690]],data_status:"QA connector"},
+ {a:"old_laiban",b:"kilabuwan",surf:"ford",bend:[[14.6202,121.4001]],data_status:"stakeholder-informed QA edge",note:"Several river crossings toward Kilabuwan"},
+ {a:"kilabuwan",b:"manggahan",surf:"ford",bend:[[14.6249,121.4095]],data_status:"stakeholder-informed QA edge",note:"Several river crossings toward Manggahan"},
+ {a:"manggahan",b:"magata",surf:"ford",bend:[[14.6290,121.4183]],data_status:"stakeholder-informed QA edge",note:"Boat may be an alternative when conditions permit"},
+ {a:"banatas",b:"old_laiban",surf:"gravel",bend:[[14.6147,121.3982]],data_status:"QA connector"},
+ {a:"iwi_iw",b:"old_laiban",surf:"gravel",bend:[[14.6236,121.3950]],data_status:"QA connector"}
 ];
 
 var WX={mm:38};
@@ -125,9 +104,9 @@ var SHIFT_MIN=480;
 var TRAINED_TIME_BUCKETS=6;
 
 var REPORTS=[
- {id:1,edge:"kab|pun",type:"Landslide",em:"\u26F0",sev:"impassable",src:"community",reporters:3,ago:1.5,cleared:false,who:"3 residents of Sitio Pungo",note:"Slope collapse across the path after last night's rain. No vehicle clearance."},
- {id:2,edge:"kab|mah",type:"Mud / washout",em:"\uD83D\uDCA6",sev:"major",src:"driver",reporters:1,ago:3.0,cleared:false,who:"Mobile unit driver",note:"Deep mud on the climb; 4x2 truck slipping but able to pass slowly."},
- {id:3,edge:"dar|tin",type:"River rising",em:"\uD83C\uDF0A",sev:"minor",src:"community",reporters:2,ago:7.0,cleared:false,who:"2 barangay tanod",note:"Ford water level up to knee height. Passable now, monitor."}
+ {id:1,edge:"hub|ibucao",type:"Landslide / river exposure",em:"\u26F0",sev:"major",src:"community",reporters:1,ago:1.5,cleared:false,who:"Barangay Laiban stakeholder input",note:"Ibucao approach is landslide-prone and follows river crossings; heavy rain can make travel unsafe."},
+ {id:2,edge:"kilabuwan|old_laiban",type:"River level risk",em:"\uD83C\uDF0A",sev:"major",src:"community",reporters:1,ago:3.0,cleared:false,who:"Barangay Laiban stakeholder input",note:"Old Laiban toward Kilabuwan includes river crossings that may become dangerous during rain."},
+ {id:3,edge:"banatas|hub",type:"Creek crossing",em:"\uD83D\uDCA7",sev:"minor",src:"community",reporters:1,ago:7.0,cleared:false,who:"Barangay Laiban stakeholder input",note:"Travel to Banatas requires a creek crossing; accessibility is sensitive to rainfall."}
 ];
 var ADVISORIES=[];
 var nextRepId=4;
@@ -181,12 +160,14 @@ function proposedStateKey(cur,mask,remaining,visits){
 }
 
 function learnedStandardAction(cur){
- if(typeof TRAINED_POLICY==="undefined"||!TRAINED_POLICY.standard_policy)return null;
- return TRAINED_POLICY.standard_policy[cur]||null;
+ if(!POLICY_MATCHES_GRAPH||typeof TRAINED_POLICY==="undefined"||!TRAINED_POLICY.standard_policy)return null;
+ var a=TRAINED_POLICY.standard_policy[cur]||null;
+ return SERVICE_IDS.indexOf(a)>=0?a:null;
 }
 function learnedMODQLAction(stateKey){
- if(typeof TRAINED_POLICY==="undefined"||!TRAINED_POLICY.modql_policy)return null;
- return TRAINED_POLICY.modql_policy[stateKey]||null;
+ if(!POLICY_MATCHES_GRAPH||typeof TRAINED_POLICY==="undefined"||!TRAINED_POLICY.modql_policy)return null;
+ var a=TRAINED_POLICY.modql_policy[stateKey]||null;
+ return SERVICE_IDS.indexOf(a)>=0?a:null;
 }
 
 /* Proposed MODQL operational route. The learned deployment policy is derived
