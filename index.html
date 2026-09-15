@@ -62,8 +62,8 @@
 <div class="turn">
 <div class="arrow"><svg viewBox="0 0 24 24" id="turnIcon"><path d="M12 20V7M12 7l-5 5M12 7l5 5"/></svg></div>
 <div>
-<div class="t1" id="turnText">Continue on Laiban&ndash;Kabayunan gravel road</div>
-<div class="t2" id="turnSub">4.1 km &middot; unpaved &middot; passable</div>
+<div class="t1" id="turnText">Continue on Laiban Proper&ndash;Ibucao route</div>
+<div class="t2" id="turnSub">provisional route &middot; current accessibility</div>
 </div>
 </div>
 <div class="body">
@@ -77,7 +77,7 @@
 </div>
 <div class="destination-panel">
 <div class="destination-label">Next destination</div>
-<div class="nm" id="stopName">Sitio Kabayunan</div>
+<div class="nm" id="stopName">Sitio Ibucao</div>
 <div class="mt" id="stopTags"></div>
 </div>
 <div id="legend" class="accessibility-legend" aria-label="Road condition guide">
@@ -131,7 +131,7 @@ The band A falls into decides whether the segment stays in the agent&rsquo;s act
 <table>
 <thead><tr><th>Signal</th><th>Where it comes from</th><th>Effect on A</th></tr></thead>
 <tbody>
-<tr><td><b>Surface baseline</b></td><td>OpenStreetMap road class &mdash; concrete provincial road, gravel barangay road, unimproved mountain path, river crossing</td><td>Sets the ceiling: 1.00 / 0.85 / 0.65 / 0.50</td></tr>
+<tr><td><b>Surface baseline</b></td><td>Provisional road type &mdash; concrete, gravel, mountain path, creek/river crossing</td><td>Sets the ceiling: 1.00 / 0.85 / 0.65 / 0.50</td></tr>
 <tr><td><b>Weather feed</b></td><td>Automatic rainfall and seasonal condition input</td><td>Scales unpaved segments hardest: &times;1.00 dry, &times;0.85 light, &times;0.60 heavy, &times;0.35 extreme</td></tr>
 <tr><td><b>External road alert</b></td><td>Official or partner source: landslide, flooding, washout, fallen tree, impassable</td><td>Pulls A toward the severity floor, weighted by confidence</td></tr>
 <tr><td><b>Official advisory</b></td><td>LGU / DPWH / MDRRMO closure notice</td><td>Hard override: A = 0 until lifted</td></tr>
@@ -204,7 +204,7 @@ Python / Google Colab runs (500&ndash;2,000 episodes).</div>
 <div class="foot">
 Interface prototype for <i>Enhancing a Q-Learning Based Algorithm Applied to Schooling Services in Underserved Philippine Communities</i><br>
 Mahusay, L. G. &amp; Samonte, M. A. G. A. &middot; Adviser: Prof. Erwin D. Marcelo &middot; PLM College of Information Systems and Technology Management<br>
-Base map &copy; OpenStreetMap contributors. Node coordinates, learner demand and road geometry are simulation placeholders pending the OSM extraction and DepEd ALS enrollment datasets described in Section 3.1.
+Base map &copy; OpenStreetMap contributors. Sitio identities come from Barangay Laiban stakeholder input. Public-reference coordinates are used where available; unresolved sitio coordinates, sitio-level learner allocation, visit history, and unverified road geometry remain clearly marked QA/simulation placeholders pending official validation.
 </div>
 </div>
 </div>
