@@ -12,8 +12,7 @@ var layerTerrain=true;
 L.control.scale({imperial:false,position:"bottomright"}).addTo(map);
 
 var gRoads=L.layerGroup().addTo(map), gRoute=L.layerGroup().addTo(map),
-    gNodes=L.layerGroup().addTo(map), gHaz=L.layerGroup().addTo(map),
-    gQaSitios=L.layerGroup().addTo(map);
+    gNodes=L.layerGroup().addTo(map), gHaz=L.layerGroup().addTo(map);
 
 var DRIVE_ROUTE_FLOW_CLASS="drive-route-flow";
 (function installDriveRouteFlowStyle(){
@@ -26,26 +25,6 @@ var DRIVE_ROUTE_FLOW_CLASS="drive-route-flow";
   document.head.appendChild(style);
 })();
 
-function drawQaSitios(){
-  gQaSitios.clearLayers();
-  if(typeof LAIBAN_SITIO_REGISTRY==="undefined") return;
-  LAIBAN_SITIO_REGISTRY.forEach(function(s){
-    if(typeof s.lat!=="number"||typeof s.lng!=="number") return;
-    var isDummy=s.coordinate_status==="dummy_for_qa";
-    var marker=L.marker([s.lat,s.lng],{icon:L.divIcon({
-      className:"",
-      iconSize:[24,24],
-      iconAnchor:[12,12],
-      html:"<div style='width:24px;height:24px;border-radius:6px;background:"+(isDummy?"#D8C9A5":"#B8C6A3")+";border:2px dashed #333D1C;display:grid;place-items:center;font-size:10px;font-weight:900;color:#1F2612;box-shadow:0 2px 8px rgba(0,0,0,.35)'>QA</div>"
-    })}).addTo(gQaSitios);
-    marker.bindPopup("<b>"+s.name+"</b><br><span>Coordinate Status:</span> <b>"+(isDummy?"Dummy for QA":"Public reference - unverified")+"</b>"+
-      "<br><span>Coordinate:</span> "+s.lat.toFixed(5)+", "+s.lng.toFixed(5)+
-      "<br><span>Coordinate Source:</span> "+s.coordinate_source+
-      "<br><span>Routing Status:</span> "+s.routing_status+
-      "<br><i>Reference marker only. Not yet used by either routing algorithm.</i>");
-  });
-}
-
 function drawRoads(){
   gRoads.clearLayers();
   EDGES.forEach(function(e){
@@ -54,7 +33,9 @@ function drawRoads(){
       dashArray:e.surf==="dirt"?"9 7":e.surf==="ford"?"3 8":null,lineCap:"round"}).addTo(gRoads);
     line.bindPopup("<b>"+N[e.a].name+" &harr; "+N[e.b].name+"</b><br>"+SURF[e.surf].lab+
       "<br>"+e.km.toFixed(1)+" km &middot; ~"+Math.round(edgeMin(e))+" min"+
-      "<br>Road condition: <b>"+b.lab.charAt(0)+b.lab.slice(1).toLowerCase()+"</b>");
+      "<br>Road condition: <b>"+b.lab.charAt(0)+b.lab.slice(1).toLowerCase()+"</b>"+
+      (e.note?"<br><span>Local context:</span> "+e.note:"")+
+      "<br><span>Network status:</span> "+(e.data_status||"QA connector"));
     if(A<0.20){
       var g=edgeGeom(e),mid=g[Math.floor(g.length/2)];
       L.marker(mid,{icon:L.divIcon({className:"",iconSize:[30,30],iconAnchor:[15,15],
@@ -104,8 +85,8 @@ function drawNodes(){
       html:"<div style='width:26px;height:26px;border-radius:50%;background:"+col+";color:#1F2612;display:grid;place-items:center;font-size:12px;font-weight:800;border:2px solid rgba(255,255,255,.85);box-shadow:0 3px 9px rgba(0,0,0,.45)'>"+lbl+"</div>"})})
       .addTo(gNodes).bindPopup("<b>"+n.name+"</b><br><span>Community:</span> "+n.sitios+
         "<br><span>Learners to Serve:</span> <b>"+n.learners+"</b>"+
-        (n.dataSource?"<br><span>Demand Source:</span> <b>"+n.dataSource+"</b><br><span>CLC:</span> "+n.officialClcName+" ("+n.officialClcId+")":"<br><span>Demand Source:</span> Simulated placeholder")+
-        (n.locationStatus?"<br><span>Location Status:</span> "+n.locationStatus:"")+
+        "<br><span>Demand Source:</span> <b>"+(n.dataSource||"Simulated QA learner allocation")+"</b>"+
+        "<br><span>Coordinate Status:</span> "+(n.coordinate_status==="dummy_for_qa"?"Dummy coordinate for QA":n.coordinate_status==="public_area_reference_unverified"?"Public area reference - unverified":"Public reference - unverified")+
         "<br><span>Last Served:</span> <b>"+n.days+" days ago</b>"+
         "<br><span>Visits This Month:</span> "+n.visits30+
         (def?"<br><span>Status:</span> <b style='color:#A24D42'>Deferred today</b>":idx>=0?"<br><span>Stop Order:</span> <b>#"+(idx+1)+"</b><br><span>Estimated Arrival:</span> <b>"+formatOperationalTime(PLAN.stops[idx].arrive)+"</b>":"<br><span>Status:</span> Not scheduled today"));
