@@ -25,6 +25,27 @@
 
 function rng(seed){var s=seed;return function(){s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff}}
 
+/* ---------- canonical Laiban sitio registry ----------
+   Step 1 of the real-data migration. These are the nine sitios confirmed by
+   the Barangay Laiban SK through local stakeholder communication. They are
+   locked here as the canonical real-world location names for the study.
+
+   IMPORTANT: this registry is NOT yet the active routing graph. The prototype
+   NODES/EDGES below remain unchanged until sitio coordinates and the real road
+   network are verified, so no legacy coordinates/distances are falsely assigned
+   to these sitios. */
+var LAIBAN_SITIO_REGISTRY=[
+ {id:"maysawa",name:"Maysawa",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
+ {id:"toyang",name:"Toyang",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
+ {id:"ibucao",name:"Ibucao",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
+ {id:"kilabuwan",name:"Kilabuwan",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
+ {id:"banatas",name:"Banatas",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
+ {id:"iwi_iw",name:"Iwi-Iw",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
+ {id:"old_laiban",name:"Old Laiban",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
+ {id:"manggahan",name:"Manggahan",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
+ {id:"magata",name:"Magata",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"}
+];
+
 var NODES=[
  {id:"hub", name:"Laiban ALS Hub",       kind:"depot", lat:14.5762, lng:121.3828, learners:0,  days:0,  visits30:0, sitios:"Deployment origin / motor pool"},
  {id:"mah", name:"Sitio Mahabang Lalim",kind:"node",  lat:14.5921, lng:121.4026, learners:48, days:9,  visits30:2, sitios:"Riverside cluster"},
