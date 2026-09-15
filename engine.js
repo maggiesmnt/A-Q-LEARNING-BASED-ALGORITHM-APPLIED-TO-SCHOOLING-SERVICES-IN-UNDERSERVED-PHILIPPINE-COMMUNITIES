@@ -35,15 +35,15 @@ function rng(seed){var s=seed;return function(){s=(s*1103515245+12345)&0x7ffffff
    network are verified, so no legacy coordinates/distances are falsely assigned
    to these sitios. */
 var LAIBAN_SITIO_REGISTRY=[
- {id:"maysawa",name:"Maysawa",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
- {id:"toyang",name:"Toyang",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
- {id:"ibucao",name:"Ibucao",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
- {id:"kilabuwan",name:"Kilabuwan",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
- {id:"banatas",name:"Banatas",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
- {id:"iwi_iw",name:"Iwi-Iw",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
- {id:"old_laiban",name:"Old Laiban",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
- {id:"manggahan",name:"Manggahan",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"},
- {id:"magata",name:"Magata",source:"Barangay Laiban SK / local stakeholder",routing_status:"pending verified coordinates and road graph"}
+ {id:"maysawa",name:"Maysawa",lat:14.59780,lng:121.35114,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"OpenStreetMap/Mapcarta public reference",coordinate_status:"public_reference_unverified",routing_status:"not yet in active routing graph"},
+ {id:"toyang",name:"Toyang",lat:14.61080,lng:121.38180,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"not yet in active routing graph"},
+ {id:"ibucao",name:"Ibucao",lat:14.60220,lng:121.38480,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"not yet in active routing graph"},
+ {id:"kilabuwan",name:"Kilabuwan",lat:14.62260,lng:121.40360,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"not yet in active routing graph"},
+ {id:"banatas",name:"Banatas",lat:14.60940,lng:121.39940,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"not yet in active routing graph"},
+ {id:"iwi_iw",name:"Iwi-Iw",lat:14.62800,lng:121.39170,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"not yet in active routing graph"},
+ {id:"old_laiban",name:"Old Laiban",lat:14.61880,lng:121.39700,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"not yet in active routing graph"},
+ {id:"manggahan",name:"Manggahan",lat:14.62679,lng:121.41616,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"Magata-Manggahan Elementary School OSM/Mapcarta area reference",coordinate_status:"public_area_reference_unverified",routing_status:"not yet in active routing graph"},
+ {id:"magata",name:"Magata",lat:14.63140,lng:121.42020,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement near Magata-Manggahan reference area",coordinate_status:"dummy_for_qa",routing_status:"not yet in active routing graph"}
 ];
 
 var NODES=[
