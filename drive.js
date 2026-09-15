@@ -131,7 +131,7 @@ document.getElementById("resetDayBtn").onclick=function(){
   nextRepId=4;
   WX.mm=INITIAL_WX_MM;
   SIM_DATE=new Date(SIM_START_DATE);
-  PROGRESS=1;
+  PROGRESS=0;
   refresh({t:"Simulation reset",b:"The date, hazard reports, weather, and visit history were restored to their Day 1 starting values."});
 };
 

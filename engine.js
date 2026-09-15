@@ -294,4 +294,4 @@ function isSimulationDay1(){
     SIM_DATE.getMonth()===SIM_START_DATE.getMonth() &&
     SIM_DATE.getDate()===SIM_START_DATE.getDate();
 }
-var PLAN=planRoute(), PROGRESS=1; /* stops already completed */
+var PLAN=planRoute(), PROGRESS=0; /* no stops completed on a fresh deployment */
