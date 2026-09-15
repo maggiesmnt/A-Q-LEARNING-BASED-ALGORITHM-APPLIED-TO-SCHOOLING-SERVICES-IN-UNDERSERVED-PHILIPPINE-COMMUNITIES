@@ -29,13 +29,21 @@ function drawRoads(){
   gRoads.clearLayers();
   EDGES.forEach(function(e){
     var A=accA(e), b=band(A);
-    var line=L.polyline(edgeGeom(e),{color:b.col,weight:A<0.20?6:5,opacity:A<0.20?0.95:0.72,
-      dashArray:e.surf==="dirt"?"9 7":e.surf==="ford"?"3 8":null,lineCap:"round"}).addTo(gRoads);
+    var isQa=e.graph_status==="qa_connector";
+    var line=L.polyline(edgeGeom(e),{
+      color:b.col,
+      weight:isQa?3:(A<0.20?6:5),
+      opacity:isQa?0.42:(A<0.20?0.95:0.72),
+      dashArray:isQa?"5 8":e.surf==="dirt"?"9 7":e.surf==="ford"?"3 8":null,
+      lineCap:"round"
+    }).addTo(gRoads);
     line.bindPopup("<b>"+N[e.a].name+" &harr; "+N[e.b].name+"</b><br>"+SURF[e.surf].lab+
       "<br>"+e.km.toFixed(1)+" km &middot; ~"+Math.round(edgeMin(e))+" min"+
       "<br>Road condition: <b>"+b.lab.charAt(0)+b.lab.slice(1).toLowerCase()+"</b>"+
       (e.note?"<br><span>Local context:</span> "+e.note:"")+
-      "<br><span>Network status:</span> "+(e.data_status||"QA connector"));
+      "<br><span>Road graph basis:</span> <b>"+(e.graph_status==="stakeholder_supported"?"Stakeholder-supported (provisional)":"QA-only connector")+"</b>"+
+      "<br><span>Source:</span> "+(e.source||"System QA assumption")+
+      "<br><span>Verification:</span> "+(e.verification||"provisional"));
     if(A<0.20){
       var g=edgeGeom(e),mid=g[Math.floor(g.length/2)];
       L.marker(mid,{icon:L.divIcon({className:"",iconSize:[30,30],iconAnchor:[15,15],
