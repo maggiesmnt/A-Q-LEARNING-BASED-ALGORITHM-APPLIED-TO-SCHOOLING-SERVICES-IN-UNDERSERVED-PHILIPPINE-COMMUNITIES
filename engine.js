@@ -80,6 +80,7 @@ var SERVICE_IDS=NODES.filter(function(n){return n.kind==="node"}).map(function(n
    graph. This protects the runtime from replaying an incompatible policy. */
 function trainedPolicyMatchesCurrentGraph(){
  if(typeof TRAINED_POLICY==="undefined"||!TRAINED_POLICY.node_bit_index) return false;
+ if(TRAINED_POLICY.version!=="laiban-methodology-state-v2") return false;
  var ids=Object.keys(TRAINED_POLICY.node_bit_index);
  return ids.length===SERVICE_IDS.length&&SERVICE_IDS.every(function(id){return ids.indexOf(id)>=0});
 }
@@ -255,21 +256,7 @@ function path(from,to){
 /* ----- exact Chapter 3 state encoding mirrored from train_q_learning.py ----- */
 function timeBucket(rem){var b=Math.floor((Math.max(0,Math.min(1,rem/SHIFT_MIN)))*TRAINED_TIME_BUCKETS);return Math.min(TRAINED_TIME_BUCKETS-1,Math.max(0,b))}
 function accessBucket(x){return x<.20?0:x<.45?1:x<.75?2:3}
-function proposedStateKey(cur,mask,remaining,visits){
- var candidates=[];
- SERVICE_IDS.forEach(function(id){if(mask&(1<<BITIDX[id]))return;if(path(cur,id))candidates.push(id)});
- var maxDemand=Math.max.apply(null,SERVICE_IDS.map(function(id){return N[id].learners}));
- var pressure=0;candidates.forEach(function(id){pressure=Math.max(pressure,N[id].learners/maxDemand)});
- var D=pressure===0?0:pressure<.45?1:pressure<.75?2:3;
- var vals=SERVICE_IDS.map(function(id){return visits[id]||0}),J=jain(vals);
- var H=J<.55?0:J<.70?1:J<.85?2:3;
- var local=[];EDGES.forEach(function(e){if(e.a===cur||e.b===cur)local.push(accA(e))});
- var meanA=local.length?local.reduce(function(a,b){return a+b},0)/local.length:0;
- var A=accessBucket(meanA);
- return "L="+cur+"|D="+D+"|T="+timeBucket(remaining)+"|H="+H+"|A="+A;
-}
-
-function learnedStandardAction(cur){
+function demandBucket(value,maxDemand){\n var r=value/Math.max(maxDemand,1);\n return r<.45?1:r<.75?2:3;\n}\nfunction historyBucket(days){\n return days<=7?0:days<=14?1:days<=21?2:3;\n}\nfunction routeAccessibility(p){\n if(!p||!p.legs||!p.legs.length)return 0;\n var worst=1;\n p.legs.forEach(function(edge){worst=Math.min(worst,accA(edge))});\n return worst;\n}\nfunction proposedStateKey(cur,mask,remaining,visits,historyDays){\n var maxDemand=Math.max.apply(null,SERVICE_IDS.map(function(id){return N[id].learners}));\n var d=[],h=[],a=[];\n SERVICE_IDS.forEach(function(id){\n  var served=!!(mask&(1<<BITIDX[id]));\n  var p=served?null:path(cur,id);\n  if(served||!p){d.push(0);a.push(0)}else{d.push(demandBucket(N[id].learners,maxDemand));a.push(accessBucket(routeAccessibility(p)))}\n  h.push(historyBucket(historyDays[id]||0));\n });\n return "L="+cur+"|D="+d.join("")+"|T="+timeBucket(remaining)+"|H="+h.join("")+"|A="+a.join("");\n}\n\nfunction learnedStandardAction(cur){
  if(!POLICY_MATCHES_GRAPH||typeof TRAINED_POLICY==="undefined"||!TRAINED_POLICY.standard_policy)return null;
  var a=TRAINED_POLICY.standard_policy[cur]||null;
  return SERVICE_IDS.indexOf(a)>=0?a:null;
@@ -300,7 +287,7 @@ function planRoute(startId,servedIds,remainingMinutes,elapsedMinutes){
   var feasible=[];
   pending.forEach(function(id){var p=path(cur,id);if(!p)return;var need=p.min+serviceMin(N[id]);if(need<=left)feasible.push({id:id,p:p})});
   if(!feasible.length)break;
-  var sk=proposedStateKey(cur,mask,left,visits),learned=learnedMODQLAction(sk),best=null;
+  var sk=proposedStateKey(cur,mask,left,visits,historyDays),learned=learnedMODQLAction(sk),best=null;
   feasible.forEach(function(c){
    var trial=SERVICE_IDS.map(function(id){return (visits[id]||0)+(id===c.id?1:0)});
    var J=jain(trial),cov=N[c.id].learners/maxL,fallback=cov*J*(1/Math.max(c.p.min/60,1e-6));
@@ -309,7 +296,7 @@ function planRoute(startId,servedIds,remainingMinutes,elapsedMinutes){
   });
   var t0=hhmm(hh,mm+best.p.min);
   stops.push({id:best.id,p:best.p,arrive:t0,score:best.score,J:best.J,usedPolicy:best.usedPolicy,stateKey:best.stateKey});
-  var adv=best.p.min+serviceMin(N[best.id]);mm+=adv;left-=adv;visits[best.id]++;cur=best.id;mask|=(1<<BITIDX[best.id]);pending.splice(pending.indexOf(best.id),1);
+  var adv=best.p.min+serviceMin(N[best.id]);mm+=adv;left-=adv;visits[best.id]++;historyDays[best.id]=0;cur=best.id;mask|=(1<<BITIDX[best.id]);pending.splice(pending.indexOf(best.id),1);
  }
  pending.forEach(function(id){var p=path(cur,id);deferred.push({id:id,reason:p?"outside remaining time budget":"no open corridor — all approaches masked (A < 0.20)"})});
  return {stops:stops,deferred:deferred,ret:path(cur,"hub"),visits:visits,methodology:"MODQL <L,D,T,H,A>",start:startId,remaining:left};
