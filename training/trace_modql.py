@@ -57,6 +57,10 @@ def trace(index=3):
         node_id: tq.NODES[node_id]["visits30"]
         for node_id in tq.SERVICE
     }
+    history_days = {
+        node_id: tq.NODES[node_id]["days"]
+        for node_id in tq.SERVICE
+    }
 
     rows = []
     step = 1
@@ -78,6 +82,7 @@ def trace(index=3):
             mask,
             remaining,
             visits,
+            history_days,
         )
 
         candidates = []
@@ -134,6 +139,7 @@ def trace(index=3):
 
         remaining -= travel + tq.SERVICE_MIN_PER_STOP
         visits[action] += 1
+        history_days[action] = 0
         mask |= 1 << tq.IDX[action]
         current = action
         step += 1
