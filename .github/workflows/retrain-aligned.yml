@@ -28,5 +28,6 @@ jobs:
             echo "No regenerated changes."
           else
             git commit -m "Regenerate aligned MODQL policy and evaluation"
+            git pull --rebase origin main
             git push
           fi
