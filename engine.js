@@ -257,7 +257,38 @@ function path(from,to){
 /* v2 preserves localized demand, recency history, and route accessibility per sitio. */
 function timeBucket(rem){var b=Math.floor((Math.max(0,Math.min(1,rem/SHIFT_MIN)))*TRAINED_TIME_BUCKETS);return Math.min(TRAINED_TIME_BUCKETS-1,Math.max(0,b))}
 function accessBucket(x){return x<.20?0:x<.45?1:x<.75?2:3}
-function demandBucket(value,maxDemand){\n var r=value/Math.max(maxDemand,1);\n return r<.45?1:r<.75?2:3;\n}\nfunction historyBucket(days){\n return days<=7?0:days<=14?1:days<=21?2:3;\n}\nfunction routeAccessibility(p){\n if(!p||!p.legs||!p.legs.length)return 0;\n var worst=1;\n p.legs.forEach(function(edge){worst=Math.min(worst,accA(edge))});\n return worst;\n}\nfunction proposedStateKey(cur,mask,remaining,visits,historyDays){\n var maxDemand=Math.max.apply(null,SERVICE_IDS.map(function(id){return N[id].learners}));\n var d=[],h=[],a=[];\n SERVICE_IDS.forEach(function(id){\n  var served=!!(mask&(1<<BITIDX[id]));\n  var p=served?null:path(cur,id);\n  if(served||!p){d.push(0);a.push(0)}else{d.push(demandBucket(N[id].learners,maxDemand));a.push(accessBucket(routeAccessibility(p)))}\n  h.push(historyBucket(historyDays[id]||0));\n });\n return "L="+cur+"|D="+d.join("")+"|T="+timeBucket(remaining)+"|H="+h.join("")+"|A="+a.join("");\n}\n\nfunction learnedStandardAction(cur){
+function demandBucket(value,maxDemand){
+ var r=value/Math.max(maxDemand,1);
+ return r<.45?1:r<.75?2:3;
+}
+function historyBucket(days){
+ return days<=7?0:days<=14?1:days<=21?2:3;
+}
+function routeAccessibility(p){
+ if(!p||!p.legs||!p.legs.length)return 0;
+ var worst=1;
+ p.legs.forEach(function(edge){worst=Math.min(worst,accA(edge))});
+ return worst;
+}
+function proposedStateKey(cur,mask,remaining,visits,historyDays){
+ var maxDemand=Math.max.apply(null,SERVICE_IDS.map(function(id){return N[id].learners}));
+ var d=[],h=[],a=[];
+ SERVICE_IDS.forEach(function(id){
+  var served=!!(mask&(1<<BITIDX[id]));
+  var p=served?null:path(cur,id);
+  if(served||!p){
+   d.push(0);
+   a.push(0);
+  }else{
+   d.push(demandBucket(N[id].learners,maxDemand));
+   a.push(accessBucket(routeAccessibility(p)));
+  }
+  h.push(historyBucket(historyDays[id]||0));
+ });
+ return "L="+cur+"|D="+d.join("")+"|T="+timeBucket(remaining)+"|H="+h.join("")+"|A="+a.join("");
+}
+
+function learnedStandardAction(cur){
  if(!POLICY_MATCHES_GRAPH||typeof TRAINED_POLICY==="undefined"||!TRAINED_POLICY.standard_policy)return null;
  var a=TRAINED_POLICY.standard_policy[cur]||null;
  return SERVICE_IDS.indexOf(a)>=0?a:null;
