@@ -1,44 +1,30 @@
-# /training — Chapter 3 aligned Q-learning experiment
+# Training - Barangay Laiban Q-Learning Experiment
 
-This folder contains the research experiment used to compare the Chapter 3 control and proposed algorithms.
+This folder contains the aligned comparison between Standard Q-Learning and MODQL.
 
-| File | Purpose |
-|---|---|
-| `train_q_learning.py` | Trains Standard Q-Learning and MODQL for 1,200 episodes under the same simulated environment |
-| `comparison_summary.json` | Current validation summary from 100 held-out simulated scenarios |
-| `outputs_aligned/standard_policy.json` | Trained single-table Standard Q-Learning control policy |
-| `outputs_aligned/comparison_summary.json` | Copy of the aligned validation summary |
-| `training_log.csv` / legacy outputs | Previous experiment artifacts retained for traceability |
+## Experiment setup
 
-## Research alignment
+- Standard state: S = L
+- Standard reward: 1 / Travel Cost
+- MODQL state: S = <L,D,T,H,A>
+- MODQL reward: Coverage x Jain Fairness x (1 / Travel Cost)
+- Training episodes: 2000
+- Held-out evaluation scenarios: 200
+- Shift length: 480 minutes
+- Service duration: 60 minutes per sitio
 
-**Existing / control — Standard Q-Learning**
-
-- State: `S = L` (current location only)
-- One Q-table
-- Reward: `1 / Travel Cost`
-- Standard max-based Q update
-
-**Proposed / experimental — MODQL**
-
-- State: `S = <L,D,T,H,A>`
-- `D`, `T`, `H`, and `A` are explicitly observed and discretized so the state remains finite for tabular learning
-- Two independently updated tables, `Q1` and `Q2`
-- Reward: `Coverage × Jain's Fairness × (1 / Travel Cost)`
-- Action selection and evaluation are decoupled during the Double Q update
+Both algorithms use the same nine Barangay Laiban sitios, road graph, accessibility conditions, demand scenarios, historical-service initialization, time budget, and scenario seeds.
 
 ## Data status
 
-The current Laiban/Tanay nodes, learner counts, and road network are **simulation placeholders**. The current results are for implementation validation only and must not be presented as final Chapter 4 evidence. Once the official DepEd/OSM/weather datasets are available, replace the environment data and re-run:
+The official Barangay Laiban CY 2026 OSY total of 284 is the learner-demand basis.
+Because there is no official sitio-level OSY breakdown, the sitio allocation is controlled simulated data.
+Historical service H, operational time T, and unresolved road details are controlled or explicitly marked simulation inputs.
 
-\`\`\`bash
-# Windows (Python launcher)
-py -m pip install numpy pandas matplotlib
-py train_q_learning.py
+## Run
 
-# macOS/Linux
-python3 -m pip install numpy pandas matplotlib
-python3 train_q_learning.py
-\`\`\`
+From the repository root:
 
-The current placeholder run does **not** establish that MODQL is superior to Standard Q-Learning on all metrics. That is a valid experimental finding and should remain visible until the real-data experiment is completed.
+py .\training\train_q_learning.py
+
+The trainer updates trained_policy.js and writes aligned outputs under training/outputs_aligned/.
