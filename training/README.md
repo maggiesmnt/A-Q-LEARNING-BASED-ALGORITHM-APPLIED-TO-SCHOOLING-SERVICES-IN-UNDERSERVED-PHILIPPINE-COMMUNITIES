@@ -28,3 +28,5 @@ From the repository root:
 py .\training\train_q_learning.py
 
 The trainer updates trained_policy.js and writes aligned outputs under training/outputs_aligned/.
+
+Authoritative current outputs are the files under training/outputs_aligned/ and the root trained_policy.js. Older root-level training artifacts in this folder are retained only as legacy references and are not used by the live browser system.
