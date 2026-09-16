@@ -3,47 +3,48 @@
 
    Existing/control:
      Standard Q-Learning
-     State:  S = L
+     State: S = L
      Reward during training: 1 / Travel Cost
-     Runtime: replay the learned Standard policy for the current location.
 
    Proposed/experimental:
      Multi-Objective Double Q-Learning (MODQL)
-     State:  S = <L,D,T,H,A>
+     State: S = <L,D,T,H,A>
      Reward during training: Coverage * JainFairness * (1 / Travel Cost)
-     Runtime: replay the learned policy derived from Q1(s,a)+Q2(s,a).
 
-   Both algorithms use the same road graph and the same hard feasibility rules.
-   Roads with A < 0.20 are unavailable to both. The Operational PLAN is the
-   Proposed MODQL route.
+   Both algorithms use the same active Barangay Laiban road graph, the same
+   feasibility rules, and the same operational constraints.
 
-   TEMPORARY DATA TEST (Sep 2026):
-   Official DepEd ALS SY 2025-2026 learner demand is overlaid only where a
-   conservative CLC/community match is available. Road geometry, most locations,
-   visit history, and hazards remain simulated until the pending datasets arrive.
+   CURRENT DATA STATUS (Sep 2026):
+   - Active locations are the nine Barangay Laiban sitios confirmed through
+     local stakeholder communication.
+   - Barangay-wide learner demand is based on the official CY 2026 OSY total
+     of 284, with a controlled simulated sitio allocation.
+   - H and T remain controlled simulation inputs.
+   - Road topology and accessibility combine stakeholder information, public
+     references, and clearly marked QA assumptions where exact sitio-level
+     road data remain unavailable.
    ============================================================================ */
 
 function rng(seed){var s=seed;return function(){s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff}}
 
 /* ---------- canonical Laiban sitio registry ----------
-   Step 1 of the real-data migration. These are the nine sitios confirmed by
-   the Barangay Laiban SK through local stakeholder communication. They are
-   locked here as the canonical real-world location names for the study.
+   These are the nine sitios confirmed by the Barangay Laiban SK through local
+   stakeholder communication.
 
-   IMPORTANT: this registry is NOT yet the active routing graph. The prototype
-   NODES/EDGES below remain unchanged until sitio coordinates and the real road
-   network are verified, so no legacy coordinates/distances are falsely assigned
-   to these sitios. */
+   The same sitio identities are used by the active routing graph. Coordinate
+   verification status remains explicit because several sitio coordinates are
+   still provisional or QA placements.
+*/
 var LAIBAN_SITIO_REGISTRY=[
- {id:"maysawa",name:"Maysawa",lat:14.59780,lng:121.35114,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"OpenStreetMap/Mapcarta public reference",coordinate_status:"public_reference_unverified",routing_status:"not yet in active routing graph"},
- {id:"toyang",name:"Toyang",lat:14.61080,lng:121.38180,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"not yet in active routing graph"},
- {id:"ibucao",name:"Ibucao",lat:14.60220,lng:121.38480,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"not yet in active routing graph"},
- {id:"kilabuwan",name:"Kilabuwan",lat:14.62260,lng:121.40360,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"not yet in active routing graph"},
- {id:"banatas",name:"Banatas",lat:14.60940,lng:121.39940,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"not yet in active routing graph"},
- {id:"iwi_iw",name:"Iwi-Iw",lat:14.62800,lng:121.39170,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"not yet in active routing graph"},
- {id:"old_laiban",name:"Old Laiban",lat:14.61880,lng:121.39700,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"not yet in active routing graph"},
- {id:"manggahan",name:"Manggahan",lat:14.62679,lng:121.41616,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"Magata-Manggahan Elementary School OSM/Mapcarta area reference",coordinate_status:"public_area_reference_unverified",routing_status:"not yet in active routing graph"},
- {id:"magata",name:"Magata",lat:14.63140,lng:121.42020,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement near Magata-Manggahan reference area",coordinate_status:"dummy_for_qa",routing_status:"not yet in active routing graph"}
+ {id:"maysawa",name:"Maysawa",lat:14.59780,lng:121.35114,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"OpenStreetMap/Mapcarta public reference",coordinate_status:"public_reference_unverified",routing_status:"active routing node"},
+ {id:"toyang",name:"Toyang",lat:14.61080,lng:121.38180,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"active routing node"},
+ {id:"ibucao",name:"Ibucao",lat:14.60220,lng:121.38480,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"active routing node"},
+ {id:"kilabuwan",name:"Kilabuwan",lat:14.62260,lng:121.40360,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"active routing node"},
+ {id:"banatas",name:"Banatas",lat:14.60940,lng:121.39940,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"active routing node"},
+ {id:"iwi_iw",name:"Iwi-Iw",lat:14.62800,lng:121.39170,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"active routing node"},
+ {id:"old_laiban",name:"Old Laiban",lat:14.61880,lng:121.39700,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement only",coordinate_status:"dummy_for_qa",routing_status:"active routing node"},
+ {id:"manggahan",name:"Manggahan",lat:14.62679,lng:121.41616,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"Magata-Manggahan Elementary School OSM/Mapcarta area reference",coordinate_status:"public_area_reference_unverified",routing_status:"active routing node"},
+ {id:"magata",name:"Magata",lat:14.63140,lng:121.42020,source:"Barangay Laiban SK / local stakeholder",coordinate_source:"QA placement near Magata-Manggahan reference area",coordinate_status:"dummy_for_qa",routing_status:"active routing node"}
 ];
 
 var NODES=[
@@ -75,10 +76,8 @@ var HISTORY_DATA_META={
 var N={};NODES.forEach(function(n){N[n.id]=n});
 var SERVICE_IDS=NODES.filter(function(n){return n.kind==="node"}).map(function(n){return n.id});
 
-/* The policy bundled in trained_policy.js was trained on the previous prototype
-   graph. Until retraining is completed for the Laiban sitio graph, use a fresh
-   bit index and let both planners use their methodology-consistent fallback
-   objectives instead of replaying incompatible actions. */
+/* Only use a bundled policy when its node index matches the active Laiban
+   graph. This protects the runtime from replaying an incompatible policy. */
 function trainedPolicyMatchesCurrentGraph(){
  if(typeof TRAINED_POLICY==="undefined"||!TRAINED_POLICY.node_bit_index) return false;
  var ids=Object.keys(TRAINED_POLICY.node_bit_index);
