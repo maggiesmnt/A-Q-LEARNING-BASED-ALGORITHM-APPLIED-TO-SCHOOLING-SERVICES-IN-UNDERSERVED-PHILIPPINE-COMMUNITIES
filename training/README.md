@@ -25,8 +25,18 @@ Historical service H, operational time T, and unresolved road details are contro
 
 From the repository root:
 
-py .\training\train_q_learning.py
+`py .\training\train_q_learning.py`
 
-The trainer updates trained_policy.js and writes aligned outputs under training/outputs_aligned/.
+The trainer updates `trained_policy.js` and writes aligned outputs under `training/outputs_aligned/`.
 
-Authoritative current outputs are the files under training/outputs_aligned/ and the root trained_policy.js. Older root-level training artifacts in this folder are retained only as legacy references and are not used by the live browser system.
+## Authoritative outputs
+
+The current authoritative experiment artifacts are:
+
+- `training/outputs_aligned/comparison_summary.json`
+- `training/outputs_aligned/standard_policy.json`
+- `training/outputs_aligned/modql_policy.json`
+- `training/outputs_aligned/training_log.csv`
+- root `trained_policy.js`
+
+`charts.js` reads the embedded `TRAINED_POLICY.training_curves` data directly. `make_sim_js.py` is an optional aligned export helper only.
