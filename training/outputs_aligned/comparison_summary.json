@@ -1,0 +1,44 @@
+{
+  "environment": "Barangay Laiban finalized Step 1-6 environment",
+  "episodes_trained": 2000,
+  "evaluation_scenarios": 200,
+  "fair_comparison": "Both algorithms trained and evaluated using identical scenario seeds.",
+  "official_demand_basis": {
+    "barangay_osy_total": 284,
+    "sitio_distribution": "controlled simulated unequal distribution"
+  },
+  "operational_constraints": {
+    "shift_minutes": 480,
+    "service_minutes_per_stop": 60
+  },
+  "hyperparameters": {
+    "alpha": 0.1,
+    "gamma": 0.9,
+    "epsilon_start": 1.0,
+    "epsilon_min": 0.05,
+    "epsilon_decay": 0.995
+  },
+  "state_design": {
+    "standard": "L",
+    "modql": "<L,D,T,H,A>"
+  },
+  "reward_design": {
+    "standard": "1 / TravelCost",
+    "modql": "Coverage * JainFairness * (1 / TravelCost)"
+  },
+  "standard": {
+    "travel_min": 79.64380963889745,
+    "fairness": 0.536374269005848,
+    "stops": 4.14,
+    "deferred": 4.86,
+    "coverage": 124.315
+  },
+  "modql": {
+    "travel_min": 98.34123371919594,
+    "fairness": 0.5119883040935672,
+    "stops": 3.87,
+    "deferred": 5.13,
+    "coverage": 118.825
+  },
+  "data_note": "Sitio identities and accessibility evidence are based on the Step 1-4 Laiban dataset. Sitio demand allocation, initial historical service H, and operational time T remain controlled simulation inputs where sitio-level official records were unavailable."
+}

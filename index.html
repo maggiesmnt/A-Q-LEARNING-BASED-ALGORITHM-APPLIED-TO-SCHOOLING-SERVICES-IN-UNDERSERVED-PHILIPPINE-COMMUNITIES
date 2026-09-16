@@ -194,10 +194,13 @@ This is exactly the &ldquo;structural amnesia&rdquo; that location-only standard
 </nav>
 <div class="research-content">
 <div class="badge-sim">SIMULATED DATA &mdash; FOR SYSTEM DEMONSTRATION</div>
-<div class="note"><b>Placeholder values, where marked.</b> Route KPIs and stop lists on every tab below are computed live by this
-prototype's own routing engine. Multi-episode training curves (marked "illustrative") are produced by a built-in demonstration
-curve generator so the panel can see the reporting layout &mdash; replace those specific curves with your Chapter 4 logs from the
-Python / Google Colab runs (500&ndash;2,000 episodes).</div>
+<div class="note">
+<b>Dataset status.</b>
+Sitio identities and local road-accessibility information are based on Barangay Laiban stakeholder data.
+Learner demand uses the official Barangay Laiban CY 2026 Out-of-School Youth total of 284 as its real-world basis.
+Because the provided record has no sitio-level breakdown, the 284 learners are distributed across the nine sitios using a controlled simulated allocation for experimental testing.
+The same demand values are provided to both Standard Q-Learning and MODQL.
+</div>
 <div class="subview active" id="sub-existing"></div>
 <div class="subview" id="sub-proposed"></div>
 <div class="subview" id="sub-maze"></div>
