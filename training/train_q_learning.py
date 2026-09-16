@@ -654,113 +654,123 @@ def standard_state(current):
     return current
 
 
+def demand_bucket(value, max_demand):
+    ratio = value / max(max_demand, 1)
+    if ratio < 0.45:
+        return 1
+    if ratio < 0.75:
+        return 2
+    return 3
+
+
+def history_bucket(days_since_service):
+    """Recency-based Historical Visit Index: higher = more neglected."""
+    if days_since_service <= 7:
+        return 0
+    if days_since_service <= 14:
+        return 1
+    if days_since_service <= 21:
+        return 2
+    return 3
+
+
+def route_accessibility(scenario, start, goal):
+    """Minimum accessibility A along the current shortest-time open route."""
+    dist = {start: 0.0}
+    route_min_a = {start: 1.0}
+    seen = set()
+    queue = [start]
+
+    while queue:
+        queue.sort(key=lambda node: dist[node])
+        current = queue.pop(0)
+
+        if current in seen:
+            continue
+        seen.add(current)
+
+        if current == goal:
+            return route_min_a[current]
+
+        for neighbor in ADJ[current]:
+            key = tuple(sorted((current, neighbor)))
+            edge_a = scenario.access(key)
+            minutes = scenario.edge_min(current, neighbor)
+
+            if minutes is None:
+                continue
+
+            new_distance = dist[current] + minutes
+            if new_distance < dist.get(neighbor, float("inf")):
+                dist[neighbor] = new_distance
+                route_min_a[neighbor] = min(route_min_a[current], edge_a)
+                queue.append(neighbor)
+
+    return 0.0
+
+
 def proposed_state(
     scenario,
     current,
     mask,
     remaining,
-    visits
+    visits,
+    history_days
 ):
     """
-    L = current location
-    D = demand pressure
-    T = remaining time
-    H = historical visit fairness
-    A = local accessibility
-    """
+    Paper-aligned enriched state S=<L,D,T,H,A>.
 
-    candidates = []
+    L = current location.
+    D = localized demand vector for each unserved reachable sitio.
+    T = remaining operational time bucket.
+    H = Historical Visit Index vector based on days since last service.
+    A = localized route-accessibility vector for each unserved reachable sitio.
+
+    D/H/A are encoded in stable SERVICE order so community-specific context is
+    preserved instead of being collapsed into one global summary statistic.
+    """
+    max_demand = max(scenario.demand.values())
+
+    d_vector = []
+    h_vector = []
+    a_vector = []
 
     for node_id in SERVICE:
+        served = bool(mask & (1 << IDX[node_id]))
+        travel = None if served else dijkstra(scenario, current, node_id)
 
-        if mask & (
-            1 << IDX[node_id]
-        ):
-            continue
-
-        distance = dijkstra(
-            scenario,
-            current,
-            node_id
-        )
-
-        if distance is not None:
-            candidates.append(node_id)
-
-
-    max_demand = max(
-        scenario.demand.values()
-    )
-
-    demand_pressure = max(
-        (
-            scenario.demand[node_id]
-            / max_demand
-            for node_id in candidates
-        ),
-        default=0.0
-    )
-
-    if demand_pressure == 0:
-        D = 0
-    elif demand_pressure < 0.45:
-        D = 1
-    elif demand_pressure < 0.75:
-        D = 2
-    else:
-        D = 3
-
-
-    fairness = jain(
-        visits.values()
-    )
-
-    if fairness < 0.55:
-        H = 0
-    elif fairness < 0.70:
-        H = 1
-    elif fairness < 0.85:
-        H = 2
-    else:
-        H = 3
-
-
-    local_access = []
-
-    for neighbor in ADJ[current]:
-
-        key = tuple(
-            sorted(
-                (
-                    current,
-                    neighbor
+        if served or travel is None:
+            d_vector.append(0)
+            a_vector.append(0)
+        else:
+            d_vector.append(
+                demand_bucket(
+                    scenario.demand[node_id],
+                    max_demand
                 )
+            )
+            a_vector.append(
+                access_bucket(
+                    route_accessibility(
+                        scenario,
+                        current,
+                        node_id
+                    )
+                )
+            )
+
+        h_vector.append(
+            history_bucket(
+                history_days[node_id]
             )
         )
 
-        local_access.append(
-            scenario.access(key)
-        )
-
-
-    mean_access = (
-        sum(local_access)
-        / len(local_access)
-        if local_access
-        else 0.0
-    )
-
-    A = access_bucket(
-        mean_access
-    )
-
-
     return (
         f"L={current}"
-        f"|D={D}"
+        f"|D={''.join(map(str, d_vector))}"
         f"|T={time_bucket(remaining)}"
-        f"|H={H}"
-        f"|A={A}"
+        f"|H={''.join(map(str, h_vector))}"
+        f"|A={''.join(map(str, a_vector))}"
     )
 
 
@@ -1103,6 +1113,12 @@ def train_modql(
             for node_id in SERVICE
         }
 
+        history_days = {
+            node_id:
+                NODES[node_id]["days"]
+            for node_id in SERVICE
+        }
+
         total_reward = 0.0
 
         episode_spread = []
@@ -1126,7 +1142,8 @@ def train_modql(
                 current,
                 mask,
                 remaining,
-                visits
+                visits,
+                history_days
             )
 
 
@@ -1215,13 +1232,19 @@ def train_modql(
 
             next_visits[action] += 1
 
+            next_history_days = dict(
+                history_days
+            )
+            next_history_days[action] = 0
+
 
             next_state = proposed_state(
                 scenario,
                 action,
                 new_mask,
                 new_remaining,
-                next_visits
+                next_visits,
+                next_history_days
             )
 
 
@@ -1359,6 +1382,7 @@ def train_modql(
 
 
             visits = next_visits
+            history_days = next_history_days
             current = action
             mask = new_mask
             remaining = new_remaining
@@ -1414,6 +1438,12 @@ def rollout(
         for node_id in SERVICE
     }
 
+    history_days = {
+        node_id:
+            NODES[node_id]["days"]
+        for node_id in SERVICE
+    }
+
     travel_total = 0.0
     learners_served = 0
 
@@ -1451,7 +1481,8 @@ def rollout(
                 current,
                 mask,
                 remaining,
-                visits
+                visits,
+                history_days
             )
 
             values = {
@@ -1524,6 +1555,7 @@ def rollout(
 
 
         visits[action] += 1
+        history_days[action] = 0
 
         current = action
 
@@ -1904,7 +1936,7 @@ def main():
     # ---------------------------------------------------------
 
     runtime_policy = {
-        "version": "laiban-step8-aligned-v1",
+        "version": "laiban-methodology-state-v2",
         "episodes_trained": EPISODES,
         "evaluation_scenarios": EVALUATION_SCENARIOS,
         "node_bit_index": IDX,
