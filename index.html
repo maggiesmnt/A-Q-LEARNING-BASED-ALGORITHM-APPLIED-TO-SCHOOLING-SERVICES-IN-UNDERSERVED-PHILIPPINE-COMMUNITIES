@@ -139,7 +139,6 @@ The local-risk factor represents the SK-supported conditions of each corridor, s
 <tr><td><b>Local-risk profile</b></td><td>Barangay Laiban SK stakeholder information plus the Step 3 road graph</td><td>Applies edge-specific penalties/closures for landslide, creek, river, mountain-path, and boat-sensitive routes</td></tr>
 <tr><td><b>External road alert</b></td><td>Official or partner source: landslide, flooding, washout, fallen tree, impassable</td><td>Pulls A toward the severity floor, weighted by confidence</td></tr>
 <tr><td><b>Official advisory</b></td><td>LGU / DPWH / MDRRMO closure notice</td><td>Hard override: A = 0 until lifted</td></tr>
-<tr><td><b>Unit telemetry</b></td><td>Mobile unit turns back or stalls on a segment mid-route</td><td>Auto-raises a low-confidence suspected-blockage report</td></tr>
 </tbody>
 </table>
 <div class="k" style="margin-top:11px"><b>Confidence &amp; decay.</b> A single unverified external alert starts at 0.45 confidence; each corroboration adds 0.2; an official advisory is 1.0.
@@ -152,7 +151,7 @@ Confidence halves every 6 hours, so a segment re-opens on its own once no extern
 <tbody>
 <tr><td class="mono">A &ge; 0.75</td><td><span class="pill open">OPEN</span></td><td>Normal travel cost. Segment fully available.</td></tr>
 <tr><td class="mono">0.45&ndash;0.74</td><td><span class="pill caut">CAUTION</span></td><td>Soft penalty &mdash; travel time divided by A, so the reward term (1 / Travel Cost) drops and the path is only chosen when its coverage and fairness gains justify it.</td></tr>
-<tr><td class="mono">0.20&ndash;0.44</td><td><span class="pill rest">RESTRICTED</span></td><td>Removed from the default action set; usable only on explicit coordinator override, logged with a reason.</td></tr>
+<tr><td class="mono">0.20&ndash;0.44</td><td><span class="pill rest">RESTRICTED</span></td><td>RESTRICTED roads remain available to the planner but receive a much higher travel-time penalty. Only roads below A &lt; 0.20 are hard-masked and unavailable to both algorithms.</td></tr>
 <tr><td class="mono">A &lt; 0.20</td><td><span class="pill cls">CLOSED</span></td><td><b>Hard mask.</b> The edge is deleted from the valid action set for that decision epoch, so the &epsilon;-greedy policy cannot select it even by random exploration. A community reachable only through it is deferred with an H-priority boost.</td></tr>
 </tbody>
 </table>

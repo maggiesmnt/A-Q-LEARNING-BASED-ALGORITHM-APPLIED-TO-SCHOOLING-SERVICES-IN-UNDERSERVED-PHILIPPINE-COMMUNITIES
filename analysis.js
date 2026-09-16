@@ -91,6 +91,23 @@ function multiDayEvaluation(){
   restoreEvaluationSnapshot(base);
   return {days:days,standard:standard,modql:modql};
 }
+function evaluationGraphHTML(id,title,plan,color){
+  var minLat=Math.min.apply(null,NODES.map(function(n){return n.lat})),maxLat=Math.max.apply(null,NODES.map(function(n){return n.lat}));
+  var minLng=Math.min.apply(null,NODES.map(function(n){return n.lng})),maxLng=Math.max.apply(null,NODES.map(function(n){return n.lng}));
+  function xy(n){return {x:18+(n.lng-minLng)/(maxLng-minLng||1)*264,y:18+(maxLat-n.lat)/(maxLat-minLat||1)*184}}
+  var lines=EDGES.map(function(e){var a=xy(N[e.a]),b=xy(N[e.b]),bandName=band(accA(e)).k;return '<line class="eg-edge eg-'+bandName+'" x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'"/>'}).join("");
+  var route=plan.stops.map(function(s){return s.p.seq?s.p.seq.join(","):s.id}).join(" &rarr; ");
+  var nodes=NODES.map(function(n){var p=xy(n),idx=-1;plan.stops.forEach(function(s,i){if(s.id===n.id)idx=i});return '<g class="eg-node" data-step="'+(idx+1)+'"><circle cx="'+p.x+'" cy="'+p.y+'" r="'+(n.kind==="depot"?8:6)+'"/><text x="'+(p.x+8)+'" y="'+(p.y+3)+'">'+(idx>=0?idx+1:"")+'</text><title>'+n.name+'</title></g>'}).join("");
+  return '<div class="card eg-card"><h3>'+title+'</h3><div class="k">Same live scenario; numbered circles show stop order.</div><svg id="'+id+'" class="eval-graph" viewBox="0 0 300 220" role="img" aria-label="'+title+'">'+lines+nodes+'</svg><div class="eg-legend"><span><i class="eg-open"></i>Open</span><span><i class="eg-caution"></i>Caution</span><span><i class="eg-rest"></i>Restricted</span></div><div class="k">Route: '+(route||"No reachable stops")+'</div><button class="btn g eg-step" data-graph="'+id+'">Play route step-through</button><span class="k eg-status" id="'+id+'-status">Step 0 / '+plan.stops.length+'</span></div>';
+}
+function wireEvaluationGraphs(){
+  document.querySelectorAll(".eg-step").forEach(function(btn){
+    var svg=document.getElementById(btn.getAttribute("data-graph")),status=document.getElementById(btn.getAttribute("data-graph")+"-status"),step=0,timer=null,nodes=svg.querySelectorAll(".eg-node");
+    var maxStep=0;nodes.forEach(function(node){maxStep=Math.max(maxStep,Number(node.getAttribute("data-step"))||0)});
+    function advance(){step++;if(step>maxStep)step=0;nodes.forEach(function(node){var n=Number(node.getAttribute("data-step"))||0;node.classList.toggle("eg-active",n>0&&n<=step)});status.textContent="Step "+step+" / "+maxStep}
+    btn.onclick=function(){if(timer){clearInterval(timer);timer=null;btn.textContent="Play route step-through"}else{advance();timer=setInterval(advance,700);btn.textContent="Pause route step-through"}};
+  });
+}
 function renderEvaluation(){
   var std=evaluationKPIs(analysisStd),mod=evaluationKPIs(analysisMod),multi=multiDayEvaluation(),neverStandard=[],neverModql=[];
   NODES.filter(function(n){return n.kind==="node"}).forEach(function(n){
@@ -101,6 +118,7 @@ function renderEvaluation(){
   document.getElementById("sub-evaluation").innerHTML=
     '<div class="algo-head mod"><div class="ic">&Delta;</div><div><h2>Algorithm Evaluation Dashboard</h2><p>Same simulated weather, hazards, Laiban network, and learner-demand inputs for both planners</p></div></div>'+
     '<div class="sop-problem"><b>Simulated environment.</b> This is a read-only comparison of the Standard Q-Learning and MODQL planners under the same current Laiban simulation conditions.</div>'+
+    '<div class="card"><h3>Algorithm Evaluation — route behavior</h3><div class="k">Both node graphs use the same accessibility-colored road network. Standard uses <span class="mono">planRouteStandard()</span>; MODQL uses <span class="mono">planRoute()</span>.</div><div class="split2 eg-grid">'+evaluationGraphHTML("evaluation-standard","Existing Algorithm — Standard Q-Learning",analysisStd,"#5b4fc7")+evaluationGraphHTML("evaluation-modql","Proposed Algorithm — MODQL",analysisMod,"#0f9d58")+'</div></div>'+
     '<div class="card eval-card"><table><thead><tr><th>Metric</th><th class="std-head">Standard Q-Learning</th><th class="mod-head">MODQL</th></tr></thead><tbody>'+
     evaluationMetric("Total travel distance",std,mod,function(k){return k.distance.toFixed(1)+" km"})+
     evaluationMetric("Total travel time",std,mod,function(k){return Math.round(k.travelMin)+" min"})+
@@ -125,6 +143,7 @@ function renderEvaluation(){
     '<div class="k eval-discussion">Standard: '+multi.standard.cumulative.join(", ")+' &middot; MODQL: '+multi.modql.cumulative.join(", ")+'</div>'+
     svgLine([{d:multi.modql.cumulative,c:"#0f9d58"},{d:multi.standard.cumulative,c:"#5b4fc7",dash:true}],{xs:[1,2,3,4,5,6,7],dp:0,h:190,min:0})+
     '<div class="split2" style="margin-top:12px"><div class="splitcol std"><h4>Never served by Standard</h4><div class="k">'+(neverStandard.length?neverStandard.join("<br>"):"None")+'</div></div><div class="splitcol mod"><h4>Never served by MODQL</h4><div class="k">'+(neverModql.length?neverModql.join("<br>"):"None")+'</div></div></div></div>';
+  wireEvaluationGraphs();
 }
 
 function resultCard(title,r,label){
@@ -173,7 +192,8 @@ function renderExisting(){
     '<div class="card"><h3>Research definition</h3><div class="k">The control uses <span class="mono">S = L</span>. Its reward is travel efficiency only, <span class="mono">R = 1 / Travel Cost</span>. The same Q-table selects and evaluates actions:</div><div class="k mono" style="background:var(--ink3);padding:10px 12px;border-radius:10px;margin-top:9px">Q(s,a) &larr; Q(s,a) + &alpha;[r + &gamma; max Q(s&prime;,a&prime;) &minus; Q(s,a)]</div><div class="k" style="margin-top:9px">The corrected Python experiment now trains this baseline independently. The live route card below is only the Current Laiban simulation route replay under today&rsquo;s simulated hazards.</div></div>'+
     resultCard('Aligned training result &mdash; control',r,'Standard Q-Learning')+evidenceNote()+
     '<div class="g3"><div class="kpi"><div class="lab">Live learners reached</div><div class="v">'+k.learners+'</div><div class="d">Laiban simulation today</div></div><div class="kpi"><div class="lab">Live route length</div><div class="v">'+k.totalKm.toFixed(1)+'<span style="font-size:13px"> km</span></div><div class="d">shared Laiban environment</div></div><div class="kpi"><div class="lab">Live Jain&rsquo;s J</div><div class="v">'+k.J.toFixed(3)+'</div><div class="d">descriptive only</div></div></div><div style="height:12px"></div>'+
-    '<div class="card"><h3>Current Laiban simulation route</h3>'+stopRowsHTML(analysisStd)+'</div><div class="card"><h3>Deferred</h3>'+deferredHTML(analysisStd)+'</div>'
+    '<div class="card"><h3>Current Laiban simulation route</h3>'+stopRowsHTML(analysisStd)+'</div><div class="card"><h3>Deferred</h3>'+deferredHTML(analysisStd)+'</div>'+
+    '<div id="existing-maze-host"><h3 style="margin:18px 0 8px">Reference implementation — the external baseline Q-learning system this study&rsquo;s control algorithm is based on.</h3></div>'
 }
 
 function renderProposed(){
@@ -184,7 +204,8 @@ function renderProposed(){
     '<div class="card"><h3>How the five state dimensions are encoded</h3><table><thead><tr><th>Term</th><th>Implementation</th></tr></thead><tbody><tr><td><b>L</b> &mdash; Location</td><td>Current graph node</td></tr><tr><td><b>D</b> &mdash; Demand</td><td>Localized per-sitio demand buckets for unserved reachable communities</td></tr><tr><td><b>T</b> &mdash; Time</td><td>Remaining 480-minute shift discretized into time buckets</td></tr><tr><td><b>H</b> &mdash; History</td><td>Per-sitio Historical Visit Index based on days since last service</td></tr><tr><td><b>A</b> &mdash; Accessibility</td><td>Per-sitio route-accessibility buckets using the weakest segment on the current open route</td></tr></tbody></table></div>'+
     resultCard('Aligned training result &mdash; proposed',r,'MODQL')+evidenceNote()+
     '<div class="g3"><div class="kpi"><div class="lab">Live learners reached</div><div class="v">'+k.learners+'</div><div class="d">Laiban simulation today</div></div><div class="kpi"><div class="lab">Live route length</div><div class="v">'+k.totalKm.toFixed(1)+'<span style="font-size:13px"> km</span></div><div class="d">shared Laiban environment</div></div><div class="kpi"><div class="lab">Live Jain&rsquo;s J</div><div class="v">'+k.J.toFixed(3)+'</div><div class="d">descriptive only</div></div></div><div style="height:12px"></div>'+
-    '<div class="card"><h3>Current Laiban simulation route</h3>'+stopRowsHTML(analysisMod)+'</div><div class="card"><h3>Deferred</h3>'+deferredHTML(analysisMod)+'</div>'
+    '<div class="card"><h3>Current Laiban simulation route</h3>'+stopRowsHTML(analysisMod)+'</div><div class="card"><h3>Deferred</h3>'+deferredHTML(analysisMod)+'</div>'+
+    evaluationGraphHTML("proposed-page-graph","Proposed Algorithm — MODQL route simulation",analysisMod,"#0f9d58")
 }
 
 function renderSOP1(){
@@ -282,5 +303,25 @@ function updateSV(id){
 }
 function sv(sym,nm,desc,val,col){return '<div class="sv"><div class="sym" style="color:'+col+'">'+sym+'</div><div class="nm"><b>'+nm+'</b>'+desc+'</div><div class="vv" style="color:'+col+'">'+val+'</div></div>'}
 
-function renderAnalysis(){computeAnalysisPlans();renderExisting();renderProposed();renderEvaluation();renderSOP1();renderSOP2();renderSOP3()}
+function renderAnalysis(){
+  computeAnalysisPlans();
+  renderExisting();
+  renderProposed();
+  renderEvaluation();
+  renderSOP1();
+  renderSOP2();
+  renderSOP3();
+  setTimeout(function(){
+    var maze=document.getElementById("sub-maze"),host=document.getElementById("existing-maze-host");
+    if(maze&&host){
+      maze.classList.remove("subview","active");
+      maze.classList.add("evaluation-maze");
+      host.appendChild(maze);
+      var note=document.createElement("div");
+      note.className="note";
+      note.textContent="This reference implementation uses a grid environment with a single goal. The controlled comparison against the proposed algorithm is performed on the shared Laiban road network under Algorithm Evaluation.";
+      host.appendChild(note);
+    }
+  },0);
+}
 document.querySelectorAll('.rn-group button[data-sub]').forEach(function(b){b.onclick=function(){document.querySelectorAll('.rn-group button[data-sub]').forEach(function(x){x.classList.remove('on')});b.classList.add('on');document.querySelectorAll('.subview').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('sub-'+b.getAttribute('data-sub'));if(target)target.classList.add('active')}})
