@@ -1693,3 +1693,15 @@ nav#tabs button{
 .eval-card .mod-head{color:#0f9d58}
 .eval-card tbody th{text-align:left;color:var(--txt);font-weight:700}
 .eval-discussion{margin-top:9px;padding:9px 11px;background:var(--panel-soft,#fbf6df);border:1px solid var(--line);border-radius:9px}
+/* Compact route comparison graphs in Research & Analysis. */
+.eg-grid{align-items:start}
+.eval-graph{display:block;width:100%;height:220px;margin:10px 0;background:var(--ink3);border:1px solid var(--line);border-radius:10px}
+.eg-edge{stroke-width:3;opacity:.8}
+.eg-open{stroke:#0f9d58}.eg-caut{stroke:#c28a2c}.eg-rest{stroke:#b5683c}.eg-cls{stroke:#a24d42;stroke-dasharray:4 4}
+.eg-node circle{fill:var(--ink);stroke:var(--cy);stroke-width:2}
+.eg-node text{fill:var(--txt);font-size:11px;font-weight:800}
+.eg-node.eg-active circle{fill:var(--go);stroke:#fff}
+.eg-legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--dim);margin-bottom:8px}
+.eg-legend i{display:inline-block;width:18px;border-top:3px solid currentColor;margin:0 4px 3px 0}
+.eg-legend .eg-open{color:#0f9d58}.eg-legend .eg-caution{color:#c28a2c}.eg-legend .eg-rest{color:#b5683c}
+.eg-status{margin-left:8px}

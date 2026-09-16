@@ -47,6 +47,7 @@ function renderStops(){
       '<div class="mt"><span class="tag">'+n.learners+' learners</span>'+
       '<span class="tag'+(n.days>=20?' hot':'')+'">last served '+n.days+'d ago</span>'+
       '<span class="tag" style="color:'+b.col+'">road condition: '+roadLabel+'</span>'+
+      '<span class="tag">'+(s.usedPolicy?(PLAN.methodology.indexOf("MODQL")>=0?'trained Q1+Q2':'trained Q'):'fallback formula')+'</span>'+
       '<span class="tag">'+serviceMin(n)+' min on site</span>'+
       '</div>'+
       '<div class="k" style="margin-top:7px">via '+s.p.seq.map(function(x){return N[x].name.replace("Sitio ","")}).join(" \u2192 ")+'</div>'+
