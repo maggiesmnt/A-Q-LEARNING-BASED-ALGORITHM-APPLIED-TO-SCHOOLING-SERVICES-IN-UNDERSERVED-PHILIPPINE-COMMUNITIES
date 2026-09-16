@@ -100,8 +100,8 @@ function renderEvaluation(){
   });
   function reasons(k){if(!k.deferredReasons.length)return '<span class="pill open">None</span>';return k.deferredReasons.map(function(d){return '<div class="k">'+N[d.id].name+' &mdash; '+d.reason+'</div>'}).join("")}
   document.getElementById("sub-evaluation").innerHTML=
-    '<div class="algo-head mod"><div class="ic">&Delta;</div><div><h2>Algorithm Evaluation Dashboard</h2><p>Same simulated weather, hazards, network, and learner-demand inputs for both planners</p></div></div>'+
-    '<div class="sop-problem"><b>Simulated environment.</b> This is a read-only comparison of the Standard Q-Learning and MODQL planners under the the same current Laiban simulation conditions.</div>'+
+    '<div class="algo-head mod"><div class="ic">&Delta;</div><div><h2>Algorithm Evaluation Dashboard</h2><p>Same simulated weather, hazards, Laiban network, and learner-demand inputs for both planners</p></div></div>'+
+    '<div class="sop-problem"><b>Simulated environment.</b> This is a read-only comparison of the Standard Q-Learning and MODQL planners under the same current Laiban simulation conditions.</div>'+
     '<div class="card eval-card"><table><thead><tr><th>Metric</th><th class="std-head">Standard Q-Learning</th><th class="mod-head">MODQL</th></tr></thead><tbody>'+
     evaluationMetric("Total travel distance",std,mod,function(k){return k.distance.toFixed(1)+" km"})+
     evaluationMetric("Total travel time",std,mod,function(k){return Math.round(k.travelMin)+" min"})+
