@@ -2,7 +2,7 @@
    Research & Analysis — Chapter 3 aligned comparison.
 
    Important distinction:
-   - Route cards below use the live prototype environment in engine.js.
+   - Route cards below use the active Laiban simulation environment in engine.js.
    - Training evidence uses the aligned Standard-Q vs MODQL experiment.
    - The Maze Demo is a controlled visualization, not Chapter 4 evidence.
    ============================================================================ */
@@ -101,7 +101,7 @@ function renderEvaluation(){
   function reasons(k){if(!k.deferredReasons.length)return '<span class="pill open">None</span>';return k.deferredReasons.map(function(d){return '<div class="k">'+N[d.id].name+' &mdash; '+d.reason+'</div>'}).join("")}
   document.getElementById("sub-evaluation").innerHTML=
     '<div class="algo-head mod"><div class="ic">&Delta;</div><div><h2>Algorithm Evaluation Dashboard</h2><p>Same simulated weather, hazards, network, and learner-demand inputs for both planners</p></div></div>'+
-    '<div class="sop-problem"><b>Simulated environment.</b> This is a read-only comparison of the Standard Q-Learning and MODQL planners under the same current prototype conditions.</div>'+
+    '<div class="sop-problem"><b>Simulated environment.</b> This is a read-only comparison of the Standard Q-Learning and MODQL planners under the the same current Laiban simulation conditions.</div>'+
     '<div class="card eval-card"><table><thead><tr><th>Metric</th><th class="std-head">Standard Q-Learning</th><th class="mod-head">MODQL</th></tr></thead><tbody>'+
     evaluationMetric("Total travel distance",std,mod,function(k){return k.distance.toFixed(1)+" km"})+
     evaluationMetric("Total travel time",std,mod,function(k){return Math.round(k.travelMin)+" min"})+
@@ -159,7 +159,13 @@ function resultCard(title,r,label){
     '</div>'+
   '</div>';
 }
-function evidenceNote(){return '<div class="note"><b>Validation status.</b> These training numbers come from the corrected 1,200-episode experiment using placeholder Laiban/Tanay data. They are useful for implementation verification, but they are <b>not final Chapter 4 evidence</b> until the official datasets are inserted and the experiment is re-run.</div>'}
+function evidenceNote(){
+  return '<div class="note"><b>Experimental data status.</b> These results were generated from the finalized Barangay Laiban simulation environment using '+
+    TRAINING_RESULT.episodes_trained+' training episodes and '+
+    TRAINING_RESULT.evaluation_scenarios+' identical held-out evaluation scenarios for both algorithms. '+
+    'The official Barangay Laiban CY 2026 OSY total is used as the learner-demand basis. '+
+    'Sitio-level demand allocation, historical service values, and operational time remain controlled simulation inputs where official sitio-level records were unavailable.</div>';
+}
 
 function renderExisting(){
   var k=planKPIs(analysisStd),r=TRAINING_RESULT.standard;
