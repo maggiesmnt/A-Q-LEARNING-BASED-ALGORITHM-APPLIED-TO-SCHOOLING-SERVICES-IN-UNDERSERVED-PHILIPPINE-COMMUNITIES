@@ -7,6 +7,10 @@ This folder contains the aligned comparison between Standard Q-Learning and MODQ
 - Standard state: S = L
 - Standard reward: 1 / Travel Cost
 - MODQL state: S = <L,D,T,H,A>
+  - D = localized per-sitio demand buckets for unserved reachable communities
+  - T = remaining 480-minute service-time budget bucket
+  - H = per-sitio Historical Visit Index from days since last service
+  - A = per-sitio route-accessibility bucket using the weakest segment on the current open route
 - MODQL reward: Coverage x Jain Fairness x (1 / Travel Cost)
 - Training episodes: 2000
 - Held-out evaluation scenarios: 200
@@ -31,7 +35,7 @@ The trainer updates `trained_policy.js` and writes aligned outputs under `traini
 
 ## Authoritative outputs
 
-The current authoritative experiment artifacts are:
+The current authoritative experiment artifacts are regenerated from policy version `laiban-methodology-state-v2`:
 
 - `training/outputs_aligned/comparison_summary.json`
 - `training/outputs_aligned/standard_policy.json`
