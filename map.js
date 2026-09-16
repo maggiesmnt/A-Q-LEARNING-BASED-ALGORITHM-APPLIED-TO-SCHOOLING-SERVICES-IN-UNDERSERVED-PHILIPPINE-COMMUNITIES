@@ -99,7 +99,9 @@ function drawNodes(){
       html:"<div style='width:26px;height:26px;border-radius:50%;background:"+col+";color:#1F2612;display:grid;place-items:center;font-size:12px;font-weight:800;border:2px solid rgba(255,255,255,.85);box-shadow:0 3px 9px rgba(0,0,0,.45)'>"+lbl+"</div>"})})
       .addTo(gNodes).bindPopup("<b>"+n.name+"</b><br><span>Community:</span> "+n.sitios+
         "<br><span>Learners to Serve:</span> <b>"+n.learners+"</b>"+
-        "<br><span>Demand Source:</span> <b>"+(n.dataSource||"Simulated QA learner allocation")+"</b>"+
+        "<br><span>Target Learners (D):</span> <b>"+n.learners+"</b>"+
+        "<br><span>Demand Source:</span> <b>"+(n.dataSource||"Simulated sitio allocation")+"</b>"+
+        "<br><span>Barangay OSY Basis:</span> 284 official OSY, CY 2026"+        
         "<br><span>Coordinate Status:</span> "+(n.coordinate_status==="dummy_for_qa"?"Dummy coordinate for QA":n.coordinate_status==="public_area_reference_unverified"?"Public area reference - unverified":"Public reference - unverified")+
         "<br><span>Last Served:</span> <b>"+n.days+" days ago</b>"+
         "<br><span>Visits This Month:</span> "+n.visits30+

@@ -48,16 +48,30 @@ var LAIBAN_SITIO_REGISTRY=[
 
 var NODES=[
  {id:"hub",name:"Laiban Proper / ALS Hub",kind:"depot",lat:14.61785,lng:121.38961,learners:0,days:0,visits30:0,sitios:"Deployment origin / Laiban Proper",coordinate_status:"public_reference_unverified"},
- {id:"maysawa",name:"Sitio Maysawa",kind:"node",lat:14.59780,lng:121.35114,learners:42,days:12,visits30:1,sitios:"Barangay Laiban",coordinate_status:"public_reference_unverified",dataSource:"Simulated QA learner allocation"},
- {id:"toyang",name:"Sitio Toyang",kind:"node",lat:14.61080,lng:121.38180,learners:35,days:18,visits30:1,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated QA learner allocation"},
- {id:"ibucao",name:"Sitio Ibucao",kind:"node",lat:14.60220,lng:121.38480,learners:51,days:24,visits30:0,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated QA learner allocation"},
- {id:"kilabuwan",name:"Sitio Kilabuwan",kind:"node",lat:14.62260,lng:121.40360,learners:39,days:27,visits30:0,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated QA learner allocation"},
- {id:"banatas",name:"Sitio Banatas",kind:"node",lat:14.60940,lng:121.39940,learners:33,days:16,visits30:1,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated QA learner allocation"},
- {id:"iwi_iw",name:"Sitio Iwi-Iw",kind:"node",lat:14.62800,lng:121.39170,learners:28,days:21,visits30:0,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated QA learner allocation"},
- {id:"old_laiban",name:"Sitio Old Laiban",kind:"node",lat:14.61880,lng:121.39700,learners:44,days:9,visits30:2,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated QA learner allocation"},
- {id:"manggahan",name:"Sitio Manggahan",kind:"node",lat:14.62679,lng:121.41616,learners:47,days:30,visits30:0,sitios:"Barangay Laiban",coordinate_status:"public_area_reference_unverified",dataSource:"Simulated QA learner allocation"},
- {id:"magata",name:"Sitio Magata",kind:"node",lat:14.63140,lng:121.42020,learners:31,days:26,visits30:0,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated QA learner allocation"}
+ {id:"maysawa",name:"Sitio Maysawa",kind:"node",lat:14.59780,lng:121.35114,learners:28,days:12,visits30:1,sitios:"Barangay Laiban",coordinate_status:"public_reference_unverified",dataSource:"Simulated sitio allocation from official Barangay Laiban CY 2026 OSY total"},
+ {id:"toyang",name:"Sitio Toyang",kind:"node",lat:14.61080,lng:121.38180,learners:34,days:18,visits30:1,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated sitio allocation from official Barangay Laiban CY 2026 OSY total"},
+ {id:"ibucao",name:"Sitio Ibucao",kind:"node",lat:14.60220,lng:121.38480,learners:38,days:24,visits30:0,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated sitio allocation from official Barangay Laiban CY 2026 OSY total"},
+ {id:"kilabuwan",name:"Sitio Kilabuwan",kind:"node",lat:14.62260,lng:121.40360,learners:29,days:27,visits30:0,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated sitio allocation from official Barangay Laiban CY 2026 OSY total"},
+ {id:"banatas",name:"Sitio Banatas",kind:"node",lat:14.60940,lng:121.39940,learners:27,days:16,visits30:1,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated sitio allocation from official Barangay Laiban CY 2026 OSY total"},
+ {id:"iwi_iw",name:"Sitio Iwi-Iw",kind:"node",lat:14.62800,lng:121.39170,learners:31,days:21,visits30:0,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated sitio allocation from official Barangay Laiban CY 2026 OSY total"},
+ {id:"old_laiban",name:"Sitio Old Laiban",kind:"node",lat:14.61880,lng:121.39700,learners:30,days:9,visits30:2,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated sitio allocation from official Barangay Laiban CY 2026 OSY total"},
+ {id:"manggahan",name:"Sitio Manggahan",kind:"node",lat:14.62679,lng:121.41616,learners:35,days:30,visits30:0,sitios:"Barangay Laiban",coordinate_status:"public_area_reference_unverified",dataSource:"Simulated sitio allocation from official Barangay Laiban CY 2026 OSY total"},
+ {id:"magata",name:"Sitio Magata",kind:"node",lat:14.63140,lng:121.42020,learners:32,days:26,visits30:0,sitios:"Barangay Laiban",coordinate_status:"dummy_for_qa",dataSource:"Simulated sitio allocation from official Barangay Laiban CY 2026 OSY total"}
 ];
+var DEMAND_DATA_META={
+ source:"Barangay Laiban Sex Disaggregated Data CY 2026",
+ official_barangay_osy_total:284,
+ allocation_level:"sitio",
+ allocation_status:"simulated_from_official_barangay_total",
+ note:"The SK-provided record contains a Barangay Laiban-wide OSY total only and has no sitio-level breakdown. Sitio demand values are controlled simulated allocations whose sum equals the official total of 284 OSY."
+};
+var HISTORY_DATA_META={
+ source:"Controlled simulation",
+ variable:"H",
+ status:"simulated",
+ period:"previous 30 days",
+ note:"No historical mobile-schooling deployment record was available. Initial visit history is simulated to create unequal service exposure among the nine sitios for fairness testing. The same initial history is provided to Standard Q-Learning and MODQL."
+};
 var N={};NODES.forEach(function(n){N[n.id]=n});
 var SERVICE_IDS=NODES.filter(function(n){return n.kind==="node"}).map(function(n){return n.id});
 
@@ -148,6 +162,14 @@ var EDGES=[
 var WX={mm:38};
 var CLOCK={h:8,m:48};
 var SHIFT_MIN=480;
+var TIME_DATA_META={
+ source:"Controlled simulation",
+ variable:"T",
+ status:"simulated operational constraint",
+ shift_minutes:480,
+ shift_hours:8,
+ note:"Each simulated deployment day begins with an 8-hour service window. Travel and on-site service consume the remaining time. The same time budget is provided to both algorithms."
+};
 var TRAINED_TIME_BUCKETS=6;
 
 var REPORTS=[
@@ -217,7 +239,10 @@ function accA(e){
 function band(A){return A>=.75?{k:"open",lab:"OPEN",col:"#7B753B"}:A>=.45?{k:"caut",lab:"CAUTION",col:"#A77A2D"}:A>=.20?{k:"rest",lab:"RESTRICTED",col:"#9A633B"}:{k:"cls",lab:"CLOSED",col:"#A24D42"}}
 function speed(s){return s==="concrete"?38:s==="gravel"?24:s==="ford"?12:16}
 function edgeMin(e){var A=accA(e);return (e.km/speed(e.surf))*60/Math.max(A,.08)}
-function serviceMin(n){return 25+Math.round(n.learners/3)}
+var SERVICE_MIN_PER_STOP=60;
+function serviceMin(n){
+ return SERVICE_MIN_PER_STOP;
+}
 function jain(v){var s=0,q=0;v.forEach(function(x){s+=x;q+=x*x});return q===0?1:(s*s)/(v.length*q)}
 function hhmm(h,m){m=Math.round(m);h+=Math.floor(m/60);m%=60;return (h%24<10?"0":"")+(h%24)+":"+(m<10?"0":"")+m}
 
