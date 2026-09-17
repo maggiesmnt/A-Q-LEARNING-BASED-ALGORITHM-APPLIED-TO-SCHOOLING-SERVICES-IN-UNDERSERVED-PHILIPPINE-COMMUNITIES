@@ -467,6 +467,13 @@ body[data-theme="light"] .mapctl button{background:rgba(251,252,248,.94)}
 :root{
   --chart-grid:var(--line);
   --chart-label:var(--dim2);
+  --maze-cell:#F7F0E2;
+  --maze-wall:#B9AB6B;
+  --maze-grid:#C9B99B;
+  --maze-trail:rgba(94,104,40,.28);
+  --maze-goal:#5E6828;
+  --maze-agent:#8A633F;
+  --maze-panel:var(--ink2);
 }
 body[data-theme="light"]{
   --ink:#EFE7D8;
@@ -486,6 +493,13 @@ body[data-theme="light"]{
   --sh:0 12px 28px rgba(69,59,38,.18);
   --chart-grid:#D3C6A8;
   --chart-label:#5B603A;
+  --maze-cell:#F7F0E2;
+  --maze-wall:#B9AB6B;
+  --maze-grid:#C9B99B;
+  --maze-trail:rgba(94,104,40,.30);
+  --maze-goal:#5E6828;
+  --maze-agent:#8A633F;
+  --maze-panel:#F8F1E4;
 }
 body[data-theme="dark"]{
   --ink:#131612;
@@ -505,6 +519,13 @@ body[data-theme="dark"]{
   --sh:0 12px 30px rgba(0,0,0,.38);
   --chart-grid:#3F482B;
   --chart-label:#C8BC99;
+  --maze-cell:#222819;
+  --maze-wall:#7B753B;
+  --maze-grid:#4A5130;
+  --maze-trail:rgba(220,201,175,.24);
+  --maze-goal:#B9AB6B;
+  --maze-agent:#DCC9AF;
+  --maze-panel:#202718;
 }
 body[data-theme] header#top,
 body[data-theme] nav#tabs{background:var(--ink2);border-color:var(--line)}

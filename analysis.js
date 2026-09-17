@@ -4,6 +4,7 @@
    Important distinction:
    - Route cards below use the active Laiban simulation environment in engine.js.
    - Training evidence uses the aligned Standard-Q vs MODQL experiment.
+   - The Maze Demo is a controlled visualization, not Chapter 4 evidence.
    ============================================================================ */
 
 var analysisStd=null, analysisMod=null;
