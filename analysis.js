@@ -8,6 +8,7 @@
    ============================================================================ */
 
 var analysisStd=null, analysisMod=null;
+var EVALUATION_DEMO_RAIN_MM=12;
 var TRAINING_RESULT=(
   typeof TRAINED_POLICY!=="undefined" &&
   TRAINED_POLICY.evaluation_summary
@@ -144,7 +145,11 @@ function wireEvaluationGraphs(){
   });
 }
 function renderEvaluation(){
-  var std=evaluationKPIs(analysisStd),mod=evaluationKPIs(analysisMod),multi=multiDayEvaluation(),neverStandard=[],neverModql=[];
+  var liveSnapshot=evaluationSnapshot();
+  WX.mm=EVALUATION_DEMO_RAIN_MM;
+  var evaluationStd=planRouteStandard(),evaluationMod=planRoute(),multi=multiDayEvaluation();
+  restoreEvaluationSnapshot(liveSnapshot);
+  var std=evaluationKPIs(evaluationStd),mod=evaluationKPIs(evaluationMod),neverStandard=[],neverModql=[];
   NODES.filter(function(n){return n.kind==="node"}).forEach(function(n){
     if(!multi.standard.servedBy[n.id])neverStandard.push(n.name);
     if(!multi.modql.servedBy[n.id])neverModql.push(n.name);
@@ -152,8 +157,7 @@ function renderEvaluation(){
   function reasons(k){if(!k.deferredReasons.length)return '<span class="pill open">None</span>';return k.deferredReasons.map(function(d){return '<div class="k">'+N[d.id].name+' &mdash; '+d.reason+'</div>'}).join("")}
   document.getElementById("sub-evaluation").innerHTML=
     '<div class="algo-head mod"><div class="ic">&Delta;</div><div><h2>Algorithm Evaluation Dashboard</h2><p>Same simulated weather, hazards, Laiban network, and learner-demand inputs for both planners</p></div></div>'+
-    '<div class="sop-problem"><b>Simulated environment.</b> This is a read-only comparison of the Standard Q-Learning and MODQL planners under the same current Laiban simulation conditions.</div>'+
-    '<div class="card"><h3>Algorithm Evaluation — route behavior</h3><div class="k">Both node graphs use the same accessibility-colored road network. Standard uses <span class="mono">planRouteStandard()</span>; MODQL uses <span class="mono">planRoute()</span>.</div><div class="split2 eg-grid">'+evaluationGraphHTML("evaluation-standard","Existing Algorithm — Standard Q-Learning",analysisStd,"#5b4fc7")+evaluationGraphHTML("evaluation-modql","Proposed Algorithm — MODQL",analysisMod,"#0f9d58")+'</div></div>'+
+    '<div class="sop-problem"><b>Simulated environment.</b> This is a read-only comparison of the Standard Q-Learning and MODQL planners under the same 12 mm demonstration rainfall scenario. The Operational view retains its live weather state.</div>'+
     '<div class="card eval-card"><table><thead><tr><th>Metric</th><th class="std-head">Standard Q-Learning</th><th class="mod-head">MODQL</th></tr></thead><tbody>'+
     evaluationMetric("Total travel distance",std,mod,function(k){return k.distance.toFixed(1)+" km"})+
     evaluationMetric("Total travel time",std,mod,function(k){return Math.round(k.travelMin)+" min"})+
@@ -172,8 +176,8 @@ function renderEvaluation(){
     '<div class="lg"><span><i style="background:#0f9d58"></i> MODQL reward</span><span><i style="background:#5b4fc7"></i> Standard Q-Learning reward</span></div></div>'+
     '<div class="card"><h3>Seven-day simulated comparison</h3><div class="k" style="margin-bottom:8px">Both algorithms replay the same seven weather/hazard days. This evaluation does not advance the Operational view.</div>'+
     '<h4>Jain&rsquo;s Fairness Index by day</h4>'+
-    svgLine([{d:multi.standard.fairness,c:"#5b4fc7"},{d:multi.modql.fairness,c:"#0f9d58"}],{xs:[1,2,3,4,5,6,7],dp:3,h:190,min:0,max:1})+
-    '<div class="lg"><span><i style="background:#0f9d58"></i> MODQL</span><span><i style="background:#5b4fc7"></i> Standard Q-Learning</span></div>'+
+    svgLine([{d:multi.modql.fairness,c:"#0f9d58"},{d:multi.standard.fairness,c:"#5b4fc7",dash:true}],{xs:[1,2,3,4,5,6,7],dp:3,h:190,min:0,max:1})+
+    '<div class="lg"><span><i style="background:#0f9d58"></i> MODQL (solid)</span><span><i style="background:#5b4fc7"></i> Standard Q-Learning (dashed)</span></div>'+
     '<h4 style="margin-top:16px">Cumulative communities served</h4>'+
     '<div class="k eval-discussion">Standard: '+multi.standard.cumulative.join(", ")+' &middot; MODQL: '+multi.modql.cumulative.join(", ")+'</div>'+
     svgLine([{d:multi.modql.cumulative,c:"#0f9d58"},{d:multi.standard.cumulative,c:"#5b4fc7",dash:true}],{xs:[1,2,3,4,5,6,7],dp:0,h:190,min:0})+
