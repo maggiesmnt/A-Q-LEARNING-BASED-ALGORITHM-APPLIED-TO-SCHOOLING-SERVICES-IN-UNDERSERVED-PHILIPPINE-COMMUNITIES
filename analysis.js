@@ -101,6 +101,39 @@ function evaluationGraphHTML(id,title,plan,color){
   var nodes=NODES.map(function(n){var p=xy(n),idx=-1;plan.stops.forEach(function(s,i){if(s.id===n.id)idx=i});return '<g class="eg-node" data-step="'+(idx+1)+'"><circle cx="'+p.x+'" cy="'+p.y+'" r="'+(n.kind==="depot"?8:6)+'"/><text x="'+(p.x+8)+'" y="'+(p.y+3)+'">'+(idx>=0?idx+1:"")+'</text><title>'+n.name+'</title></g>'}).join("");
   return '<div class="card eg-card"><h3>'+title+'</h3><div class="k">Same live scenario; numbered circles show stop order.</div><svg id="'+id+'" class="eval-graph" viewBox="0 0 300 220" role="img" aria-label="'+title+'">'+lines+nodes+'</svg><div class="eg-legend"><span><i class="eg-open"></i>Open</span><span><i class="eg-caution"></i>Caution</span><span><i class="eg-rest"></i>Restricted</span></div><div class="k">Route: '+(route||"No reachable stops")+'</div><button class="btn g eg-step" data-graph="'+id+'">Play route step-through</button><span class="k eg-status" id="'+id+'-status">Step 0 / '+plan.stops.length+'</span></div>';
 }
+var PROPOSED_GRAPH_SCENARIOS=[
+  {title:"Simulation 1 — Balanced coverage",note:"MODQL compares coverage, fairness, travel cost, and accessibility before selecting the next node.",nodes:[
+    {id:"hub",label:"Hub",x:80,y:180,hub:true},{id:"near",label:"Near",x:300,y:78},{id:"ridge",label:"Ridge",x:520,y:270},{id:"far",label:"Far",x:710,y:100}
+  ],edges:[{a:"hub",b:"near",min:14,kind:"open"},{a:"hub",b:"ridge",min:22,kind:"caution"},{a:"hub",b:"far",min:30,kind:"open"},{a:"near",b:"ridge",min:10,kind:"open"},{a:"ridge",b:"far",min:12,kind:"open"}],route:["hub","near","ridge","far","hub"],returnMin:30},
+  {title:"Simulation 2 — Fairness over nearest stop",note:"A less-recently served node can be selected before a closer node when fairness and demand make it the better combined action.",nodes:[
+    {id:"hub",label:"Hub",x:80,y:180,hub:true},{id:"near",label:"Near",x:280,y:80},{id:"priority",label:"Priority",x:510,y:260},{id:"far",label:"Far",x:720,y:100}
+  ],edges:[{a:"hub",b:"near",min:12,kind:"open"},{a:"hub",b:"priority",min:20,kind:"open"},{a:"hub",b:"far",min:28,kind:"caution"},{a:"near",b:"priority",min:11,kind:"open"},{a:"priority",b:"far",min:13,kind:"open"}],route:["hub","priority","near","far","hub"],returnMin:28},
+  {title:"Simulation 3 — Accessibility-aware detour",note:"The proposed state includes accessibility, so a hazardous direct approach can be avoided in favor of a safer connected route.",nodes:[
+    {id:"hub",label:"Hub",x:80,y:180,hub:true},{id:"hazard",label:"Hazard Zone",x:300,y:70},{id:"safe",label:"Safe Route",x:500,y:270},{id:"goal",label:"Goal",x:720,y:100}
+  ],edges:[{a:"hub",b:"hazard",min:14,kind:"hazard"},{a:"hub",b:"safe",min:24,kind:"open"},{a:"safe",b:"goal",min:12,kind:"open"},{a:"hazard",b:"goal",min:10,kind:"closed"}],route:["hub","safe","goal","hub"],returnMin:36}
+];
+function proposedGraphHTML(){
+  return '<div class="card eg-card"><h3>Proposed Algorithm — MODQL simulations</h3><div class="k">Three separate abstract examples show how MODQL evaluates the full state and multiple objectives. These are illustrative nodes, not Laiban locations.</div><div id="proposed-sim-title" class="k" style="font-weight:800;margin-top:8px"></div><svg id="proposed-sim-svg" class="eval-graph compact-graph" viewBox="0 0 780 360" role="img" aria-label="Proposed Algorithm abstract simulation"></svg><div class="eg-legend"><span><i class="eg-selected"></i>Selected route</span><span><i class="eg-hazard"></i>Hazard / delay</span><span><i class="eg-open"></i>Open road</span><span><i class="eg-closed"></i>Closed / deferred</span></div><div id="proposed-sim-note" class="k"></div><div id="proposed-sim-status" class="k">Ready at Hub</div><div class="eg-controls"><button class="btn g" id="proposed-sim-play">Start Simulation</button><button class="btn k" id="proposed-sim-reset">Reset Simulation</button><button class="btn p" id="proposed-sim-next">Next Simulation</button></div></div>';
+}
+function wireProposedGraph(){
+  var index=0,step=0,timer=null;
+  function render(){
+    var s=PROPOSED_GRAPH_SCENARIOS[index],by={};s.nodes.forEach(function(n){by[n.id]=n});
+    var lines=s.edges.map(function(e){var a=by[e.a],b=by[e.b],cls=e.kind==="hazard"?"eg-hazard":e.kind==="closed"?"eg-closed":"eg-base-edge";return '<line class="'+cls+'" x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'"/><text class="eg-time" x="'+((a.x+b.x)/2)+'" y="'+((a.y+b.y)/2-7)+'">'+e.min+' min</text>'}).join("");
+    var routeLines=[];for(var i=0;i<s.route.length-1;i++){var a=by[s.route[i]],b=by[s.route[i+1]],e=s.edges.filter(function(x){return (x.a===a.id&&x.b===b.id)||(x.a===b.id&&x.b===a.id)})[0],min=e?e.min:s.returnMin;routeLines.push('<line class="eg-route" x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'"/><text class="eg-time" x="'+((a.x+b.x)/2)+'" y="'+((a.y+b.y)/2+13)+'">'+min+' min</text>')}
+    var nodes=s.nodes.map(function(n){var visit=s.route.indexOf(n.id);return '<g class="eg-node proposed-sim-node" data-visit="'+(visit>0?visit:0)+'"><circle cx="'+n.x+'" cy="'+n.y+'" r="'+(n.hub?11:9)+'"/><text x="'+(n.x-35)+'" y="'+(n.y+32)+'">'+(visit>0?"Stop "+visit+" — ":"")+n.label+'</text></g>'}).join("");
+    document.getElementById("proposed-sim-title").textContent=s.title+" ("+(index+1)+" of "+PROPOSED_GRAPH_SCENARIOS.length+")";
+    document.getElementById("proposed-sim-note").textContent=s.note;
+    document.getElementById("proposed-sim-svg").innerHTML=lines+routeLines.join("")+nodes;
+    document.getElementById("proposed-sim-status").textContent="Ready at Hub — MODQL multi-objective selection";
+    step=0;
+  }
+  function advance(){var nodes=document.querySelectorAll("#proposed-sim-svg .proposed-sim-node"),max=nodes.length-1;step++;if(step>max){clearInterval(timer);timer=null;document.getElementById("proposed-sim-play").textContent="Start Simulation";step=0}nodes.forEach(function(n){var v=Number(n.getAttribute("data-visit"));n.classList.toggle("eg-active",v>0&&v<=step)});document.getElementById("proposed-sim-status").textContent=step===0?"Returned to Hub — simulation complete":"MODQL visit "+Math.min(step,max)+" of "+max}
+  render();
+  document.getElementById("proposed-sim-play").onclick=function(){if(timer){clearInterval(timer);timer=null;this.textContent="Start Simulation"}else{advance();timer=setInterval(advance,900);this.textContent="Pause Simulation"}};
+  document.getElementById("proposed-sim-reset").onclick=function(){if(timer)clearInterval(timer);timer=null;document.getElementById("proposed-sim-play").textContent="Start Simulation";render()};
+  document.getElementById("proposed-sim-next").onclick=function(){if(timer)clearInterval(timer);timer=null;document.getElementById("proposed-sim-play").textContent="Start Simulation";index=(index+1)%PROPOSED_GRAPH_SCENARIOS.length;render()};
+}
 function wireEvaluationGraphs(){
   document.querySelectorAll(".eg-step").forEach(function(btn){
     var svg=document.getElementById(btn.getAttribute("data-graph")),status=document.getElementById(btn.getAttribute("data-graph")+"-status"),step=0,timer=null,nodes=svg.querySelectorAll(".eg-node");
@@ -206,7 +239,7 @@ function renderProposed(){
     resultCard('Aligned training result &mdash; proposed',r,'MODQL')+evidenceNote()+
     '<div class="g3"><div class="kpi"><div class="lab">Live learners reached</div><div class="v">'+k.learners+'</div><div class="d">Laiban simulation today</div></div><div class="kpi"><div class="lab">Live route length</div><div class="v">'+k.totalKm.toFixed(1)+'<span style="font-size:13px"> km</span></div><div class="d">shared Laiban environment</div></div><div class="kpi"><div class="lab">Live Jain&rsquo;s J</div><div class="v">'+k.J.toFixed(3)+'</div><div class="d">descriptive only</div></div></div><div style="height:12px"></div>'+
     '<div class="card"><h3>Current Laiban simulation route</h3>'+stopRowsHTML(analysisMod)+'</div><div class="card"><h3>Deferred</h3>'+deferredHTML(analysisMod)+'</div>'+
-    evaluationGraphHTML("proposed-page-graph","Proposed Algorithm — MODQL route simulation",analysisMod,"#0f9d58")
+    proposedGraphHTML()
 }
 
 function renderSOP1(){
@@ -323,6 +356,7 @@ function renderAnalysis(){
       note.textContent="This reference implementation uses a grid environment with a single goal. The controlled comparison against the proposed algorithm is performed on the shared Laiban road network under Algorithm Evaluation.";
       host.appendChild(note);
     }
+    wireProposedGraph();
   },0);
 }
 document.querySelectorAll('.rn-group button[data-sub]').forEach(function(b){b.onclick=function(){document.querySelectorAll('.rn-group button[data-sub]').forEach(function(x){x.classList.remove('on')});b.classList.add('on');document.querySelectorAll('.subview').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('sub-'+b.getAttribute('data-sub'));if(target)target.classList.add('active')}})
