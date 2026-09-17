@@ -310,7 +310,14 @@ function planRoute(startId,servedIds,remainingMinutes,elapsedMinutes){
  servedIds=Array.isArray(servedIds)?servedIds.slice():[];
  var servedSet={};servedIds.forEach(function(id){servedSet[id]=true});
  var pending=SERVICE_IDS.filter(function(id){return !servedSet[id]});
- var visits={};SERVICE_IDS.forEach(function(id){visits[id]=N[id].visits30});
+ var visits={},historyDays={};
+ SERVICE_IDS.forEach(function(id){
+  visits[id]=N[id].visits30;
+  historyDays[id]=N[id].days;
+ });
+ servedIds.forEach(function(id){
+  if(historyDays[id]!==undefined)historyDays[id]=0;
+ });
  var maxL=Math.max.apply(null,SERVICE_IDS.map(function(id){return N[id].learners}));
  var cur=startId,left=(remainingMinutes==null?SHIFT_MIN:Math.max(0,remainingMinutes));
  var elapsed=Math.max(0,elapsedMinutes||0),stops=[],deferred=[],hh=CLOCK.h,mm=CLOCK.m+elapsed,mask=0;
