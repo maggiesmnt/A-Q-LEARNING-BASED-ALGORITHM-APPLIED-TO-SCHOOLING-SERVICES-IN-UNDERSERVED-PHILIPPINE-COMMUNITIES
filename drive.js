@@ -196,6 +196,7 @@ document.getElementById("nextDayBtn").onclick=function(){
   DRIVE_USED_MIN=0;
   PROGRESS=0;
   NODES.forEach(function(n){if(n.kind==="node") n.days+=1;});
+  syncHistoryDays();
   REPORTS.forEach(function(r){r.ago+=24;});
 
   /* Deterministic weather sequence makes repeated thesis demonstrations
@@ -219,11 +220,13 @@ document.getElementById("resetDayBtn").onclick=function(){
   COMPLETED_STOPS=[];
   DRIVE_USED_MIN=0;
   PROGRESS=0;
+  syncHistoryDays();
   refresh({t:"Day 1 restored",b:"The route demo is back to Day 1 with no completed stops and the original road, weather, and service records."});
 };
 
 /* replan + repaint everything (operational views + analysis tabs) */
 function refresh(msg){
+  syncHistoryDays();
   var before=PLAN.stops.slice(PROGRESS).map(function(s){return s.id}).join(",");
   var beforeDef=PLAN.deferred.length;
   var servedIds=COMPLETED_STOPS.map(function(s){return s.id});

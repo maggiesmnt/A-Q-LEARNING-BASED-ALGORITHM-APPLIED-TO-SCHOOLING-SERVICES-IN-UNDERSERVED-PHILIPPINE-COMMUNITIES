@@ -75,6 +75,9 @@ var HISTORY_DATA_META={
 };
 var N={};NODES.forEach(function(n){N[n.id]=n});
 var SERVICE_IDS=NODES.filter(function(n){return n.kind==="node"}).map(function(n){return n.id});
+var historyDays={};
+function syncHistoryDays(){NODES.forEach(function(n){if(n.kind==="node") historyDays[n.id]=n.days;});}
+syncHistoryDays();
 
 /* Only use a bundled policy when its node index matches the active Laiban
    graph. This protects the runtime from replaying an incompatible policy. */
