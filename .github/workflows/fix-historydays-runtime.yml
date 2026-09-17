@@ -1,0 +1,43 @@
+name: Fix historyDays runtime
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fix-historydays-runtime.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch engine.js
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('engine.js')
+          s = p.read_text(encoding='utf-8')
+          old = ' var visits={};SERVICE_IDS.forEach(function(id){visits[id]=N[id].visits30});\n var maxL=Math.max.apply(null,SERVICE_IDS.map(function(id){return N[id].learners}));'
+          new = ''' var visits={},historyDays={};
+ SERVICE_IDS.forEach(function(id){
+  visits[id]=N[id].visits30;
+  historyDays[id]=N[id].days;
+ });
+ servedIds.forEach(function(id){
+  if(historyDays[id]!==undefined)historyDays[id]=0;
+ });
+ var maxL=Math.max.apply(null,SERVICE_IDS.map(function(id){return N[id].learners}));'''
+          if old not in s:
+              raise SystemExit('Expected engine.js block not found; aborting without changes.')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add engine.js
+          git commit -m "Initialize MODQL runtime historyDays state"
+          git push
