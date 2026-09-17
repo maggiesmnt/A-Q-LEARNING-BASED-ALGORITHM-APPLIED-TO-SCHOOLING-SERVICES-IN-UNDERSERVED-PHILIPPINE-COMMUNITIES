@@ -15,25 +15,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Patch engine.js
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('engine.js')
-          s = p.read_text(encoding='utf-8')
-          old = ' var visits={};SERVICE_IDS.forEach(function(id){visits[id]=N[id].visits30});\n var maxL=Math.max.apply(null,SERVICE_IDS.map(function(id){return N[id].learners}));'
-          new = ''' var visits={},historyDays={};
- SERVICE_IDS.forEach(function(id){
-  visits[id]=N[id].visits30;
-  historyDays[id]=N[id].days;
- });
- servedIds.forEach(function(id){
-  if(historyDays[id]!==undefined)historyDays[id]=0;
- });
- var maxL=Math.max.apply(null,SERVICE_IDS.map(function(id){return N[id].learners}));'''
-          if old not in s:
-              raise SystemExit('Expected engine.js block not found; aborting without changes.')
-          p.write_text(s.replace(old, new, 1), encoding='utf-8')
-          PY
+        run: >-
+          python -c "from pathlib import Path; p=Path('engine.js'); s=p.read_text(encoding='utf-8'); old=' var visits={};SERVICE_IDS.forEach(function(id){visits[id]=N[id].visits30});\\n var maxL=Math.max.apply(null,SERVICE_IDS.map(function(id){return N[id].learners}));'; new=' var visits={},historyDays={};\\n SERVICE_IDS.forEach(function(id){\\n  visits[id]=N[id].visits30;\\n  historyDays[id]=N[id].days;\\n });\\n servedIds.forEach(function(id){\\n  if(historyDays[id]!==undefined)historyDays[id]=0;\\n });\\n var maxL=Math.max.apply(null,SERVICE_IDS.map(function(id){return N[id].learners}));'; assert old in s, 'Expected engine.js block not found'; p.write_text(s.replace(old,new,1),encoding='utf-8')"
       - name: Commit fix
         run: |
           git config user.name "github-actions[bot]"
