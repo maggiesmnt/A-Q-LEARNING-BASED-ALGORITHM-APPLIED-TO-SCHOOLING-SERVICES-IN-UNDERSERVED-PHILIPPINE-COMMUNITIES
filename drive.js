@@ -49,6 +49,12 @@ function formatTimeRemaining(mins){
   return parts.join(" ")||"0 minutes";
 }
 
+function routeInstructionLabel(node){
+  return node.name
+    .replace(" / ALS Hub","")
+    .replace("Sitio ","");
+}
+
 /* Keep the new controls inside Driver's Navigation so no other tab/layout
    needs to be modified. */
 function ensureDriveDayControls(){
@@ -119,7 +125,7 @@ function renderDrive(){
       '<span class="tag eq">'+s.p.km.toFixed(1)+' km</span>';
     document.getElementById("etaMin").textContent=Math.round(s.p.min);
     document.getElementById("etaClock").textContent="min - arrive "+formatOperationalTime(s.arrive);
-    document.getElementById("turnText").textContent="Continue on "+N[leg.a].name.replace("Sitio ","")+"\u2013"+N[leg.b].name.replace("Sitio ","")+" road";
+    document.getElementById("turnText").textContent="Continue on "+routeInstructionLabel(N[leg.a])+" to "+routeInstructionLabel(N[leg.b])+" road";
     document.getElementById("turnSub").innerHTML=leg.km.toFixed(1)+" km &middot; "+SURF[leg.surf].lab+
       ' &middot; <b style="color:'+b.col+'">Road condition: '+b.lab.charAt(0)+b.lab.slice(1).toLowerCase()+"</b>";
     cb.textContent="Mark \u201c"+n.name+"\u201d as completed";

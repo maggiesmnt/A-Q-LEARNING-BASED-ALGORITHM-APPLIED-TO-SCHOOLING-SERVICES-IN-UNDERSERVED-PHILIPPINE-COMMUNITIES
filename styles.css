@@ -723,14 +723,14 @@ body[data-theme] .leaflet-popup-content b{color:var(--txt)}
   transform:scale(1) rotate(0deg);
 }
 .theme-icon-btn.is-light{
-  background:#DCC9AF;
+  background:rgba(240,232,215,.14);
   border-color:#DCC9AF;
-  color:#333D1C;
+  color:#F0E8D7;
 }
 .theme-icon-btn.is-dark{
-  background:#1F2612;
+  background:rgba(220,201,175,.10);
   border-color:#B9AB6B;
-  color:#DCC9AF;
+  color:#EFE6D3;
 }
 
 /* OPERATIONAL UI REVISION */
@@ -1223,6 +1223,15 @@ nav#tabs button{
 .research-nav{
   flex:0 0 248px;
 }
+.research-nav > .rn-group{
+  flex:1;
+  min-height:0;
+}
+.research-nav .theme-dock{
+  margin-top:auto;
+  padding-top:18px;
+  padding-bottom:2px;
+}
 .research-content{
   padding:clamp(18px,3vw,34px);
   padding-bottom:calc(48px + env(safe-area-inset-bottom));
@@ -1331,6 +1340,9 @@ nav#tabs button{
   }
   .theme-dock{
     width:auto;
+    margin-top:0;
+    padding-top:6px;
+    padding-bottom:0;
   }
   .theme-icon-btn{
     min-width:44px;
@@ -1714,6 +1726,98 @@ nav#tabs button{
 .eval-card .mod-head{color:#0f9d58}
 .eval-card tbody th{text-align:left;color:var(--txt);font-weight:700}
 .eval-discussion{margin-top:9px;padding:9px 11px;background:var(--panel-soft,#fbf6df);border:1px solid var(--line);border-radius:9px}
+
+.existing-mini-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+  align-items:stretch;
+}
+.existing-mini-grid .kpi{
+  display:flex;
+  min-height:112px;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+}
+.qflow{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:24px 28px;
+  margin-top:10px;
+}
+.qstep{
+  position:relative;
+  min-height:72px;
+  padding:12px 14px;
+  border-radius:8px;
+  border:1px solid var(--line);
+  background:var(--ink3);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  font-size:12px;
+  font-weight:700;
+  color:var(--txt);
+}
+.qstep b{
+  position:absolute;
+  top:7px;
+  left:8px;
+  font-size:10px;
+  color:var(--dim2);
+}
+.qstep:not(.end-row)::after{
+  content:"\2192";
+  position:absolute;
+  right:-21px;
+  top:50%;
+  transform:translateY(-50%);
+  color:var(--go);
+  font-size:18px;
+  font-weight:800;
+}
+.qstep.turn::before{
+  content:"\21B5  continue to step 5";
+  position:absolute;
+  right:0;
+  bottom:-24px;
+  color:var(--go);
+  font-size:11px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.symbol-guide td:first-child{
+  width:132px;
+  font-weight:800;
+  color:var(--txt);
+}
+@media (max-width:760px){
+  .existing-mini-grid,
+  .qflow{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .qstep:nth-child(2)::after,
+  .qstep:nth-child(6)::after{
+    content:"";
+  }
+  .qstep.turn::before{
+    right:auto;
+    left:0;
+  }
+}
+@media (max-width:430px){
+  .existing-mini-grid,
+  .qflow{
+    grid-template-columns:1fr;
+  }
+  .qstep::after,
+  .qstep.turn::before{
+    display:none;
+  }
+}
 /* Compact route comparison graphs in Research & Analysis. */
 .eg-grid{align-items:start}
 .eval-graph{display:block;width:100%;height:220px;margin:10px 0;background:var(--ink3);border:1px solid var(--line);border-radius:10px}

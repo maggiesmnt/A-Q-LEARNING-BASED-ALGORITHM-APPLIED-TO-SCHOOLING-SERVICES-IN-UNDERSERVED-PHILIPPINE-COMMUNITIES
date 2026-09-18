@@ -37,6 +37,13 @@ var TRAINING_RESULT=(
       data_note:
         "Training results are unavailable. Run training/train_q_learning.py."
     };
+var TRAINING_LOG_STATS={
+  rows:2000,
+  mean_q1_q2_spread_avg:0.228775796740194,
+  mean_q1_q2_spread_min:0.000459586305545656,
+  mean_q1_q2_spread_max:2.39512773500819,
+  mean_q1_q2_spread_last:0.332895747132863
+};
 
 function computeAnalysisPlans(){analysisStd=planRouteStandard();analysisMod=planRoute()}
 function stopRowsHTML(plan){
@@ -182,6 +189,44 @@ function renderEvaluation(){
     '<div class="k eval-discussion">Standard: '+multi.standard.cumulative.join(", ")+' &middot; MODQL: '+multi.modql.cumulative.join(", ")+'</div>'+
     svgLine([{d:multi.modql.cumulative,c:"#0f9d58"},{d:multi.standard.cumulative,c:"#5b4fc7",dash:true}],{xs:[1,2,3,4,5,6,7],dp:0,h:190,min:0})+
     '<div class="split2" style="margin-top:12px"><div class="splitcol std"><h4>Never served by Standard</h4><div class="k">'+(neverStandard.length?neverStandard.join("<br>"):"None")+'</div></div><div class="splitcol mod"><h4>Never served by MODQL</h4><div class="k">'+(neverModql.length?neverModql.join("<br>"):"None")+'</div></div></div></div>';
+/*===comment lang since same function nagmodify
+  var std=evaluationKPIs(analysisStd),mod=evaluationKPIs(analysisMod),rStd=TRAINING_RESULT.standard,rMod=TRAINING_RESULT.modql;
+  function num(v,d){return Number(v||0).toFixed(d)}
+  function resultMetric(label,key,format){return '<tr><th>'+label+'</th><td>'+format(rStd[key])+'</td><td>'+format(rMod[key])+'</td></tr>'}
+  function kpi(label,stdVal,modVal,detail){return '<div class="kpi"><div class="lab">'+label+'</div><div class="v">'+stdVal+'</div><div class="d">Standard</div></div><div class="kpi"><div class="lab">'+label+'</div><div class="v">'+modVal+'</div><div class="d">MODQL</div></div><div class="kpi"><div class="lab">Evidence</div><div class="v" style="font-size:18px;line-height:1.2">'+detail+'</div><div class="d">'+TRAINING_RESULT.evaluation_scenarios+' held-out scenarios</div></div>'}
+  var sitioRows=NODES.filter(function(n){return n.kind==="node"}).map(function(n){
+    var p=path("hub",n.id),worst=1,risk="no open approach";
+    if(p){p.legs.forEach(function(e){worst=Math.min(worst,accA(e));risk=accessibilityReason(e)||risk})}
+    return '<tr><td>'+n.name+'</td><td>'+n.learners+' OSY</td><td>'+n.days+' days</td><td>'+(p?worst.toFixed(2):'n/a')+'</td><td>'+risk+'</td></tr>'
+  }).join("");
+  document.getElementById("sub-evaluation").innerHTML=
+    '<div class="algo-head mod"><div class="ic">&Delta;</div><div><h2>Algorithm Evaluation Dashboard</h2><p>Same simulated weather, hazards, Laiban network, and learner-demand inputs for both algorithms</p></div></div>'+ 
+    '<div class="sop-problem"><b>Simulated environment.</b> This is a read-only comparison of the Standard Q-Learning and MODQL planners under the same current Laiban simulation conditions.</div>'+ 
+    '<div class="card"><h3>1. Overall Experimental Results</h3><div class="k" style="margin-bottom:10px">Authoritative results come from <span class="mono">TRAINED_POLICY.evaluation_summary</span>: '+TRAINING_RESULT.episodes_trained+' training episodes and '+TRAINING_RESULT.evaluation_scenarios+' identical held-out evaluation scenarios. The dataset uses the Barangay Laiban CY 2026 total of 284 OSY, controlled simulated sitio allocation, simulated history, a 480-minute shift, and route accessibility from road/weather conditions.</div><table><thead><tr><th>Metric</th><th class="std-head">Standard Q-Learning</th><th class="mod-head">MODQL</th></tr></thead><tbody>'+ 
+    resultMetric("Avg travel time","travel_min",function(v){return num(v,1)+" min"})+ 
+    resultMetric("Avg Jain&rsquo;s Fairness Index","fairness",function(v){return num(v,3)})+ 
+    resultMetric("Avg stops served","stops",function(v){return num(v,2)})+ 
+    resultMetric("Avg deferred communities","deferred",function(v){return num(v,2)})+ 
+    resultMetric("Avg learner coverage","coverage",function(v){return num(v,2)+" learners"})+ 
+    '</tbody></table><div class="k" style="margin-top:10px">In this measured 200-scenario experiment, Standard Q-Learning has lower average travel time and higher average fairness, stops, and learner coverage. MODQL is therefore presented here as the proposed structural design, not as an artificially superior outcome.</div></div>'+ 
+    '<div class="card"><h3>2. Route Behavior Comparison &mdash; Algorithm Evaluation &mdash; route behavior</h3><div class="k">Both node graphs use the same accessibility-colored road network. Standard uses <span class="mono">planRouteStandard()</span>; MODQL uses <span class="mono">planRoute()</span>.</div><div class="split2 eg-grid">'+evaluationGraphHTML("evaluation-standard","Existing Algorithm &mdash; Standard Q-Learning",analysisStd,"#5b4fc7")+evaluationGraphHTML("evaluation-modql","Proposed Algorithm &mdash; MODQL",analysisMod,"#0f9d58")+'</div></div>'+ 
+    '<div class="card eval-card"><h3>Current live route metrics</h3><table><thead><tr><th>Metric</th><th class="std-head">Standard Q-Learning</th><th class="mod-head">MODQL</th></tr></thead><tbody>'+ 
+    evaluationMetric("Total travel distance",std,mod,function(k){return k.distance.toFixed(1)+" km"})+ 
+    evaluationMetric("Total travel time",std,mod,function(k){return Math.round(k.travelMin)+" min"})+ 
+    evaluationMetric("Communities served",std,mod,function(k){return k.served+" of "+(NODES.length-1)})+ 
+    evaluationMetric("Communities deferred",std,mod,function(k){return k.deferred})+ 
+    evaluationMetric("Jain&rsquo;s Fairness Index",std,mod,function(k){return k.fairness.toFixed(3)})+ 
+    evaluationMetric("Learners reached",std,mod,function(k){return k.learners})+ 
+    '</tbody></table></div>'+ 
+    '<div class="card"><h3>3. SOP 1 &mdash; Single vs Multi-Objective</h3><div class="split2"><div class="splitcol std"><h4>Standard Q-Learning</h4><div class="k"><span class="mono">S = L</span><br><span class="mono">R = 1 / Travel Cost</span><br>The control optimizes travel efficiency from location state only.</div></div><div class="splitcol mod"><h4>MODQL</h4><div class="k"><span class="mono">S = &lang;L,D,T,H,A&rang;</span><br><span class="mono">R = Coverage &times; Jain&rsquo;s Fairness &times; (1 / Travel Cost)</span><br>The proposed reward explicitly combines learner coverage, fairness, and efficiency.</div></div></div><div style="height:12px"></div><div class="g3">'+kpi("Avg travel time",num(rStd.travel_min,1)+'<span style="font-size:13px"> min</span>',num(rMod.travel_min,1)+'<span style="font-size:13px"> min</span>',"Measured outcome")+'</div><div style="height:12px"></div><table><thead><tr><th>Measured metric</th><th>Standard</th><th>MODQL</th></tr></thead><tbody>'+ 
+    resultMetric("Fairness","fairness",function(v){return num(v,3)})+ 
+    resultMetric("Stops","stops",function(v){return num(v,2)})+ 
+    resultMetric("Deferred","deferred",function(v){return num(v,2)})+ 
+    resultMetric("Coverage","coverage",function(v){return num(v,2)+" learners"})+ 
+    '</tbody></table><div class="k" style="margin-top:10px">The Laiban experiment uses nine sitios, the 284-OSY barangay total with simulated sitio allocation, simulated history, 480 minutes of operating time, and accessibility penalties. Under these measured conditions, the multi-objective formulation did not outperform the travel-cost baseline in the aggregate results.</div></div>'+ 
+    '<div class="card"><h3>4. SOP 2 &mdash; Overestimation Bias</h3><div class="split2"><div class="splitcol std"><h4>Standard &mdash; one Q-table</h4><div class="k mono" style="background:var(--ink3);padding:9px;border-radius:9px">Q(s,a) &larr; Q(s,a)+&alpha;[r+&gamma;max Q(s&prime;,a&prime;)&minus;Q(s,a)]</div><div class="k" style="margin-top:8px">The same estimator selects the max action and evaluates that selected action.</div></div><div class="splitcol mod"><h4>MODQL &mdash; decoupled estimators</h4><div class="k mono" style="background:var(--ink3);padding:9px;border-radius:9px">Q1 selects, Q2 evaluates<br>Q2 selects, Q1 evaluates</div><div class="k" style="margin-top:8px">Two learned tables are used so the table choosing an action is not always the one assigning its target value.</div></div></div><div class="note" style="margin-top:12px"><b>Training-log evidence.</b> <span class="mono">training/outputs_aligned/training_log.csv</span> contains '+TRAINING_LOG_STATS.rows+' episodes and records <span class="mono">mean_q1_q2_spread</span>. The observed average spread is '+num(TRAINING_LOG_STATS.mean_q1_q2_spread_avg,3)+', with a final value of '+num(TRAINING_LOG_STATS.mean_q1_q2_spread_last,3)+' and a maximum of '+num(TRAINING_LOG_STATS.mean_q1_q2_spread_max,3)+'. This documents estimator disagreement, which is the mechanism designed to reduce overestimation bias; it is not, by itself, proof that bias was fully eliminated.</div></div>'+ 
+    '<div class="card"><h3>5. SOP 3 &mdash; State Representation</h3><div class="split2"><div class="splitcol std"><h4>Standard state</h4><div class="k mono">S = L</div><div class="k">A location is treated as the same state even when demand, remaining time, service history, or road accessibility changes.</div></div><div class="splitcol mod"><h4>MODQL state</h4><div class="k mono">S = &lang;L,D,T,H,A&rang;</div><div class="k">L = location; D = localized per-sitio demand; T = remaining time; H = days-since-last-service Historical Visit Index; A = route accessibility from road and weather conditions.</div></div></div><div style="height:12px"></div><table><thead><tr><th>Sitio</th><th>D</th><th>H</th><th>A from hub</th><th>Route risk evidence</th></tr></thead><tbody>'+sitioRows+'</tbody></table><div class="k" style="margin-top:10px">Known route risks in the current graph include Ibucao landslide and river exposure, Banatas creek crossing, Old Laiban-Kilabuwan-Manggahan river crossings, and conditional Manggahan-Magata boat/river access. These make accessibility part of the state rather than a static property of location alone.</div></div>';
+===*/
   wireEvaluationGraphs();
 }
 
@@ -225,20 +270,32 @@ function evidenceNote(){
 }
 
 function renderExisting(){
-  var k=planKPIs(analysisStd),r=TRAINING_RESULT.standard;
+  var k=planKPIs(analysisStd);
+  var hp=TRAINING_RESULT.hyperparameters||{};
+  function fmt(v,d){return Number(v||0).toFixed(d)}
+  var trainingEvidence=SIM.sq&&SIM.sq.length>1
+    ? svgLine([{d:SIM.sq,c:"#5b4fc7"}],{xs:SIM.ep,dp:2,h:150})+'<div class="lg"><span><i style="background:#5b4fc7"></i> Standard Q-Learning reward</span></div>'
+    : '';
   document.getElementById('sub-existing').innerHTML=
-    '<div class="algo-head std"><div class="ic">Q</div><div><h2>Existing Algorithm &mdash; Standard Q-Learning</h2><p>Control model from Chapter 3: one Q-table, location-only state, single-objective reward</p></div></div>'+
-    '<div class="card"><h3>Research definition</h3><div class="k">The control uses <span class="mono">S = L</span>. Its reward is travel efficiency only, <span class="mono">R = 1 / Travel Cost</span>. The same Q-table selects and evaluates actions:</div><div class="k mono" style="background:var(--ink3);padding:10px 12px;border-radius:10px;margin-top:9px">Q(s,a) &larr; Q(s,a) + &alpha;[r + &gamma; max Q(s&prime;,a&prime;) &minus; Q(s,a)]</div><div class="k" style="margin-top:9px">The corrected Python experiment now trains this baseline independently. The live route card below is only the Current Laiban simulation route replay under today&rsquo;s simulated hazards.</div></div>'+
-    resultCard('Aligned training result &mdash; control',r,'Standard Q-Learning')+evidenceNote()+
-    '<div class="g3"><div class="kpi"><div class="lab">Live learners reached</div><div class="v">'+k.learners+'</div><div class="d">Laiban simulation today</div></div><div class="kpi"><div class="lab">Live route length</div><div class="v">'+k.totalKm.toFixed(1)+'<span style="font-size:13px"> km</span></div><div class="d">shared Laiban environment</div></div><div class="kpi"><div class="lab">Live Jain&rsquo;s J</div><div class="v">'+k.J.toFixed(3)+'</div><div class="d">descriptive only</div></div></div><div style="height:12px"></div>'+
-    '<div class="card"><h3>Current Laiban simulation route</h3>'+stopRowsHTML(analysisStd)+'</div><div class="card"><h3>Deferred</h3>'+deferredHTML(analysisStd)+'</div>'+
-    '<div id="existing-maze-host"><h3 style="margin:18px 0 8px">Reference implementation — the external baseline Q-learning system this study&rsquo;s control algorithm is based on.</h3></div>'
+    '<div class="algo-head std"><div class="ic">Q</div><div><h2>Existing Algorithm &mdash; Standard Q-Learning</h2><p>Baseline/control algorithm used in the study</p></div></div>'+ 
+    '<div class="split2">'+
+      '<div class="card"><h3>Existing Algorithm Overview</h3><div class="k">Standard Q-Learning is the study&rsquo;s baseline/control algorithm for learning routing decisions through repeated interaction with the simulated environment. The agent updates one Q-table until it learns which next location/action has the highest expected long-term value. The single Q-table stores the learned value of each state-action pair.</div><div class="existing-mini-grid" style="margin-top:12px"><div class="kpi"><div class="lab">Algorithm</div><div class="v" style="font-size:19px">Standard Q-Learning</div><div class="d">baseline/control</div></div><div class="kpi"><div class="lab">Q-tables</div><div class="v">1</div><div class="d">single estimator</div></div><div class="kpi"><div class="lab">Training action choice</div><div class="v" style="font-size:19px">&epsilon;-greedy</div><div class="d">explore and exploit</div></div></div></div>'+
+      '<div class="card"><h3>State &amp; Reward</h3><div class="split2"><div class="splitcol std"><h4>State</h4><div class="k mono" style="font-size:18px">S = L</div><div class="k">L = current location</div></div><div class="splitcol std"><h4>Reward</h4><div class="k mono" style="font-size:18px">1 / Travel Cost</div><div class="k">Lower travel cost produces a larger reward, so the baseline is directly driven by travel efficiency.</div></div></div></div>'+
+    '</div>'+
+    '<div class="card"><h3>How the Learning Cycle Works</h3><div class="qflow"><div class="qstep"><b>1</b>Initialize Q-values</div><div class="qstep"><b>2</b>Observe current location</div><div class="qstep"><b>3</b>Select action using &epsilon;-greedy</div><div class="qstep end-row turn"><b>4</b>Travel to selected sitio</div><div class="qstep"><b>5</b>Receive reward</div><div class="qstep"><b>6</b>Observe next state</div><div class="qstep"><b>7</b>Update Q-value</div><div class="qstep end-row"><b>8</b>Repeat</div></div><div class="k" style="margin-top:14px">Exploration means trying other actions during training; exploitation means choosing the currently highest-valued action.</div></div>'+
+    '<div class="split2">'+
+      '<div class="card"><h3>Q-Learning Update</h3><div class="k mono" style="background:var(--ink3);padding:12px;border-radius:10px;font-size:13px">Q(s,a) &larr; Q(s,a) + &alpha;[r + &gamma; max Q(s&prime;,a&prime;) &minus; Q(s,a)]</div><div class="existing-mini-grid" style="margin-top:12px"><div class="kpi"><div class="lab">&alpha;</div><div class="v">'+fmt(hp.alpha,2)+'</div><div class="d">learning rate</div></div><div class="kpi"><div class="lab">&gamma;</div><div class="v">'+fmt(hp.gamma,2)+'</div><div class="d">discount factor</div></div><div class="kpi"><div class="lab">&epsilon;</div><div class="v" style="font-size:18px">'+fmt(hp.epsilon_start,2)+' &rarr; '+fmt(hp.epsilon_min,2)+'</div><div class="d">decay '+fmt(hp.epsilon_decay,3)+'</div></div></div></div>'+
+      '<div class="card"><h3>Symbol Guide</h3><table class="symbol-guide"><tbody><tr><th>Symbol</th><th>Meaning</th></tr><tr><td><span class="mono">s</span></td><td>current state/location</td></tr><tr><td><span class="mono">a</span></td><td>selected action</td></tr><tr><td><span class="mono">r</span></td><td>immediate reward</td></tr><tr><td><span class="mono">&alpha;</span></td><td>learning rate ('+fmt(hp.alpha,2)+')</td></tr><tr><td><span class="mono">&gamma;</span></td><td>discount factor ('+fmt(hp.gamma,2)+')</td></tr><tr><td><span class="mono">max Q(s&prime;,a&prime;)</span></td><td>highest estimated next-state action value</td></tr></tbody></table></div>'+
+    '</div>'+
+    '<div class="card"><h3>Why Enhancement Was Needed</h3><div class="split2"><div class="splitcol std"><h4>Single-objective reward</h4><div class="k">The reward directly focuses on travel cost.</div></div><div class="splitcol std"><h4>Overestimation Bias</h4><div class="k">Using the maximum estimated next-state Q-value can lead to overestimation of action values.</div></div><div class="splitcol std"><h4>Limited state representation</h4><div class="k">The baseline state is centered on current location only.</div></div></div><div class="k" style="margin-top:10px">Standard Q-Learning remains the valid baseline that the proposed method enhances.</div></div>'+
+    '<div class="card"><h3>Actual Training Evidence</h3><div class="g3"><div class="kpi"><div class="lab">Training episodes</div><div class="v">'+TRAINING_RESULT.episodes_trained+'</div><div class="d">existing experiment</div></div><div class="kpi"><div class="lab">Held-out scenarios</div><div class="v">'+TRAINING_RESULT.evaluation_scenarios+'</div><div class="d">evaluation rollout</div></div><div class="kpi"><div class="lab">Comparison setup</div><div class="v" style="font-size:18px;line-height:1.2">same seeds</div><div class="d">same environment</div></div></div><div style="height:12px"></div>'+trainingEvidence+'</div>'+
+    '<div class="card"><h3>Current Live Baseline Route</h3><div class="g3"><div class="kpi"><div class="lab">Live learners reached</div><div class="v">'+k.learners+'</div><div class="d">Laiban simulation today</div></div><div class="kpi"><div class="lab">Live route length</div><div class="v">'+k.totalKm.toFixed(1)+'<span style="font-size:13px"> km</span></div><div class="d">shared Laiban environment</div></div><div class="kpi"><div class="lab">Live travel time</div><div class="v">'+Math.round(k.totalMin)+'<span style="font-size:13px"> min</span></div><div class="d">travel plus service time</div></div></div><div style="height:12px"></div>'+stopRowsHTML(analysisStd)+'</div>'
 }
 
 function renderProposed(){
   var k=planKPIs(analysisMod),r=TRAINING_RESULT.modql;
   document.getElementById('sub-proposed').innerHTML=
-    '<div class="algo-head mod"><div class="ic">Q2</div><div><h2>Proposed Algorithm &mdash; MODQL</h2><p>Multi-Objective Double Q-Learning with enriched state and non-linear reward</p></div></div>'+
+    '<div class="algo-head mod"><div class="ic">Q2</div><div><h2>Proposed Algorithm &mdash; MODQL</h2></div></div>'+
     '<div class="card"><h3>Research definition</h3><div class="k">The proposed state is explicitly represented in the corrected trainer as <span class="mono">S = &lang;L,D,T,H,A&rang;</span>. Continuous/context variables are discretized into finite buckets so a tabular implementation remains feasible.</div><div class="k mono" style="background:var(--ink3);padding:10px 12px;border-radius:10px;margin-top:9px">R(s,a) = Coverage &times; Jain&rsquo;s Fairness &times; (1 / Travel Cost)</div><div class="k" style="margin-top:9px">Two independent tables Q<sub>1</sub> and Q<sub>2</sub> decouple action selection from evaluation. The final greedy policy evaluates actions using the combined learned values rather than claiming that the reward formula alone is the trained policy.</div></div>'+
     '<div class="card"><h3>How the five state dimensions are encoded</h3><table><thead><tr><th>Term</th><th>Implementation</th></tr></thead><tbody><tr><td><b>L</b> &mdash; Location</td><td>Current graph node</td></tr><tr><td><b>D</b> &mdash; Demand</td><td>Localized per-sitio demand buckets for unserved reachable communities</td></tr><tr><td><b>T</b> &mdash; Time</td><td>Remaining 480-minute shift discretized into time buckets</td></tr><tr><td><b>H</b> &mdash; History</td><td>Per-sitio Historical Visit Index based on days since last service</td></tr><tr><td><b>A</b> &mdash; Accessibility</td><td>Per-sitio route-accessibility buckets using the weakest segment on the current open route</td></tr></tbody></table></div>'+
     resultCard('Aligned training result &mdash; proposed',r,'MODQL')+evidenceNote()+
@@ -247,109 +304,11 @@ function renderProposed(){
     proposedGraphHTML()
 }
 
-function renderSOP1(){
-  var s=TRAINING_RESULT.standard,
-      m=TRAINING_RESULT.modql;
-
-  document.getElementById('sub-sop1').innerHTML=
-    '<div class="sop-problem">'+
-      '<b>SOP 1 &mdash; Single-objective limitation.</b> '+
-      'The experiment changes the reward architecture while keeping the same routing environment.'+
-    '</div>'+
-
-    '<div class="split2">'+
-      '<div class="splitcol std">'+
-        '<h4>Standard Q-Learning</h4>'+
-        '<div class="k">'+
-          '<span class="mono">R = 1 / Travel Cost</span><br>'+
-          'No direct coverage or fairness term.'+
-        '</div>'+
-      '</div>'+
-
-      '<div class="splitcol mod">'+
-        '<h4>MODQL</h4>'+
-        '<div class="k">'+
-          '<span class="mono">R = C &times; J &times; (1 / Cost)</span><br>'+
-          'Coverage, fairness, and efficiency all affect the reward.'+
-        '</div>'+
-      '</div>'+
-    '</div>'+
-
-    '<div style="height:12px"></div>'+
-
-    '<div class="card">'+
-      '<h3>Current aligned simulation result</h3>'+
-
-      '<table>'+
-        '<thead>'+
-          '<tr>'+
-            '<th>Metric</th>'+
-            '<th>Standard</th>'+
-            '<th>MODQL</th>'+
-          '</tr>'+
-        '</thead>'+
-
-        '<tbody>'+
-          '<tr>'+
-            '<td>Avg learner coverage</td>'+
-            '<td>'+s.coverage.toFixed(2)+'</td>'+
-            '<td>'+m.coverage.toFixed(2)+'</td>'+
-          '</tr>'+
-
-          '<tr>'+
-            '<td>Avg Jain&rsquo;s fairness</td>'+
-            '<td>'+s.fairness.toFixed(3)+'</td>'+
-            '<td>'+m.fairness.toFixed(3)+'</td>'+
-          '</tr>'+
-
-          '<tr>'+
-            '<td>Avg travel time</td>'+
-            '<td>'+s.travel_min.toFixed(1)+' min</td>'+
-            '<td>'+m.travel_min.toFixed(1)+' min</td>'+
-          '</tr>'+
-        '</tbody>'+
-      '</table>'+
-
-      '<div class="k" style="margin-top:10px">'+
-        'The table reports the measured results of the finalized simulation experiment. '+
-        'Coverage, fairness, and travel time should be interpreted separately rather than reduced to an overall winner.'+
-      '</div>'+
-    '</div>'+
-
-    evidenceNote();
-}
-
-function renderSOP2(){
-  document.getElementById('sub-sop2').innerHTML=
-    '<div class="sop-problem"><b>SOP 2 &mdash; Overestimation bias.</b> The implementation difference is structural, not cosmetic.</div>'+
-    '<div class="split2"><div class="splitcol std"><h4>Standard &mdash; one estimator</h4><div class="k mono" style="background:var(--ink3);padding:9px;border-radius:9px">Q(s,a) &larr; Q(s,a)+&alpha;[r+&gamma;max Q(s&prime;,a&prime;)&minus;Q(s,a)]</div><div class="k" style="margin-top:8px">The same table identifies the maximum action and supplies its target value.</div></div><div class="splitcol mod"><h4>MODQL &mdash; decoupled estimators</h4><div class="k mono" style="background:var(--ink3);padding:9px;border-radius:9px">50%: choose with Q1, evaluate with Q2<br>50%: choose with Q2, evaluate with Q1</div><div class="k" style="margin-top:8px">Q1 and Q2 are independently updated; the chooser is not allowed to validate its own estimate.</div></div></div><div style="height:12px"></div>'+
-    '<div class="card"><h3>What the corrected trainer records</h3><div class="k">The aligned training log contains episode reward for both algorithms plus mean <span class="mono">|Q1 &minus; Q2|</span> for MODQL. That spread is a diagnostic of estimator disagreement; it should not be mislabeled as direct proof of overestimation without a proper reference/ground-truth estimate.</div></div>'+evidenceNote()
-}
-
-function renderSOP3(){
-  var html='<div class="sop-problem"><b>SOP 3 &mdash; Limited state representation.</b> This is the largest code correction made during the audit.</div>'+
-  '<div class="split2"><div class="splitcol std"><h4>Standard state</h4><div class="k mono">S = L</div><div class="k">The same location maps to the same state even when demand, remaining time, history, or road conditions differ.</div></div><div class="splitcol mod"><h4>Proposed state</h4><div class="k mono">S = &lang;L,D,T,H,A&rang;</div><div class="k">The corrected trainer directly observes all five dimensions. D, H, and A preserve localized per-sitio context while T is discretized for the finite tabular state space.</div></div></div><div style="height:12px"></div>'+
-  '<div class="card"><h3>Live state-vector inspector</h3><div class="k" style="margin-bottom:9px">Select a simulated community to inspect the real values that correspond to the five terms.</div><select id="svSelect" style="width:100%;padding:9px;border-radius:8px;background:var(--ink3);color:var(--txt);border:1px solid var(--line)">';
-  NODES.filter(function(n){return n.kind==='node'}).forEach(function(n){html+='<option value="'+n.id+'">'+n.name+'</option>'});
-  html+='</select><div id="svBody" style="margin-top:10px"></div></div>'+evidenceNote();
-  document.getElementById('sub-sop3').innerHTML=html;
-  var sel=document.getElementById('svSelect');sel.onchange=function(){updateSV(sel.value)};updateSV(sel.value)
-}
-function updateSV(id){
-  var n=N[id],p=path('hub',id),worst=1;if(p)p.legs.forEach(function(e){worst=Math.min(worst,accA(e))});
-  var used=0;PLAN.stops.slice(0,PROGRESS).forEach(function(st){used+=st.p.min+serviceMin(N[st.id])});var b=band(worst),maxL=Math.max.apply(null,NODES.filter(function(x){return x.kind==='node'}).map(function(x){return x.learners}));
-  document.getElementById('svBody').innerHTML=sv('L','Location','current graph node',n.name+' ('+n.lat.toFixed(4)+', '+n.lng.toFixed(4)+')','var(--cy)')+sv('D','Student demand','current simulated learner demand',n.learners+' learners ('+(n.learners/maxL).toFixed(2)+' normalized)','var(--go)')+sv('T','Remaining time','time left in the 480-minute shift',Math.max(0,Math.round(SHIFT_MIN-used))+' min','var(--warn)')+sv('H','Visit history','days since last service and visits in 30 days',n.days+' days; '+n.visits30+' visits','var(--vio)')+sv('A','Road accessibility','worst accessibility on the current best open approach',p?worst.toFixed(2)+' &mdash; '+b.lab:'no open approach',b.col)
-}
-function sv(sym,nm,desc,val,col){return '<div class="sv"><div class="sym" style="color:'+col+'">'+sym+'</div><div class="nm"><b>'+nm+'</b>'+desc+'</div><div class="vv" style="color:'+col+'">'+val+'</div></div>'}
-
 function renderAnalysis(){
   computeAnalysisPlans();
   renderExisting();
   renderProposed();
   renderEvaluation();
-  renderSOP1();
-  renderSOP2();
-  renderSOP3();
   setTimeout(function(){
     var maze=document.getElementById("sub-maze"),host=document.getElementById("existing-maze-host");
     if(maze&&host){
