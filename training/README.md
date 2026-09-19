@@ -7,10 +7,11 @@ This folder contains the aligned comparison between Standard Q-Learning and MODQ
 - Standard state: S = L
 - Standard reward: 1 / Travel Cost
 - MODQL state: S = <L,D,T,H,A>
-  - D = localized per-sitio demand buckets for unserved reachable communities
-  - T = remaining 480-minute service-time budget bucket
-  - H = per-sitio Historical Visit Index from days since last service
-  - A = per-sitio route-accessibility bucket using the weakest segment on the current open route
+  - D = localized per-sitio demand using 2 buckets
+  - T = remaining 480-minute service-time budget using 2 buckets
+  - H = per-sitio Historical Visit Index using 2 recency buckets
+  - A = per-sitio route-accessibility using 2 buckets
+- The current 2,000-episode run observes approximately 519 combined MODQL states.
 - MODQL reward: Coverage x Jain Fairness x (1 / Travel Cost)
 - Training episodes: 2000
 - Held-out evaluation scenarios: 200

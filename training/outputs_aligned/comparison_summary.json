@@ -34,11 +34,11 @@
     "coverage": 124.315
   },
   "modql": {
-    "travel_min": 111.50107973042267,
-    "fairness": 0.5168512729578261,
-    "stops": 3.84,
-    "deferred": 5.16,
-    "coverage": 116.825
+    "travel_min": 89.39239008468968,
+    "fairness": 0.5344153207091804,
+    "stops": 4.095,
+    "deferred": 4.905,
+    "coverage": 125.485
   },
   "data_note": "Sitio identities and accessibility evidence are based on the Step 1-4 Laiban dataset. Sitio demand allocation, initial historical service H, and operational time T remain controlled simulation inputs where sitio-level official records were unavailable."
 }
