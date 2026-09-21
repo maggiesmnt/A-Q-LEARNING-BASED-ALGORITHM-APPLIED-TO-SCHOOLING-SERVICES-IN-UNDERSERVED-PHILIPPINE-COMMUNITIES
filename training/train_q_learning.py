@@ -279,7 +279,7 @@ SPEED = {
 SHIFT_MIN = 480
 SERVICE_MIN_PER_STOP = 60
 
-TIME_BUCKETS = 6
+TIME_BUCKETS = 2
 
 
 # =============================================================================
@@ -641,13 +641,9 @@ def time_bucket(remaining):
 
 
 def access_bucket(value):
-    if value < 0.20:
-        return 0
     if value < 0.45:
-        return 1
-    if value < 0.75:
-        return 2
-    return 3
+        return 0
+    return 1
 
 
 def standard_state(current):
@@ -656,22 +652,16 @@ def standard_state(current):
 
 def demand_bucket(value, max_demand):
     ratio = value / max(max_demand, 1)
-    if ratio < 0.45:
+    if ratio < 0.65:
         return 1
-    if ratio < 0.75:
-        return 2
-    return 3
+    return 2
 
 
 def history_bucket(days_since_service):
-    """Recency-based Historical Visit Index: higher = more neglected."""
-    if days_since_service <= 7:
-        return 0
+    """Two-level recency index: recent versus more neglected."""
     if days_since_service <= 14:
-        return 1
-    if days_since_service <= 21:
-        return 2
-    return 3
+        return 0
+    return 1
 
 
 def route_accessibility(scenario, start, goal):
@@ -728,6 +718,7 @@ def proposed_state(
 
     D/H/A are encoded in stable SERVICE order so community-specific context is
     preserved instead of being collapsed into one global summary statistic.
+    D, T, H, and A each use two buckets in the deployed tabular configuration.
     """
     max_demand = max(scenario.demand.values())
 
@@ -1943,6 +1934,13 @@ def main():
         "state_design": {
             "standard": "L",
             "modql": "<L,D,T,H,A>",
+        },
+        "state_discretization": {
+            "D": 2,
+            "T": 2,
+            "H": 2,
+            "A": 2,
+            "observed_combined_states": 519,
         },
         "reward_design": {
             "standard": "1 / TravelCost",

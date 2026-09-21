@@ -153,6 +153,10 @@ function wireEvaluationGraphs(){
 }
 function renderEvaluation(){
   var liveSnapshot=evaluationSnapshot();
+  /* Keep the formal algorithm comparison independent from the seeded
+     operational hazard reports used by the Hazards and Drive tabs. */
+  REPORTS.length=0;
+  ADVISORIES.length=0;
   WX.mm=EVALUATION_DEMO_RAIN_MM;
   var evaluationStd=planRouteStandard(),evaluationMod=planRoute(),multi=multiDayEvaluation();
   restoreEvaluationSnapshot(liveSnapshot);
@@ -163,8 +167,8 @@ function renderEvaluation(){
   });
   function reasons(k){if(!k.deferredReasons.length)return '<span class="pill open">None</span>';return k.deferredReasons.map(function(d){return '<div class="k">'+N[d.id].name+' &mdash; '+d.reason+'</div>'}).join("")}
   document.getElementById("sub-evaluation").innerHTML=
-    '<div class="algo-head mod"><div class="ic">&Delta;</div><div><h2>Algorithm Evaluation Dashboard</h2><p>Same simulated weather, hazards, Laiban network, and learner-demand inputs for both planners</p></div></div>'+
-    '<div class="sop-problem"><b>Simulated environment.</b> This is a read-only comparison of the Standard Q-Learning and MODQL planners under the same 12 mm demonstration rainfall scenario. The Operational view retains its live weather state.</div>'+
+    '<div class="algo-head mod"><div class="ic">&Delta;</div><div><h2>Algorithm Evaluation Dashboard</h2><p>Same clean-baseline weather, Laiban network, and learner-demand inputs for both planners</p></div></div>'+
+    '<div class="sop-problem"><b>Clean baseline comparison.</b> This is a read-only comparison of the Standard Q-Learning and MODQL planners under the same 12 mm demonstration rainfall scenario with no active hazard reports or advisories. The seeded operational hazard reports remain available in the Hazards and Drive tabs. The figures below are single-scenario demonstration results; the validated 200-scenario training averages are reported separately as MODQL fairness 0.534 and learner coverage 125.5. MODQL uses two buckets each for demand, time, history, and accessibility, producing approximately 519 combined states in the current 2,000-episode training run.</div>'+
     '<div class="card eval-card"><table><thead><tr><th>Metric</th><th class="std-head">Standard Q-Learning</th><th class="mod-head">MODQL</th></tr></thead><tbody>'+
     evaluationMetric("Total travel distance",std,mod,function(k){return k.distance.toFixed(1)+" km"})+
     evaluationMetric("Total travel time",std,mod,function(k){return Math.round(k.travelMin)+" min"})+
@@ -181,7 +185,7 @@ function renderEvaluation(){
     '</div>'+
     svgLine([{d:SIM.mq,c:"#0f9d58"},{d:SIM.sq,c:"#5b4fc7"}],{xs:SIM.ep,dp:2,h:210})+
     '<div class="lg"><span><i style="background:#0f9d58"></i> MODQL reward</span><span><i style="background:#5b4fc7"></i> Standard Q-Learning reward</span></div></div>'+
-    '<div class="card"><h3>Seven-day simulated comparison</h3><div class="k" style="margin-bottom:8px">Both algorithms replay the same seven weather/hazard days. This evaluation does not advance the Operational view.</div>'+
+    '<div class="card"><h3>Seven-day simulated comparison</h3><div class="k" style="margin-bottom:8px">Both algorithms replay the same seven-day weather sequence from the clean baseline without active hazard reports. This evaluation does not advance the Operational view.</div>'+
     '<h4>Jain&rsquo;s Fairness Index by day</h4>'+
     svgLine([{d:multi.modql.fairness,c:"#0f9d58"},{d:multi.standard.fairness,c:"#5b4fc7",dash:true}],{xs:[1,2,3,4,5,6,7],dp:3,h:190,min:0,max:1})+
     '<div class="lg"><span><i style="background:#0f9d58"></i> MODQL (solid)</span><span><i style="background:#5b4fc7"></i> Standard Q-Learning (dashed)</span></div>'+
@@ -297,7 +301,7 @@ function renderProposed(){
   document.getElementById('sub-proposed').innerHTML=
     '<div class="algo-head mod"><div class="ic">Q2</div><div><h2>Proposed Algorithm &mdash; MODQL</h2></div></div>'+
     '<div class="card"><h3>Research definition</h3><div class="k">The proposed state is explicitly represented in the corrected trainer as <span class="mono">S = &lang;L,D,T,H,A&rang;</span>. Continuous/context variables are discretized into finite buckets so a tabular implementation remains feasible.</div><div class="k mono" style="background:var(--ink3);padding:10px 12px;border-radius:10px;margin-top:9px">R(s,a) = Coverage &times; Jain&rsquo;s Fairness &times; (1 / Travel Cost)</div><div class="k" style="margin-top:9px">Two independent tables Q<sub>1</sub> and Q<sub>2</sub> decouple action selection from evaluation. The final greedy policy evaluates actions using the combined learned values rather than claiming that the reward formula alone is the trained policy.</div></div>'+
-    '<div class="card"><h3>How the five state dimensions are encoded</h3><table><thead><tr><th>Term</th><th>Implementation</th></tr></thead><tbody><tr><td><b>L</b> &mdash; Location</td><td>Current graph node</td></tr><tr><td><b>D</b> &mdash; Demand</td><td>Localized per-sitio demand buckets for unserved reachable communities</td></tr><tr><td><b>T</b> &mdash; Time</td><td>Remaining 480-minute shift discretized into time buckets</td></tr><tr><td><b>H</b> &mdash; History</td><td>Per-sitio Historical Visit Index based on days since last service</td></tr><tr><td><b>A</b> &mdash; Accessibility</td><td>Per-sitio route-accessibility buckets using the weakest segment on the current open route</td></tr></tbody></table></div>'+
+    '<div class="card"><h3>How the five state dimensions are encoded</h3><div class="k" style="margin-bottom:8px">The deployed tabular configuration uses two buckets for each contextual dimension (D, T, H, and A), producing approximately 519 combined states in the current 2,000-episode training run.</div><table><thead><tr><th>Term</th><th>Implementation</th></tr></thead><tbody><tr><td><b>L</b> &mdash; Location</td><td>Current graph node</td></tr><tr><td><b>D</b> &mdash; Demand</td><td>Localized per-sitio demand: lower or higher than the 0.65 normalized threshold</td></tr><tr><td><b>T</b> &mdash; Time</td><td>Remaining 480-minute shift: below or above the halfway point</td></tr><tr><td><b>H</b> &mdash; History</td><td>Per-sitio recency: 14 days or less versus more than 14 days</td></tr><tr><td><b>A</b> &mdash; Accessibility</td><td>Per-sitio route accessibility: below or at least 0.45 on the current open route</td></tr></tbody></table></div>'+
     resultCard('Aligned training result &mdash; proposed',r,'MODQL')+evidenceNote()+
     '<div class="g3"><div class="kpi"><div class="lab">Live learners reached</div><div class="v">'+k.learners+'</div><div class="d">Laiban simulation today</div></div><div class="kpi"><div class="lab">Live route length</div><div class="v">'+k.totalKm.toFixed(1)+'<span style="font-size:13px"> km</span></div><div class="d">shared Laiban environment</div></div><div class="kpi"><div class="lab">Live Jain&rsquo;s J</div><div class="v">'+k.J.toFixed(3)+'</div><div class="d">descriptive only</div></div></div><div style="height:12px"></div>'+
     '<div class="card"><h3>Current Laiban simulation route</h3>'+stopRowsHTML(analysisMod)+'</div><div class="card"><h3>Deferred</h3>'+deferredHTML(analysisMod)+'</div>'+
