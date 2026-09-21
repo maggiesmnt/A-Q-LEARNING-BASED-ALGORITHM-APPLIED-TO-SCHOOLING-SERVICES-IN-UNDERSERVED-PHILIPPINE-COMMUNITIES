@@ -1737,9 +1737,9 @@ nav#tabs button{
   display:flex;
   min-height:112px;
   flex-direction:column;
-  align-items:center;
+  align-items:flex-start;
   justify-content:center;
-  text-align:center;
+  text-align:left;
 }
 .qflow{
   display:grid;
@@ -1780,19 +1780,41 @@ nav#tabs button{
   font-weight:800;
 }
 .qstep.turn::before{
-  content:"\21B5  continue to step 5";
+  content:"\21B5";
   position:absolute;
-  right:0;
+  right:8px;
   bottom:-24px;
   color:var(--go);
-  font-size:11px;
+  font-size:22px;
   font-weight:800;
   white-space:nowrap;
 }
-.symbol-guide td:first-child{
-  width:132px;
-  font-weight:800;
+.symbol-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+}
+.symbol-card{
+  min-height:74px;
+  padding:10px;
+  border-radius:8px;
+  border:1px solid var(--line);
+  background:var(--ink3);
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:4px;
+}
+.symbol-card .sym{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:15px;
+  font-weight:850;
   color:var(--txt);
+}
+.symbol-card .desc{
+  font-size:10.5px;
+  line-height:1.35;
+  color:var(--dim2);
 }
 @media (max-width:760px){
   .existing-mini-grid,
@@ -1807,10 +1829,14 @@ nav#tabs button{
     right:auto;
     left:0;
   }
+  .symbol-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
 }
 @media (max-width:430px){
   .existing-mini-grid,
-  .qflow{
+  .qflow,
+  .symbol-grid{
     grid-template-columns:1fr;
   }
   .qstep::after,
