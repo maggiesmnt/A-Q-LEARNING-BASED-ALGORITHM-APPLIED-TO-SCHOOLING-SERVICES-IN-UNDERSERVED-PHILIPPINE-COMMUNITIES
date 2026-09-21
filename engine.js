@@ -173,7 +173,7 @@ var TIME_DATA_META={
  shift_hours:8,
  note:"Each simulated deployment day begins with an 8-hour service window. Travel and on-site service consume the remaining time. The same time budget is provided to both algorithms."
 };
-var TRAINED_TIME_BUCKETS=6;
+var TRAINED_TIME_BUCKETS=2;
 
 var REPORTS=[
  {id:1,edge:"hub|ibucao",type:"Landslide / river exposure",em:"\u26F0",sev:"major",src:"community",reporters:1,ago:1.5,cleared:false,who:"Barangay Laiban stakeholder input",note:"Ibucao approach is landslide-prone and follows river crossings; heavy rain can make travel unsafe."},
@@ -257,15 +257,16 @@ function path(from,to){
 }
 
 /* ----- exact Chapter 3 state encoding mirrored from train_q_learning.py ----- */
-/* v2 preserves localized demand, recency history, and route accessibility per sitio. */
-function timeBucket(rem){var b=Math.floor((Math.max(0,Math.min(1,rem/SHIFT_MIN)))*TRAINED_TIME_BUCKETS);return Math.min(TRAINED_TIME_BUCKETS-1,Math.max(0,b))}
-function accessBucket(x){return x<.20?0:x<.45?1:x<.75?2:3}
+/* v2 preserves localized demand, recency history, and route accessibility per sitio.
+  The deployed tabular configuration uses two buckets for D, T, H, and A. */
+function timeBucket(rem){return rem<SHIFT_MIN/2?0:1}
+function accessBucket(x){return x<.45?0:1}
 function demandBucket(value,maxDemand){
  var r=value/Math.max(maxDemand,1);
- return r<.45?1:r<.75?2:3;
+ return r<.65?1:2;
 }
 function historyBucket(days){
- return days<=7?0:days<=14?1:days<=21?2:3;
+ return days<=14?0:1;
 }
 function routeAccessibility(p){
  if(!p||!p.legs||!p.legs.length)return 0;
