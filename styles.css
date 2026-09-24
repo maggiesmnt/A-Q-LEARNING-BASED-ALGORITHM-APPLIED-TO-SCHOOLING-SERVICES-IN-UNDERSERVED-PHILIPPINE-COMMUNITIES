@@ -2087,3 +2087,140 @@ nav#tabs button{
 .eg-line-help b{color:var(--txt)}
 .eg-controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .eg-status{margin-left:8px}
+
+/* Keep the restored algorithm views balanced inside the evaluation comparison. */
+.original-algorithm-split{
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  align-items:stretch;
+  gap:12px;
+}
+.original-algorithm-split > .splitcol{
+  min-width:0;
+  min-height:0;
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  box-sizing:border-box;
+}
+.original-algorithm-split > .splitcol > h3{
+  flex:0 0 auto;
+  margin:0;
+  font-size:14px;
+  line-height:1.25;
+}
+.original-algorithm-split #comparison-existing-host{
+  min-width:0;
+  display:flex;
+  flex:1 1 auto;
+  flex-direction:column;
+}
+.original-algorithm-split #sub-maze{
+  min-width:0;
+  width:100%;
+  flex:1 1 auto;
+  display:flex;
+  flex-direction:column;
+}
+.original-algorithm-split #sub-maze .maze-layout{
+  display:flex !important;
+  flex-direction:column !important;
+  grid-template-columns:none !important;
+  gap:12px !important;
+  width:100%;
+}
+.original-algorithm-split #sub-maze .maze-layout > div{
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+}
+.original-algorithm-split #sub-maze .maze-layout > div:first-child{
+  min-height:0 !important;
+}
+.original-algorithm-split #sub-maze canvas{
+  display:block;
+  width:100% !important;
+  max-width:100%;
+  height:auto !important;
+  aspect-ratio:1 / 1;
+  box-sizing:border-box;
+  margin:0 auto;
+}
+.original-algorithm-split #sub-maze > .card{
+  box-sizing:border-box;
+  flex:1 1 auto;
+  display:flex;
+  flex-direction:column;
+}
+.original-algorithm-split #sub-maze > .card > .maze-layout{
+  flex:0 0 auto;
+}
+.original-algorithm-split #sub-maze > .card > div:last-of-type{
+  margin-top:auto !important;
+}
+.original-algorithm-split #sub-maze > .card > div:last-of-type{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.original-algorithm-split #sub-maze > .card > div:last-of-type .btn{
+  flex:1 1 calc(50% - 4px) !important;
+  min-width:0;
+  box-sizing:border-box;
+}
+.original-algorithm-split > .splitcol.mod > .eg-card{
+  min-width:0;
+  width:100%;
+  height:100%;
+  margin:0;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  display:flex;
+  flex-direction:column;
+  box-sizing:border-box;
+}
+.original-algorithm-split .eg-card h3{
+  margin:0 0 4px;
+  font-size:14px;
+  line-height:1.25;
+}
+.original-algorithm-split .eg-card > .k{
+  font-size:11.5px;
+  line-height:1.55;
+}
+.original-algorithm-split .compact-graph{
+  width:100%;
+  height:auto;
+  min-height:0;
+  aspect-ratio:780 / 360;
+  margin:10px 0;
+  box-sizing:border-box;
+}
+.original-algorithm-split .eg-legend{
+  margin:0 0 8px;
+}
+.original-algorithm-split .eg-line-help{
+  margin:0 0 10px;
+}
+.original-algorithm-split .eg-controls{
+  margin-top:auto;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+}
+.original-algorithm-split .eg-controls .btn{
+  min-width:0;
+  width:100%;
+  white-space:normal;
+  box-sizing:border-box;
+}
+@media (max-width:760px){
+  .original-algorithm-split{
+    grid-template-columns:1fr;
+  }
+  .original-algorithm-split > .splitcol{
+    height:auto;
+  }
+}
