@@ -2089,25 +2089,36 @@ nav#tabs button{
 .eg-status{margin-left:8px}
 
 /* Keep the restored algorithm views balanced inside the evaluation comparison. */
+.route-comparison-card{padding:16px}
 .original-algorithm-split{
   grid-template-columns:minmax(0,1fr) minmax(0,1fr);
   align-items:stretch;
-  gap:12px;
+  gap:16px;
+  margin-top:12px;
 }
 .original-algorithm-split > .splitcol{
   min-width:0;
   min-height:0;
-  height:100%;
+  padding:16px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--panel);
+  box-sizing:border-box;
   display:flex;
   flex-direction:column;
-  gap:10px;
-  box-sizing:border-box;
+  gap:12px;
 }
-.original-algorithm-split > .splitcol > h3{
+.comparison-panel-title{
   flex:0 0 auto;
   margin:0;
-  font-size:14px;
+  font-size:16px;
   line-height:1.25;
+}
+.comparison-panel-subtitle{
+  margin:0 0 12px;
+  color:var(--dim);
+  font-size:12px;
+  line-height:1.45;
 }
 .original-algorithm-split #comparison-existing-host{
   min-width:0;
@@ -2122,12 +2133,46 @@ nav#tabs button{
   display:flex;
   flex-direction:column;
 }
+.original-algorithm-split #sub-maze > .card{
+  min-width:0;
+  width:100%;
+  padding:0 !important;
+  margin:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+}
+.original-algorithm-split #sub-maze > .card > div:first-child{
+  display:flex !important;
+  align-items:flex-start;
+  gap:10px;
+  margin:0 0 12px !important;
+}
+.original-algorithm-split #sub-maze > .card > div:first-child > div{
+  min-width:0;
+}
+.original-algorithm-split #sub-maze > .card > div:first-child h3{
+  margin:0 0 4px !important;
+  font-size:14px !important;
+  line-height:1.25;
+}
+.original-algorithm-split #sub-maze > .card > div:first-child .k{
+  font-size:11.5px;
+  line-height:1.45;
+}
+.original-algorithm-split #sub-maze > .card > div:first-child .pill{
+  flex:0 0 auto;
+  font-size:10px;
+}
 .original-algorithm-split #sub-maze .maze-layout{
   display:flex !important;
   flex-direction:column !important;
-  grid-template-columns:none !important;
-  gap:12px !important;
+  gap:16px !important;
   width:100%;
+  margin:0;
 }
 .original-algorithm-split #sub-maze .maze-layout > div{
   width:100%;
@@ -2136,37 +2181,60 @@ nav#tabs button{
 }
 .original-algorithm-split #sub-maze .maze-layout > div:first-child{
   min-height:0 !important;
+  padding:12px !important;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--maze-panel);
+}
+.original-algorithm-split #sub-maze .maze-layout > div:first-child > div:first-child{
+  margin:0 0 8px !important;
+  font-size:12px !important;
+}
+.original-algorithm-split #sub-maze .maze-layout > div:first-child > div:nth-child(2){
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:6px 12px;
+  font-size:11px !important;
+  line-height:1.35 !important;
+}
+.original-algorithm-split #sub-maze .maze-layout > div:first-child > div:nth-child(2) > div{
+  min-width:0;
+}
+.original-algorithm-split #sub-maze .maze-layout > div:first-child hr{
+  display:none;
+}
+.original-algorithm-split #sub-maze .maze-layout > div:first-child > div:nth-child(2) > div:nth-last-child(-n+4){
+  grid-column:span 1;
+}
+.original-algorithm-split #sub-maze .maze-layout > div:first-child > div:nth-child(2) > div:last-child{
+  grid-column:1 / -1;
+  margin-top:2px !important;
 }
 .original-algorithm-split #sub-maze canvas{
   display:block;
   width:100% !important;
-  max-width:100%;
+  max-width:420px !important;
   height:auto !important;
   aspect-ratio:1 / 1;
   box-sizing:border-box;
   margin:0 auto;
 }
-.original-algorithm-split #sub-maze > .card{
-  box-sizing:border-box;
-  flex:1 1 auto;
-  display:flex;
-  flex-direction:column;
-}
-.original-algorithm-split #sub-maze > .card > .maze-layout{
-  flex:0 0 auto;
-}
 .original-algorithm-split #sub-maze > .card > div:last-of-type{
-  margin-top:auto !important;
-}
-.original-algorithm-split #sub-maze > .card > div:last-of-type{
-  display:flex;
-  flex-wrap:wrap;
+  display:grid !important;
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
   gap:8px;
+  margin:16px 0 0 !important;
 }
 .original-algorithm-split #sub-maze > .card > div:last-of-type .btn{
-  flex:1 1 calc(50% - 4px) !important;
+  width:100%;
   min-width:0;
+  height:48px;
+  min-height:48px;
+  padding:6px 4px;
+  font-size:11px;
+  line-height:1.2;
   box-sizing:border-box;
+  flex:none !important;
 }
 .original-algorithm-split > .splitcol.mod > .eg-card{
   min-width:0;
@@ -2182,45 +2250,87 @@ nav#tabs button{
   box-sizing:border-box;
 }
 .original-algorithm-split .eg-card h3{
-  margin:0 0 4px;
-  font-size:14px;
-  line-height:1.25;
+  display:none;
 }
 .original-algorithm-split .eg-card > .k{
   font-size:11.5px;
-  line-height:1.55;
+  line-height:1.45;
+}
+.original-algorithm-split .eg-card > .k:first-of-type{
+  margin-top:-12px;
 }
 .original-algorithm-split .compact-graph{
   width:100%;
-  height:auto;
-  min-height:0;
-  aspect-ratio:780 / 360;
-  margin:10px 0;
+  height:480px;
+  min-height:480px;
+  aspect-ratio:auto;
+  margin:12px 0 16px;
   box-sizing:border-box;
 }
 .original-algorithm-split .eg-legend{
-  margin:0 0 8px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px 12px;
+  margin:0 0 10px;
+  font-size:11px;
 }
 .original-algorithm-split .eg-line-help{
   margin:0 0 10px;
+  font-size:11px;
+  line-height:1.4;
 }
 .original-algorithm-split .eg-controls{
-  margin-top:auto;
+  margin-top:12px;
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));
   gap:8px;
 }
 .original-algorithm-split .eg-controls .btn{
-  min-width:0;
   width:100%;
+  min-width:0;
+  height:48px;
+  min-height:48px;
+  padding:6px 4px;
+  font-size:11px;
+  line-height:1.2;
   white-space:normal;
   box-sizing:border-box;
 }
-@media (max-width:760px){
+.comparison-notes{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:16px;
+  margin-top:16px;
+}
+.comparison-notes > div{
+  min-width:0;
+}
+.comparison-notes .note{
+  height:100%;
+  box-sizing:border-box;
+  margin:0;
+}
+@media (max-width:1000px){
   .original-algorithm-split{
     grid-template-columns:1fr;
   }
+  .comparison-notes{
+    grid-template-columns:1fr;
+  }
+}
+@media (max-width:560px){
   .original-algorithm-split > .splitcol{
+    padding:12px;
+  }
+  .original-algorithm-split #sub-maze .maze-layout > div:first-child > div:nth-child(2){
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .original-algorithm-split #sub-maze > .card > div:last-of-type{
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+  .original-algorithm-split .compact-graph{
     height:auto;
+    min-height:0;
+    aspect-ratio:16 / 10;
   }
 }
