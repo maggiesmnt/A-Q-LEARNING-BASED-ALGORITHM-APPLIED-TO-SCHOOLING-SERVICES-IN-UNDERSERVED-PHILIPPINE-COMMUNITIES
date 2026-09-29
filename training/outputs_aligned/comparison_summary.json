@@ -1,8 +1,8 @@
 {
   "environment": "Barangay Laiban finalized Step 1-6 environment",
-  "episodes_trained": 2000,
+  "episodes_trained": 5000,
   "evaluation_scenarios": 200,
-  "fair_comparison": "Both algorithms trained and evaluated using identical scenario seeds.",
+  "fair_comparison": "All eight experimental configurations were trained and evaluated using identical scenario seeds.",
   "official_demand_basis": {
     "barangay_osy_total": 284,
     "sitio_distribution": "controlled simulated unequal distribution"
@@ -20,25 +20,79 @@
   },
   "state_design": {
     "standard": "L",
+    "component_reward": "L",
+    "component_doubleq": "L",
+    "component_state": "<L,D,T,H,A>",
+    "pair_reward_doubleq": "L",
+    "pair_reward_state": "<L,D,T,H,A>",
+    "pair_doubleq_state": "<L,D,T,H,A>",
     "modql": "<L,D,T,H,A>"
   },
   "reward_design": {
-    "standard": "1 / TravelCost",
-    "modql": "Coverage * JainFairness * (1 / TravelCost)"
+    "standard": "1 / TravelTimeHours",
+    "component_reward": "DemandCoverage * JainFairness * (1 / (1 + TravelTimeHours))",
+    "component_doubleq": "1 / TravelTimeHours",
+    "component_state": "1 / TravelTimeHours",
+    "pair_reward_doubleq": "DemandCoverage * JainFairness * (1 / (1 + TravelTimeHours))",
+    "pair_reward_state": "DemandCoverage * JainFairness * (1 / (1 + TravelTimeHours))",
+    "pair_doubleq_state": "1 / TravelTimeHours",
+    "modql": "DemandCoverage * JainFairness * (1 / (1 + TravelTimeHours))"
   },
   "standard": {
-    "travel_min": 79.64380963889745,
+    "travel_min": 67.02082949567533,
     "fairness": 0.536374269005848,
     "stops": 4.14,
     "deferred": 4.86,
     "coverage": 124.315
   },
+  "component_reward": {
+    "travel_min": 80.84453738060803,
+    "fairness": 0.536374269005848,
+    "stops": 4.14,
+    "deferred": 4.86,
+    "coverage": 124.315
+  },
+  "component_doubleq": {
+    "travel_min": 70.41031446047975,
+    "fairness": 0.536374269005848,
+    "stops": 4.14,
+    "deferred": 4.86,
+    "coverage": 124.315
+  },
+  "component_state": {
+    "travel_min": 77.01827606305878,
+    "fairness": 0.5317057690522603,
+    "stops": 4.065,
+    "deferred": 4.935,
+    "coverage": 123.43
+  },
+  "pair_reward_doubleq": {
+    "travel_min": 104.89385024836058,
+    "fairness": 0.5311111111111111,
+    "stops": 3.74,
+    "deferred": 5.26,
+    "coverage": 115.435
+  },
+  "pair_reward_state": {
+    "travel_min": 113.22145248647892,
+    "fairness": 0.5253925322565673,
+    "stops": 3.775,
+    "deferred": 5.225,
+    "coverage": 116.155
+  },
+  "pair_doubleq_state": {
+    "travel_min": 77.80414098310315,
+    "fairness": 0.5317057690522603,
+    "stops": 4.065,
+    "deferred": 4.935,
+    "coverage": 123.43
+  },
   "modql": {
-    "travel_min": 89.39239008468968,
-    "fairness": 0.5344153207091804,
-    "stops": 4.095,
-    "deferred": 4.905,
-    "coverage": 125.485
+    "travel_min": 113.22145248647892,
+    "fairness": 0.5253925322565673,
+    "stops": 3.775,
+    "deferred": 5.225,
+    "coverage": 116.155
   },
   "data_note": "Sitio identities and accessibility evidence are based on the Step 1-4 Laiban dataset. Sitio demand allocation, initial historical service H, and operational time T remain controlled simulation inputs where sitio-level official records were unavailable."
 }

@@ -293,7 +293,7 @@ EPS_START = 1.00
 EPS_MIN = 0.05
 EPS_DECAY = 0.995
 
-EPISODES = 2000
+EPISODES = 5000
 
 TRAIN_SEED = 7
 SCENARIO_SEED = 2026
@@ -765,6 +765,191 @@ def proposed_state(
     )
 
 
+def sensitivity_bucket(
+    value,
+    upper_bound,
+    bucket_count,
+    offset=0
+):
+    ratio = max(
+        0.0,
+        min(1.0, value / upper_bound)
+    )
+    bucket = min(
+        bucket_count - 1,
+        int(ratio * bucket_count)
+    )
+    return bucket + offset
+
+
+def bucket_sensitivity_state(
+    scenario,
+    current,
+    mask,
+    remaining,
+    visits,
+    history_days,
+    bucket_count
+):
+    """Diagnostic state encoder; two buckets reproduce proposed_state()."""
+    max_demand = max(scenario.demand.values())
+
+    d_vector = []
+    h_vector = []
+    a_vector = []
+
+    for node_id in SERVICE:
+        served = bool(mask & (1 << IDX[node_id]))
+        travel = None if served else dijkstra(scenario, current, node_id)
+
+        if served or travel is None:
+            d_vector.append(0)
+            a_vector.append(0)
+        else:
+            demand_ratio = (
+                scenario.demand[node_id]
+                / max(max_demand, 1)
+            )
+            accessibility = route_accessibility(
+                scenario,
+                current,
+                node_id
+            )
+
+            if bucket_count == 2:
+                d_vector.append(
+                    demand_bucket(
+                        scenario.demand[node_id],
+                        max_demand
+                    )
+                )
+                a_vector.append(
+                    access_bucket(accessibility)
+                )
+            else:
+                d_vector.append(
+                    sensitivity_bucket(
+                        demand_ratio,
+                        1.30,
+                        bucket_count,
+                        offset=1
+                    )
+                )
+                a_vector.append(
+                    sensitivity_bucket(
+                        accessibility,
+                        0.90,
+                        bucket_count
+                    )
+                )
+
+        if bucket_count == 2:
+            h_vector.append(history_bucket(history_days[node_id]))
+        else:
+            h_vector.append(
+                sensitivity_bucket(
+                    history_days[node_id],
+                    30.0,
+                    bucket_count
+                )
+            )
+
+    if bucket_count == 2:
+        remaining_bucket = time_bucket(remaining)
+    else:
+        remaining_bucket = sensitivity_bucket(
+            remaining,
+            SHIFT_MIN,
+            bucket_count
+        )
+
+    return (
+        f"L={current}"
+        f"|D={''.join(map(str, d_vector))}"
+        f"|T={remaining_bucket}"
+        f"|H={''.join(map(str, h_vector))}"
+        f"|A={''.join(map(str, a_vector))}"
+    )
+
+
+def component_ablation_state(
+    scenario,
+    current,
+    mask,
+    remaining,
+    visits,
+    history_days,
+    components
+):
+    components = frozenset(components)
+
+    if components == frozenset(("D", "T", "H", "A")):
+        return proposed_state(
+            scenario,
+            current,
+            mask,
+            remaining,
+            visits,
+            history_days
+        )
+
+    parts = [f"L={current}"]
+    d_vector = []
+    a_vector = []
+
+    if "D" in components or "A" in components:
+        max_demand = max(scenario.demand.values())
+
+        for node_id in SERVICE:
+            served = bool(mask & (1 << IDX[node_id]))
+            travel = None if served else dijkstra(
+                scenario,
+                current,
+                node_id
+            )
+
+            if "D" in components:
+                d_vector.append(
+                    0
+                    if served or travel is None
+                    else demand_bucket(
+                        scenario.demand[node_id],
+                        max_demand
+                    )
+                )
+
+            if "A" in components:
+                a_vector.append(
+                    0
+                    if served or travel is None
+                    else access_bucket(
+                        route_accessibility(
+                            scenario,
+                            current,
+                            node_id
+                        )
+                    )
+                )
+
+    if "D" in components:
+        parts.append(f"D={''.join(map(str, d_vector))}")
+
+    if "T" in components:
+        parts.append(f"T={time_bucket(remaining)}")
+
+    if "H" in components:
+        h_vector = [
+            history_bucket(history_days[node_id])
+            for node_id in SERVICE
+        ]
+        parts.append(f"H={''.join(map(str, h_vector))}")
+
+    if "A" in components:
+        parts.append(f"A={''.join(map(str, a_vector))}")
+
+    return "|".join(parts)
+
+
 # =============================================================================
 # Q-TABLE HELPERS
 # =============================================================================
@@ -819,7 +1004,7 @@ def reward_modql(
         scenario.demand.values()
     )
 
-    coverage = (
+    demand_coverage = (
         scenario.demand[target]
         / max_demand
     )
@@ -843,13 +1028,16 @@ def reward_modql(
     )
 
 
+    travel_efficiency = (
+        1.0
+        / (1.0 + travel_hours)
+    )
+
+
     reward = (
-        coverage
+        demand_coverage
         * fairness
-        * (
-            1.0
-            / travel_hours
-        )
+        * travel_efficiency
     )
 
 
@@ -1046,6 +1234,1118 @@ def train_standard(
 
             visits[action] += 1
 
+            current = action
+            mask = new_mask
+            remaining = new_remaining
+
+
+        logs.append(
+            total_reward
+        )
+
+
+        epsilon = max(
+            EPS_MIN,
+            epsilon * EPS_DECAY
+        )
+
+
+    return Q, logs
+
+
+# =============================================================================
+# COMPONENT TEST 1: STANDARD Q-LEARNING WITH MODQL REWARD
+# =============================================================================
+
+def train_component_reward(
+    scenarios,
+    seed=TRAIN_SEED
+):
+    Q = {}
+
+    action_rng = random.Random(
+        seed
+    )
+
+    epsilon = EPS_START
+
+    logs = []
+
+
+    for episode, scenario in enumerate(
+        scenarios,
+        start=1
+    ):
+        current = "hub"
+        mask = 0
+        remaining = SHIFT_MIN
+
+        visits = {
+            node_id:
+                NODES[node_id]["visits30"]
+            for node_id in SERVICE
+        }
+
+        total_reward = 0.0
+
+
+        while True:
+
+            choices = reachable(
+                scenario,
+                current,
+                mask,
+                remaining
+            )
+
+            if not choices:
+                break
+
+
+            state = standard_state(
+                current
+            )
+
+            actions = [
+                row[0]
+                for row in choices
+            ]
+
+            travel = dict(
+                choices
+            )
+
+
+            if (
+                action_rng.random()
+                < epsilon
+            ):
+                action = action_rng.choice(
+                    actions
+                )
+
+            else:
+                values = [
+                    qget(
+                        Q,
+                        state,
+                        candidate
+                    )
+                    for candidate
+                    in actions
+                ]
+
+                best_value = max(values)
+
+                best_actions = [
+                    action_id
+                    for action_id, value
+                    in zip(
+                        actions,
+                        values
+                    )
+                    if value
+                    == best_value
+                ]
+
+                action = action_rng.choice(
+                    best_actions
+                )
+
+
+            reward, _ = reward_modql(
+                scenario,
+                action,
+                travel[action],
+                visits
+            )
+
+            total_reward += reward
+
+
+            new_mask = (
+                mask
+                | (
+                    1
+                    << IDX[action]
+                )
+            )
+
+
+            new_remaining = (
+                remaining
+                - travel[action]
+                - SERVICE_MIN_PER_STOP
+            )
+
+
+            next_state = standard_state(
+                action
+            )
+
+
+            next_actions = [
+                row[0]
+                for row
+                in reachable(
+                    scenario,
+                    action,
+                    new_mask,
+                    new_remaining
+                )
+            ]
+
+
+            next_q = max(
+                (
+                    qget(
+                        Q,
+                        next_state,
+                        candidate
+                    )
+                    for candidate
+                    in next_actions
+                ),
+                default=0.0
+            )
+
+
+            target = (
+                reward
+                + GAMMA * next_q
+            )
+
+
+            old_value = qget(
+                Q,
+                state,
+                action
+            )
+
+
+            new_value = (
+                old_value
+                + ALPHA
+                * (
+                    target
+                    - old_value
+                )
+            )
+
+
+            qset(
+                Q,
+                state,
+                action,
+                new_value
+            )
+
+
+            visits[action] += 1
+
+            current = action
+            mask = new_mask
+            remaining = new_remaining
+
+
+        logs.append(
+            total_reward
+        )
+
+
+        epsilon = max(
+            EPS_MIN,
+            epsilon * EPS_DECAY
+        )
+
+
+    return Q, logs
+
+
+# =============================================================================
+# COMPONENT TEST 2: DOUBLE Q-LEARNING WITH STANDARD STATE AND REWARD
+# =============================================================================
+
+def train_component_doubleq(
+    scenarios,
+    seed=TRAIN_SEED
+):
+    Q1 = {}
+    Q2 = {}
+
+    action_rng = random.Random(
+        seed
+    )
+
+    update_rng = random.Random(
+        seed + 1000
+    )
+
+    epsilon = EPS_START
+
+    logs = []
+    spread = []
+
+
+    for episode, scenario in enumerate(
+        scenarios,
+        start=1
+    ):
+        current = "hub"
+        mask = 0
+        remaining = SHIFT_MIN
+
+        visits = {
+            node_id:
+                NODES[node_id]["visits30"]
+            for node_id in SERVICE
+        }
+
+        total_reward = 0.0
+
+        episode_spread = []
+
+
+        while True:
+
+            choices = reachable(
+                scenario,
+                current,
+                mask,
+                remaining
+            )
+
+            if not choices:
+                break
+
+
+            state = standard_state(
+                current
+            )
+
+
+            actions = [
+                row[0]
+                for row in choices
+            ]
+
+            travel = dict(
+                choices
+            )
+
+
+            combined = {
+                action:
+                    qget(
+                        Q1,
+                        state,
+                        action
+                    )
+                    + qget(
+                        Q2,
+                        state,
+                        action
+                    )
+                for action
+                in actions
+            }
+
+
+            if (
+                action_rng.random()
+                < epsilon
+            ):
+                action = action_rng.choice(
+                    actions
+                )
+
+            else:
+                best_value = max(
+                    combined.values()
+                )
+
+                best_actions = [
+                    action_id
+                    for action_id
+                    in actions
+                    if combined[action_id]
+                    == best_value
+                ]
+
+                action = action_rng.choice(
+                    best_actions
+                )
+
+
+            reward = reward_standard(
+                travel[action]
+            )
+
+            total_reward += reward
+
+
+            new_mask = (
+                mask
+                | (
+                    1
+                    << IDX[action]
+                )
+            )
+
+
+            new_remaining = (
+                remaining
+                - travel[action]
+                - SERVICE_MIN_PER_STOP
+            )
+
+
+            next_state = standard_state(
+                action
+            )
+
+
+            next_actions = [
+                row[0]
+                for row
+                in reachable(
+                    scenario,
+                    action,
+                    new_mask,
+                    new_remaining
+                )
+            ]
+
+
+            if (
+                update_rng.random()
+                < 0.5
+            ):
+
+                if next_actions:
+
+                    best_next = max(
+                        next_actions,
+                        key=lambda candidate:
+                            qget(
+                                Q1,
+                                next_state,
+                                candidate
+                            )
+                    )
+
+                    bootstrap = qget(
+                        Q2,
+                        next_state,
+                        best_next
+                    )
+
+                else:
+                    bootstrap = 0.0
+
+
+                target = (
+                    reward
+                    + GAMMA
+                    * bootstrap
+                )
+
+
+                old_value = qget(
+                    Q1,
+                    state,
+                    action
+                )
+
+
+                qset(
+                    Q1,
+                    state,
+                    action,
+                    old_value
+                    + ALPHA
+                    * (
+                        target
+                        - old_value
+                    )
+                )
+
+
+            else:
+
+                if next_actions:
+
+                    best_next = max(
+                        next_actions,
+                        key=lambda candidate:
+                            qget(
+                                Q2,
+                                next_state,
+                                candidate
+                            )
+                    )
+
+                    bootstrap = qget(
+                        Q1,
+                        next_state,
+                        best_next
+                    )
+
+                else:
+                    bootstrap = 0.0
+
+
+                target = (
+                    reward
+                    + GAMMA
+                    * bootstrap
+                )
+
+
+                old_value = qget(
+                    Q2,
+                    state,
+                    action
+                )
+
+
+                qset(
+                    Q2,
+                    state,
+                    action,
+                    old_value
+                    + ALPHA
+                    * (
+                        target
+                        - old_value
+                    )
+                )
+
+
+            episode_spread.append(
+                abs(
+                    qget(
+                        Q1,
+                        state,
+                        action
+                    )
+                    - qget(
+                        Q2,
+                        state,
+                        action
+                    )
+                )
+            )
+
+
+            visits[action] += 1
+
+            current = action
+            mask = new_mask
+            remaining = new_remaining
+
+
+        logs.append(
+            total_reward
+        )
+
+
+        spread.append(
+            (
+                sum(episode_spread)
+                / len(episode_spread)
+                if episode_spread
+                else 0.0
+            )
+        )
+
+
+        epsilon = max(
+            EPS_MIN,
+            epsilon * EPS_DECAY
+        )
+
+
+    return (
+        Q1,
+        Q2,
+        logs,
+        spread
+    )
+
+
+# =============================================================================
+# PAIRWISE ABLATION TRAINING
+# =============================================================================
+
+def train_pairwise_ablation(
+    scenarios,
+    *,
+    use_double_q,
+    use_modql_reward,
+    use_enriched_state,
+    discount_factor=GAMMA,
+    state_bucket_count=None,
+    state_components=None,
+    seed=TRAIN_SEED
+):
+    Q = {}
+    Q1 = {}
+    Q2 = {}
+
+    action_rng = random.Random(seed)
+    update_rng = random.Random(seed + 1000)
+
+    epsilon = EPS_START
+    logs = []
+    spread = []
+
+    for scenario in scenarios:
+        current = "hub"
+        mask = 0
+        remaining = SHIFT_MIN
+
+        visits = {
+            node_id: NODES[node_id]["visits30"]
+            for node_id in SERVICE
+        }
+        history_days = {
+            node_id: NODES[node_id]["days"]
+            for node_id in SERVICE
+        }
+
+        total_reward = 0.0
+        episode_spread = []
+
+        while True:
+            choices = reachable(
+                scenario,
+                current,
+                mask,
+                remaining
+            )
+
+            if not choices:
+                break
+
+            if use_enriched_state:
+                if state_components is not None:
+                    state = component_ablation_state(
+                        scenario,
+                        current,
+                        mask,
+                        remaining,
+                        visits,
+                        history_days,
+                        state_components
+                    )
+                elif state_bucket_count is None:
+                    state = proposed_state(
+                        scenario,
+                        current,
+                        mask,
+                        remaining,
+                        visits,
+                        history_days
+                    )
+                else:
+                    state = bucket_sensitivity_state(
+                        scenario,
+                        current,
+                        mask,
+                        remaining,
+                        visits,
+                        history_days,
+                        state_bucket_count
+                    )
+            else:
+                state = standard_state(current)
+
+            actions = [row[0] for row in choices]
+            travel = dict(choices)
+
+            if use_double_q:
+                values = {
+                    candidate: (
+                        qget(Q1, state, candidate)
+                        + qget(Q2, state, candidate)
+                    )
+                    for candidate in actions
+                }
+            else:
+                values = {
+                    candidate: qget(Q, state, candidate)
+                    for candidate in actions
+                }
+
+            if action_rng.random() < epsilon:
+                action = action_rng.choice(actions)
+            else:
+                best_value = max(values.values())
+                best_actions = [
+                    candidate
+                    for candidate in actions
+                    if values[candidate] == best_value
+                ]
+                action = action_rng.choice(best_actions)
+
+            if use_modql_reward:
+                reward, _ = reward_modql(
+                    scenario,
+                    action,
+                    travel[action],
+                    visits
+                )
+            else:
+                reward = reward_standard(travel[action])
+
+            total_reward += reward
+
+            new_mask = mask | (1 << IDX[action])
+            new_remaining = (
+                remaining
+                - travel[action]
+                - SERVICE_MIN_PER_STOP
+            )
+
+            next_visits = dict(visits)
+            next_visits[action] += 1
+
+            next_history_days = dict(history_days)
+            next_history_days[action] = 0
+
+            if use_enriched_state:
+                if state_components is not None:
+                    next_state = component_ablation_state(
+                        scenario,
+                        action,
+                        new_mask,
+                        new_remaining,
+                        next_visits,
+                        next_history_days,
+                        state_components
+                    )
+                elif state_bucket_count is None:
+                    next_state = proposed_state(
+                        scenario,
+                        action,
+                        new_mask,
+                        new_remaining,
+                        next_visits,
+                        next_history_days
+                    )
+                else:
+                    next_state = bucket_sensitivity_state(
+                        scenario,
+                        action,
+                        new_mask,
+                        new_remaining,
+                        next_visits,
+                        next_history_days,
+                        state_bucket_count
+                    )
+            else:
+                next_state = standard_state(action)
+
+            next_actions = [
+                row[0]
+                for row in reachable(
+                    scenario,
+                    action,
+                    new_mask,
+                    new_remaining
+                )
+            ]
+
+            if use_double_q:
+                if update_rng.random() < 0.5:
+                    if next_actions:
+                        best_next = max(
+                            next_actions,
+                            key=lambda candidate:
+                                qget(Q1, next_state, candidate)
+                        )
+                        bootstrap = qget(Q2, next_state, best_next)
+                    else:
+                        bootstrap = 0.0
+
+                    old_value = qget(Q1, state, action)
+                    target = reward + discount_factor * bootstrap
+                    qset(
+                        Q1,
+                        state,
+                        action,
+                        old_value + ALPHA * (target - old_value)
+                    )
+                else:
+                    if next_actions:
+                        best_next = max(
+                            next_actions,
+                            key=lambda candidate:
+                                qget(Q2, next_state, candidate)
+                        )
+                        bootstrap = qget(Q1, next_state, best_next)
+                    else:
+                        bootstrap = 0.0
+
+                    old_value = qget(Q2, state, action)
+                    target = reward + discount_factor * bootstrap
+                    qset(
+                        Q2,
+                        state,
+                        action,
+                        old_value + ALPHA * (target - old_value)
+                    )
+
+                episode_spread.append(
+                    abs(
+                        qget(Q1, state, action)
+                        - qget(Q2, state, action)
+                    )
+                )
+            else:
+                next_q = max(
+                    (
+                        qget(Q, next_state, candidate)
+                        for candidate in next_actions
+                    ),
+                    default=0.0
+                )
+                old_value = qget(Q, state, action)
+                target = reward + discount_factor * next_q
+                qset(
+                    Q,
+                    state,
+                    action,
+                    old_value + ALPHA * (target - old_value)
+                )
+
+            visits = next_visits
+            history_days = next_history_days
+            current = action
+            mask = new_mask
+            remaining = new_remaining
+
+        logs.append(total_reward)
+
+        if use_double_q:
+            spread.append(
+                sum(episode_spread) / len(episode_spread)
+                if episode_spread
+                else 0.0
+            )
+
+        epsilon = max(EPS_MIN, epsilon * EPS_DECAY)
+
+    if use_double_q:
+        return Q1, Q2, logs, spread
+
+    return Q, logs
+
+
+def train_pair_reward_doubleq(
+    scenarios,
+    seed=TRAIN_SEED
+):
+    return train_pairwise_ablation(
+        scenarios,
+        use_double_q=True,
+        use_modql_reward=True,
+        use_enriched_state=False,
+        seed=seed
+    )
+
+
+def train_pair_reward_state(
+    scenarios,
+    seed=TRAIN_SEED
+):
+    return train_pairwise_ablation(
+        scenarios,
+        use_double_q=False,
+        use_modql_reward=True,
+        use_enriched_state=True,
+        seed=seed
+    )
+
+
+def train_reward_state_gamma_sensitivity(
+    scenarios,
+    gamma,
+    seed=TRAIN_SEED
+):
+    return train_pairwise_ablation(
+        scenarios,
+        use_double_q=False,
+        use_modql_reward=True,
+        use_enriched_state=True,
+        discount_factor=gamma,
+        seed=seed
+    )
+
+
+def train_reward_state_bucket_sensitivity(
+    scenarios,
+    bucket_count,
+    seed=TRAIN_SEED
+):
+    Q, logs = train_pairwise_ablation(
+        scenarios,
+        use_double_q=False,
+        use_modql_reward=True,
+        use_enriched_state=True,
+        discount_factor=GAMMA,
+        state_bucket_count=bucket_count,
+        seed=seed
+    )
+    return Q, logs, len(Q)
+
+
+def train_reward_state_component_ablation(
+    scenarios,
+    components,
+    seed=TRAIN_SEED
+):
+    Q, logs = train_pairwise_ablation(
+        scenarios,
+        use_double_q=False,
+        use_modql_reward=True,
+        use_enriched_state=True,
+        discount_factor=GAMMA,
+        state_components=components,
+        seed=seed
+    )
+    return Q, logs, len(Q)
+
+
+def train_pair_doubleq_state(
+    scenarios,
+    seed=TRAIN_SEED
+):
+    return train_pairwise_ablation(
+        scenarios,
+        use_double_q=True,
+        use_modql_reward=False,
+        use_enriched_state=True,
+        seed=seed
+    )
+
+
+# =============================================================================
+# COMPONENT TEST 3: STANDARD Q-LEARNING WITH ENRICHED STATE
+# =============================================================================
+
+def train_component_state(
+    scenarios,
+    seed=TRAIN_SEED
+):
+    Q = {}
+
+    action_rng = random.Random(
+        seed
+    )
+
+    epsilon = EPS_START
+
+    logs = []
+
+
+    for episode, scenario in enumerate(
+        scenarios,
+        start=1
+    ):
+        current = "hub"
+        mask = 0
+        remaining = SHIFT_MIN
+
+        visits = {
+            node_id:
+                NODES[node_id]["visits30"]
+            for node_id in SERVICE
+        }
+
+        history_days = {
+            node_id:
+                NODES[node_id]["days"]
+            for node_id in SERVICE
+        }
+
+        total_reward = 0.0
+
+
+        while True:
+
+            choices = reachable(
+                scenario,
+                current,
+                mask,
+                remaining
+            )
+
+            if not choices:
+                break
+
+
+            state = proposed_state(
+                scenario,
+                current,
+                mask,
+                remaining,
+                visits,
+                history_days
+            )
+
+            actions = [
+                row[0]
+                for row in choices
+            ]
+
+            travel = dict(
+                choices
+            )
+
+
+            if (
+                action_rng.random()
+                < epsilon
+            ):
+                action = action_rng.choice(
+                    actions
+                )
+
+            else:
+                values = [
+                    qget(
+                        Q,
+                        state,
+                        candidate
+                    )
+                    for candidate
+                    in actions
+                ]
+
+                best_value = max(values)
+
+                best_actions = [
+                    action_id
+                    for action_id, value
+                    in zip(
+                        actions,
+                        values
+                    )
+                    if value
+                    == best_value
+                ]
+
+                action = action_rng.choice(
+                    best_actions
+                )
+
+
+            reward = reward_standard(
+                travel[action]
+            )
+
+            total_reward += reward
+
+
+            new_mask = (
+                mask
+                | (
+                    1
+                    << IDX[action]
+                )
+            )
+
+
+            new_remaining = (
+                remaining
+                - travel[action]
+                - SERVICE_MIN_PER_STOP
+            )
+
+
+            next_visits = dict(
+                visits
+            )
+
+            next_visits[action] += 1
+
+            next_history_days = dict(
+                history_days
+            )
+            next_history_days[action] = 0
+
+
+            next_state = proposed_state(
+                scenario,
+                action,
+                new_mask,
+                new_remaining,
+                next_visits,
+                next_history_days
+            )
+
+
+            next_actions = [
+                row[0]
+                for row
+                in reachable(
+                    scenario,
+                    action,
+                    new_mask,
+                    new_remaining
+                )
+            ]
+
+
+            next_q = max(
+                (
+                    qget(
+                        Q,
+                        next_state,
+                        candidate
+                    )
+                    for candidate
+                    in next_actions
+                ),
+                default=0.0
+            )
+
+
+            target = (
+                reward
+                + GAMMA * next_q
+            )
+
+
+            old_value = qget(
+                Q,
+                state,
+                action
+            )
+
+
+            new_value = (
+                old_value
+                + ALPHA
+                * (
+                    target
+                    - old_value
+                )
+            )
+
+
+            qset(
+                Q,
+                state,
+                action,
+                new_value
+            )
+
+
+            visits = next_visits
+            history_days = next_history_days
             current = action
             mask = new_mask
             remaining = new_remaining
@@ -1417,8 +2717,19 @@ def rollout(
     Q=None,
     Q1=None,
     Q2=None,
-    modql=False
+    modql=False,
+    use_double_q=False,
+    use_enriched_state=False,
+    enriched_state_bucket_count=None,
+    enriched_state_components=None,
+    diagnostic_rows=None,
+    diagnostic_selected_rows=None,
+    diagnostic_scenario_index=None
 ):
+    if modql:
+        use_double_q = True
+        use_enriched_state = True
+
     current = "hub"
     mask = 0
     remaining = SHIFT_MIN
@@ -1465,16 +2776,46 @@ def rollout(
         )
 
 
-        if modql:
+        if use_enriched_state:
 
-            state = proposed_state(
-                scenario,
-                current,
-                mask,
-                remaining,
-                visits,
-                history_days
+            if enriched_state_components is not None:
+                state = component_ablation_state(
+                    scenario,
+                    current,
+                    mask,
+                    remaining,
+                    visits,
+                    history_days,
+                    enriched_state_components
+                )
+            elif enriched_state_bucket_count is None:
+                state = proposed_state(
+                    scenario,
+                    current,
+                    mask,
+                    remaining,
+                    visits,
+                    history_days
+                )
+            else:
+                state = bucket_sensitivity_state(
+                    scenario,
+                    current,
+                    mask,
+                    remaining,
+                    visits,
+                    history_days,
+                    enriched_state_bucket_count
+                )
+
+        else:
+
+            state = standard_state(
+                current
             )
+
+
+        if use_double_q:
 
             values = {
                 action:
@@ -1493,10 +2834,6 @@ def rollout(
             }
 
         else:
-
-            state = standard_state(
-                current
-            )
 
             values = {
                 action:
@@ -1517,6 +2854,180 @@ def rollout(
                 -travel[candidate]
             )
         )
+
+
+        if diagnostic_rows is not None:
+            max_demand = max(scenario.demand.values())
+            candidate_diagnostics = []
+
+            if use_double_q:
+                state_seen_in_q_table = (
+                    state in (Q1 or {})
+                    or state in (Q2 or {})
+                )
+            else:
+                state_seen_in_q_table = state in (Q or {})
+
+            for candidate in actions:
+                demand_coverage = (
+                    scenario.demand[candidate]
+                    / max_demand
+                )
+                projected_visits = dict(visits)
+                projected_visits[candidate] += 1
+                projected_fairness = jain(projected_visits.values())
+                travel_hours = max(
+                    travel[candidate] / 60,
+                    1e-6
+                )
+                travel_efficiency = 1.0 / (1.0 + travel_hours)
+                candidate_reward = (
+                    demand_coverage
+                    * projected_fairness
+                    * travel_efficiency
+                )
+
+                candidate_diagnostics.append(
+                    {
+                        "scenario_index": diagnostic_scenario_index,
+                        "scenario_seed": scenario.seed,
+                        "step": len(route) + 1,
+                        "current_location": current,
+                        "target_sitio": candidate,
+                        "travel_time_min": travel[candidate],
+                        "C": demand_coverage,
+                        "J": projected_fairness,
+                        "E_T": travel_efficiency,
+                        "R": candidate_reward,
+                        "q_value": values[candidate],
+                        "state_seen_in_q_table": state_seen_in_q_table,
+                        "selected_action": action,
+                        "remaining_service_time_min": remaining,
+                    }
+                )
+
+            highest_q_candidate = max(
+                actions,
+                key=lambda candidate: (
+                    values[candidate],
+                    -travel[candidate]
+                )
+            )
+            highest_immediate_reward_candidate = max(
+                candidate_diagnostics,
+                key=lambda row: (
+                    row["R"],
+                    -row["travel_time_min"]
+                )
+            )["target_sitio"]
+
+            for row in candidate_diagnostics:
+                row["highest_q_candidate"] = highest_q_candidate
+                row["highest_immediate_reward_candidate"] = (
+                    highest_immediate_reward_candidate
+                )
+
+            diagnostic_rows.extend(candidate_diagnostics)
+
+            if diagnostic_selected_rows is not None:
+                selected_row = next(
+                    row
+                    for row in candidate_diagnostics
+                    if row["target_sitio"] == action
+                )
+                remaining_after = (
+                    remaining
+                    - travel[action]
+                    - SERVICE_MIN_PER_STOP
+                )
+                next_mask = mask | (1 << IDX[action])
+                next_visits = dict(visits)
+                next_visits[action] += 1
+                next_history_days = dict(history_days)
+                next_history_days[action] = 0
+
+                if use_enriched_state:
+                    if enriched_state_components is not None:
+                        next_state = component_ablation_state(
+                            scenario,
+                            action,
+                            next_mask,
+                            remaining_after,
+                            next_visits,
+                            next_history_days,
+                            enriched_state_components
+                        )
+                    elif enriched_state_bucket_count is None:
+                        next_state = proposed_state(
+                            scenario,
+                            action,
+                            next_mask,
+                            remaining_after,
+                            next_visits,
+                            next_history_days
+                        )
+                    else:
+                        next_state = bucket_sensitivity_state(
+                            scenario,
+                            action,
+                            next_mask,
+                            remaining_after,
+                            next_visits,
+                            next_history_days,
+                            enriched_state_bucket_count
+                        )
+                else:
+                    next_state = standard_state(action)
+
+                next_actions = [
+                    row[0]
+                    for row in reachable(
+                        scenario,
+                        action,
+                        next_mask,
+                        remaining_after
+                    )
+                ]
+
+                if use_double_q:
+                    next_state_max_q = max(
+                        (
+                            qget(Q1, next_state, candidate)
+                            + qget(Q2, next_state, candidate)
+                            for candidate in next_actions
+                        ),
+                        default=0.0
+                    )
+                else:
+                    next_state_max_q = max(
+                        (
+                            qget(Q, next_state, candidate)
+                            for candidate in next_actions
+                        ),
+                        default=0.0
+                    )
+
+                discounted_future_q = GAMMA * next_state_max_q
+                immediate_reward = selected_row["R"]
+
+                diagnostic_selected_rows.append(
+                    {
+                        "scenario_index": diagnostic_scenario_index,
+                        "scenario_seed": scenario.seed,
+                        "step": len(route) + 1,
+                        "selected_action": action,
+                        "immediate_reward": immediate_reward,
+                        "next_state_max_q": next_state_max_q,
+                        "discounted_future_q": discounted_future_q,
+                        "td_target": (
+                            immediate_reward
+                            + discounted_future_q
+                        ),
+                        "selected_action_q": values[action],
+                        "remaining_time_before": remaining,
+                        "remaining_time_after": remaining_after,
+                    }
+                )
 
 
         travel_total += travel[
@@ -1572,6 +3083,88 @@ def rollout(
 
         "route":
             route,
+    }
+
+
+def summarize_reward_state_diagnostic(
+    rows,
+    selected_rows
+):
+    decisions = {}
+
+    for row in rows:
+        key = (
+            row["scenario_index"],
+            row["step"]
+        )
+        decisions.setdefault(key, row)
+
+    decision_rows = list(decisions.values())
+    total = len(decision_rows)
+
+    states_seen = sum(
+        row["state_seen_in_q_table"]
+        for row in decision_rows
+    )
+    selected_highest_q = sum(
+        row["selected_action"]
+        == row["highest_q_candidate"]
+        for row in decision_rows
+    )
+    selected_highest_reward = sum(
+        row["selected_action"]
+        == row["highest_immediate_reward_candidate"]
+        for row in decision_rows
+    )
+
+    def percentage(count):
+        return (
+            100.0 * count / total
+            if total
+            else 0.0
+        )
+
+    def selected_mean(key):
+        return (
+            sum(row[key] for row in selected_rows)
+            / len(selected_rows)
+            if selected_rows
+            else 0.0
+        )
+
+    return {
+        "evaluation_states_total": total,
+        "evaluation_states_seen_in_q_table": states_seen,
+        "evaluation_states_seen_in_q_table_percentage": percentage(
+            states_seen
+        ),
+        "selected_actions_total": total,
+        "selected_actions_with_highest_q_value": selected_highest_q,
+        "selected_actions_with_highest_q_value_percentage": percentage(
+            selected_highest_q
+        ),
+        "selected_actions_with_highest_immediate_reward": (
+            selected_highest_reward
+        ),
+        "selected_actions_with_highest_immediate_reward_percentage": (
+            percentage(selected_highest_reward)
+        ),
+        "mean_immediate_reward": selected_mean("immediate_reward"),
+        "mean_discounted_future_q": selected_mean(
+            "discounted_future_q"
+        ),
+        "mean_td_target": selected_mean("td_target"),
+        "mean_selected_action_q": selected_mean("selected_action_q"),
+        "mean_time_consumed_per_selected_action": (
+            sum(
+                row["remaining_time_before"]
+                - row["remaining_time_after"]
+                for row in selected_rows
+            )
+            / len(selected_rows)
+            if selected_rows
+            else 0.0
+        ),
     }
 
 
@@ -1696,6 +3289,112 @@ def main():
     ]
 
 
+    component_reward_scenarios = [
+        Scenario(seed)
+        for seed
+        in training_seeds
+    ]
+
+
+    component_doubleq_scenarios = [
+        Scenario(seed)
+        for seed
+        in training_seeds
+    ]
+
+
+    component_state_scenarios = [
+        Scenario(seed)
+        for seed
+        in training_seeds
+    ]
+
+
+    pair_reward_doubleq_scenarios = [
+        Scenario(seed)
+        for seed
+        in training_seeds
+    ]
+
+
+    pair_reward_state_scenarios = [
+        Scenario(seed)
+        for seed
+        in training_seeds
+    ]
+
+
+    pair_doubleq_state_scenarios = [
+        Scenario(seed)
+        for seed
+        in training_seeds
+    ]
+
+
+    reward_state_gamma_values = (
+        0.50,
+        0.70,
+        0.90,
+    )
+
+    reward_state_gamma_scenarios = {
+        gamma: [
+            Scenario(seed)
+            for seed in training_seeds
+        ]
+        for gamma in reward_state_gamma_values
+    }
+
+
+    reward_state_bucket_values = (
+        2,
+        3,
+        4,
+    )
+
+    reward_state_bucket_scenarios = {
+        bucket_count: [
+            Scenario(seed)
+            for seed in training_seeds
+        ]
+        for bucket_count in reward_state_bucket_values
+    }
+
+
+    reward_state_component_variants = {
+        "L+D": ("D",),
+        "L+T": ("T",),
+        "L+H": ("H",),
+        "L+A": ("A",),
+        "L+D+T+H+A": ("D", "T", "H", "A"),
+    }
+
+    reward_state_component_scenarios = {
+        label: [
+            Scenario(seed)
+            for seed in training_seeds
+        ]
+        for label in reward_state_component_variants
+    }
+
+
+    reward_state_demand_interaction_variants = {
+        "L+T+H+A": ("T", "H", "A"),
+        "L+D+T": ("D", "T"),
+        "L+D+H": ("D", "H"),
+        "L+D+A": ("D", "A"),
+        "L+D+T+H+A": ("D", "T", "H", "A"),
+    }
+
+    reward_state_demand_interaction_scenarios = {
+        label: [
+            Scenario(seed)
+            for seed in training_seeds
+        ]
+        for label in reward_state_demand_interaction_variants
+    }
+
+
     Q, standard_log = (
         train_standard(
             standard_scenarios
@@ -1711,6 +3410,117 @@ def main():
     ) = train_modql(
         modql_scenarios
     )
+
+
+    Q_reward, component_reward_log = (
+        train_component_reward(
+            component_reward_scenarios
+        )
+    )
+
+
+    (
+        Q1_doubleq,
+        Q2_doubleq,
+        component_doubleq_log,
+        component_doubleq_spread
+    ) = train_component_doubleq(
+        component_doubleq_scenarios
+    )
+
+
+    Q_state, component_state_log = (
+        train_component_state(
+            component_state_scenarios
+        )
+    )
+
+
+    (
+        Q1_reward_doubleq,
+        Q2_reward_doubleq,
+        pair_reward_doubleq_log,
+        pair_reward_doubleq_spread
+    ) = train_pair_reward_doubleq(
+        pair_reward_doubleq_scenarios
+    )
+
+
+    Q_reward_state, pair_reward_state_log = (
+        train_pair_reward_state(
+            pair_reward_state_scenarios
+        )
+    )
+
+
+    (
+        Q1_doubleq_state,
+        Q2_doubleq_state,
+        pair_doubleq_state_log,
+        pair_doubleq_state_spread
+    ) = train_pair_doubleq_state(
+        pair_doubleq_state_scenarios
+    )
+
+
+    reward_state_gamma_q = {}
+    reward_state_gamma_logs = {}
+
+    for gamma in reward_state_gamma_values:
+        (
+            reward_state_gamma_q[gamma],
+            reward_state_gamma_logs[gamma]
+        ) = train_reward_state_gamma_sensitivity(
+            reward_state_gamma_scenarios[gamma],
+            gamma
+        )
+
+
+    reward_state_bucket_q = {}
+    reward_state_bucket_logs = {}
+    reward_state_bucket_unique_states = {}
+
+    for bucket_count in reward_state_bucket_values:
+        (
+            reward_state_bucket_q[bucket_count],
+            reward_state_bucket_logs[bucket_count],
+            reward_state_bucket_unique_states[bucket_count]
+        ) = train_reward_state_bucket_sensitivity(
+            reward_state_bucket_scenarios[bucket_count],
+            bucket_count
+        )
+
+
+    reward_state_component_q = {}
+    reward_state_component_logs = {}
+    reward_state_component_unique_states = {}
+
+    for label, components in reward_state_component_variants.items():
+        (
+            reward_state_component_q[label],
+            reward_state_component_logs[label],
+            reward_state_component_unique_states[label]
+        ) = train_reward_state_component_ablation(
+            reward_state_component_scenarios[label],
+            components
+        )
+
+
+    reward_state_demand_interaction_q = {}
+    reward_state_demand_interaction_logs = {}
+    reward_state_demand_interaction_unique_states = {}
+
+    for label, components in (
+        reward_state_demand_interaction_variants.items()
+    ):
+        (
+            reward_state_demand_interaction_q[label],
+            reward_state_demand_interaction_logs[label],
+            reward_state_demand_interaction_unique_states[label]
+        ) = train_reward_state_component_ablation(
+            reward_state_demand_interaction_scenarios[label],
+            components
+        )
 
 
     # ---------------------------------------------------------
@@ -1750,6 +3560,85 @@ def main():
     ]
 
 
+    component_reward_results = [
+        rollout(
+            scenario,
+            Q=Q_reward
+        )
+        for scenario
+        in evaluation_scenarios
+    ]
+
+
+    component_doubleq_results = [
+        rollout(
+            scenario,
+            Q1=Q1_doubleq,
+            Q2=Q2_doubleq,
+            use_double_q=True
+        )
+        for scenario
+        in evaluation_scenarios
+    ]
+
+
+    component_state_results = [
+        rollout(
+            scenario,
+            Q=Q_state,
+            use_enriched_state=True
+        )
+        for scenario
+        in evaluation_scenarios
+    ]
+
+
+    pair_reward_doubleq_results = [
+        rollout(
+            scenario,
+            Q1=Q1_reward_doubleq,
+            Q2=Q2_reward_doubleq,
+            use_double_q=True
+        )
+        for scenario
+        in evaluation_scenarios
+    ]
+
+
+    reward_state_diagnostic_rows = []
+    reward_state_selected_rows = []
+
+
+    pair_reward_state_results = [
+        rollout(
+            scenario,
+            Q=Q_reward_state,
+            use_enriched_state=True,
+            diagnostic_rows=reward_state_diagnostic_rows,
+            diagnostic_selected_rows=reward_state_selected_rows,
+            diagnostic_scenario_index=scenario_index
+        )
+        for scenario_index, scenario
+        in enumerate(
+            evaluation_scenarios,
+            start=1
+        )
+    ]
+
+
+    pair_doubleq_state_results = [
+        rollout(
+            scenario,
+            Q1=Q1_doubleq_state,
+            Q2=Q2_doubleq_state,
+            use_double_q=True,
+            use_enriched_state=True
+        )
+        for scenario
+        in evaluation_scenarios
+    ]
+
+
     modql_results = [
         rollout(
             scenario,
@@ -1760,6 +3649,154 @@ def main():
         for scenario
         in evaluation_scenarios
     ]
+
+
+    reward_state_gamma_results = {
+        gamma: [
+            rollout(
+                scenario,
+                Q=reward_state_gamma_q[gamma],
+                use_enriched_state=True
+            )
+            for scenario in evaluation_scenarios
+        ]
+        for gamma in reward_state_gamma_values
+    }
+
+    reward_state_gamma_metrics = {
+        f"{gamma:.2f}": {
+            "gamma": gamma,
+            **{
+                key: average(
+                    reward_state_gamma_results[gamma],
+                    key
+                )
+                for key in [
+                    "travel_min",
+                    "fairness",
+                    "stops",
+                    "deferred",
+                    "coverage",
+                ]
+            },
+        }
+        for gamma in reward_state_gamma_values
+    }
+
+
+    reward_state_bucket_results = {
+        bucket_count: [
+            rollout(
+                scenario,
+                Q=reward_state_bucket_q[bucket_count],
+                use_enriched_state=True,
+                enriched_state_bucket_count=bucket_count
+            )
+            for scenario in evaluation_scenarios
+        ]
+        for bucket_count in reward_state_bucket_values
+    }
+
+    reward_state_bucket_metrics = {
+        str(bucket_count): {
+            "buckets_per_dimension": bucket_count,
+            "unique_training_states": (
+                reward_state_bucket_unique_states[bucket_count]
+            ),
+            **{
+                key: average(
+                    reward_state_bucket_results[bucket_count],
+                    key
+                )
+                for key in [
+                    "travel_min",
+                    "fairness",
+                    "stops",
+                    "deferred",
+                    "coverage",
+                ]
+            },
+        }
+        for bucket_count in reward_state_bucket_values
+    }
+
+
+    reward_state_component_results = {
+        label: [
+            rollout(
+                scenario,
+                Q=reward_state_component_q[label],
+                use_enriched_state=True,
+                enriched_state_components=components
+            )
+            for scenario in evaluation_scenarios
+        ]
+        for label, components
+        in reward_state_component_variants.items()
+    }
+
+    reward_state_component_metrics = {
+        label: {
+            "state_components": ["L", *components],
+            "unique_training_states": (
+                reward_state_component_unique_states[label]
+            ),
+            **{
+                key: average(
+                    reward_state_component_results[label],
+                    key
+                )
+                for key in [
+                    "travel_min",
+                    "fairness",
+                    "stops",
+                    "deferred",
+                    "coverage",
+                ]
+            },
+        }
+        for label, components
+        in reward_state_component_variants.items()
+    }
+
+
+    reward_state_demand_interaction_results = {
+        label: [
+            rollout(
+                scenario,
+                Q=reward_state_demand_interaction_q[label],
+                use_enriched_state=True,
+                enriched_state_components=components
+            )
+            for scenario in evaluation_scenarios
+        ]
+        for label, components
+        in reward_state_demand_interaction_variants.items()
+    }
+
+    reward_state_demand_interaction_metrics = {
+        label: {
+            "state_components": ["L", *components],
+            "unique_training_states": (
+                reward_state_demand_interaction_unique_states[label]
+            ),
+            **{
+                key: average(
+                    reward_state_demand_interaction_results[label],
+                    key
+                )
+                for key in [
+                    "travel_min",
+                    "fairness",
+                    "stops",
+                    "deferred",
+                    "coverage",
+                ]
+            },
+        }
+        for label, components
+        in reward_state_demand_interaction_variants.items()
+    }
 
 
     summary = {
@@ -1773,7 +3810,10 @@ def main():
             EVALUATION_SCENARIOS,
 
         "fair_comparison":
-            "Both algorithms trained and evaluated using identical scenario seeds.",
+            (
+                "All eight experimental configurations were trained and "
+                "evaluated using identical scenario seeds."
+            ),
 
         "official_demand_basis":
             {
@@ -1816,6 +3856,24 @@ def main():
                 "standard":
                     "L",
 
+                "component_reward":
+                    "L",
+
+                "component_doubleq":
+                    "L",
+
+                "component_state":
+                    "<L,D,T,H,A>",
+
+                "pair_reward_doubleq":
+                    "L",
+
+                "pair_reward_state":
+                    "<L,D,T,H,A>",
+
+                "pair_doubleq_state":
+                    "<L,D,T,H,A>",
+
                 "modql":
                     "<L,D,T,H,A>",
             },
@@ -1823,10 +3881,40 @@ def main():
         "reward_design":
             {
                 "standard":
-                    "1 / TravelCost",
+                    "1 / TravelTimeHours",
+
+                "component_reward":
+                    (
+                        "DemandCoverage * JainFairness * "
+                        "(1 / (1 + TravelTimeHours))"
+                    ),
+
+                "component_doubleq":
+                    "1 / TravelTimeHours",
+
+                "component_state":
+                    "1 / TravelTimeHours",
+
+                "pair_reward_doubleq":
+                    (
+                        "DemandCoverage * JainFairness * "
+                        "(1 / (1 + TravelTimeHours))"
+                    ),
+
+                "pair_reward_state":
+                    (
+                        "DemandCoverage * JainFairness * "
+                        "(1 / (1 + TravelTimeHours))"
+                    ),
+
+                "pair_doubleq_state":
+                    "1 / TravelTimeHours",
 
                 "modql":
-                    "Coverage * JainFairness * (1 / TravelCost)",
+                    (
+                        "DemandCoverage * JainFairness * "
+                        "(1 / (1 + TravelTimeHours))"
+                    ),
             },
 
         "standard":
@@ -1834,6 +3922,108 @@ def main():
                 key:
                     average(
                         standard_results,
+                        key
+                    )
+                for key
+                in [
+                    "travel_min",
+                    "fairness",
+                    "stops",
+                    "deferred",
+                    "coverage",
+                ]
+            },
+
+        "component_reward":
+            {
+                key:
+                    average(
+                        component_reward_results,
+                        key
+                    )
+                for key
+                in [
+                    "travel_min",
+                    "fairness",
+                    "stops",
+                    "deferred",
+                    "coverage",
+                ]
+            },
+
+        "component_doubleq":
+            {
+                key:
+                    average(
+                        component_doubleq_results,
+                        key
+                    )
+                for key
+                in [
+                    "travel_min",
+                    "fairness",
+                    "stops",
+                    "deferred",
+                    "coverage",
+                ]
+            },
+
+        "component_state":
+            {
+                key:
+                    average(
+                        component_state_results,
+                        key
+                    )
+                for key
+                in [
+                    "travel_min",
+                    "fairness",
+                    "stops",
+                    "deferred",
+                    "coverage",
+                ]
+            },
+
+        "pair_reward_doubleq":
+            {
+                key:
+                    average(
+                        pair_reward_doubleq_results,
+                        key
+                    )
+                for key
+                in [
+                    "travel_min",
+                    "fairness",
+                    "stops",
+                    "deferred",
+                    "coverage",
+                ]
+            },
+
+        "pair_reward_state":
+            {
+                key:
+                    average(
+                        pair_reward_state_results,
+                        key
+                    )
+                for key
+                in [
+                    "travel_min",
+                    "fairness",
+                    "stops",
+                    "deferred",
+                    "coverage",
+                ]
+            },
+
+        "pair_doubleq_state":
+            {
+                key:
+                    average(
+                        pair_doubleq_state_results,
                         key
                     )
                 for key
@@ -1890,6 +4080,202 @@ def main():
     )
 
 
+    (
+        OUT
+        / "reward_state_evaluation_diagnostic.json"
+    ).write_text(
+        json.dumps(
+            {
+                "summary": summarize_reward_state_diagnostic(
+                    reward_state_diagnostic_rows,
+                    reward_state_selected_rows
+                ),
+                "candidates": reward_state_diagnostic_rows,
+                "selected_actions": reward_state_selected_rows,
+            },
+            indent=2
+        ),
+        encoding="utf-8"
+    )
+
+
+    (
+        OUT
+        / "reward_state_gamma_sensitivity.json"
+    ).write_text(
+        json.dumps(
+            {
+                "configuration": "Reward + State",
+                "experiment_type": "diagnostic gamma sensitivity",
+                "only_varied_parameter": "gamma",
+                "gamma_values": list(reward_state_gamma_values),
+                "episodes_trained": EPISODES,
+                "training_scenarios": len(training_seeds),
+                "evaluation_scenarios": len(evaluation_seeds),
+                "shared_training_seeds": True,
+                "shared_evaluation_seeds": True,
+                "fixed_parameters": {
+                    "learning": "Standard Q-Learning",
+                    "reward": (
+                        "DemandCoverage * JainFairness * "
+                        "(1 / (1 + TravelTimeHours))"
+                    ),
+                    "state": "<L,D,T,H,A>",
+                    "alpha": ALPHA,
+                    "epsilon_start": EPS_START,
+                    "epsilon_min": EPS_MIN,
+                    "epsilon_decay": EPS_DECAY,
+                    "training_seed": TRAIN_SEED,
+                    "scenario_seed": SCENARIO_SEED,
+                    "evaluation_seed": EVAL_SEED,
+                },
+                "results": reward_state_gamma_metrics,
+            },
+            indent=2
+        ),
+        encoding="utf-8"
+    )
+
+
+    (
+        OUT
+        / "reward_state_bucket_sensitivity.json"
+    ).write_text(
+        json.dumps(
+            {
+                "configuration": "Reward + State",
+                "experiment_type": "diagnostic state-bucket sensitivity",
+                "only_varied_parameter": (
+                    "bucket count for D, T, H, and A"
+                ),
+                "bucket_values": list(reward_state_bucket_values),
+                "deployed_state_design_unchanged": True,
+                "episodes_trained": EPISODES,
+                "training_scenarios": len(training_seeds),
+                "evaluation_scenarios": len(evaluation_seeds),
+                "shared_training_seeds": True,
+                "shared_evaluation_seeds": True,
+                "bucket_calibration": {
+                    "D_normalized_upper_bound": 1.30,
+                    "T_minutes_upper_bound": SHIFT_MIN,
+                    "H_days_upper_bound": 30.0,
+                    "A_upper_bound": 0.90,
+                    "two_bucket_encoding_matches_current_thresholds": True,
+                },
+                "fixed_parameters": {
+                    "learning": "Standard Q-Learning",
+                    "reward": (
+                        "DemandCoverage * JainFairness * "
+                        "(1 / (1 + TravelTimeHours))"
+                    ),
+                    "state": "<L,D,T,H,A>",
+                    "alpha": ALPHA,
+                    "gamma": GAMMA,
+                    "epsilon_start": EPS_START,
+                    "epsilon_min": EPS_MIN,
+                    "epsilon_decay": EPS_DECAY,
+                    "training_seed": TRAIN_SEED,
+                    "scenario_seed": SCENARIO_SEED,
+                    "evaluation_seed": EVAL_SEED,
+                },
+                "results": reward_state_bucket_metrics,
+            },
+            indent=2
+        ),
+        encoding="utf-8"
+    )
+
+
+    (
+        OUT
+        / "reward_state_component_ablation.json"
+    ).write_text(
+        json.dumps(
+            {
+                "configuration": "Reward + State",
+                "experiment_type": "diagnostic state-component ablation",
+                "only_varied_parameter": (
+                    "enriched-state component included with L"
+                ),
+                "variants": list(reward_state_component_variants),
+                "buckets_per_dimension": 2,
+                "deployed_state_design_unchanged": True,
+                "episodes_trained": EPISODES,
+                "training_scenarios": len(training_seeds),
+                "evaluation_scenarios": len(evaluation_seeds),
+                "shared_training_seeds": True,
+                "shared_evaluation_seeds": True,
+                "fixed_parameters": {
+                    "learning": "Standard Q-Learning",
+                    "reward": (
+                        "DemandCoverage * JainFairness * "
+                        "(1 / (1 + TravelTimeHours))"
+                    ),
+                    "alpha": ALPHA,
+                    "gamma": GAMMA,
+                    "epsilon_start": EPS_START,
+                    "epsilon_min": EPS_MIN,
+                    "epsilon_decay": EPS_DECAY,
+                    "training_seed": TRAIN_SEED,
+                    "scenario_seed": SCENARIO_SEED,
+                    "evaluation_seed": EVAL_SEED,
+                },
+                "results": reward_state_component_metrics,
+            },
+            indent=2
+        ),
+        encoding="utf-8"
+    )
+
+
+    (
+        OUT
+        / "reward_state_demand_interaction.json"
+    ).write_text(
+        json.dumps(
+            {
+                "configuration": "Reward + State",
+                "experiment_type": "diagnostic demand interaction",
+                "purpose": (
+                    "Test whether state Demand D negatively interacts with "
+                    "reward DemandCoverage C."
+                ),
+                "only_varied_parameter": (
+                    "enriched-state component combination"
+                ),
+                "variants": list(
+                    reward_state_demand_interaction_variants
+                ),
+                "buckets_per_dimension": 2,
+                "deployed_state_design_unchanged": True,
+                "episodes_trained": EPISODES,
+                "training_scenarios": len(training_seeds),
+                "evaluation_scenarios": len(evaluation_seeds),
+                "shared_training_seeds": True,
+                "shared_evaluation_seeds": True,
+                "fixed_parameters": {
+                    "learning": "Standard Q-Learning",
+                    "reward": (
+                        "DemandCoverage * JainFairness * "
+                        "(1 / (1 + TravelTimeHours))"
+                    ),
+                    "alpha": ALPHA,
+                    "gamma": GAMMA,
+                    "epsilon_start": EPS_START,
+                    "epsilon_min": EPS_MIN,
+                    "epsilon_decay": EPS_DECAY,
+                    "training_seed": TRAIN_SEED,
+                    "scenario_seed": SCENARIO_SEED,
+                    "evaluation_seed": EVAL_SEED,
+                },
+                "results": reward_state_demand_interaction_metrics,
+            },
+            indent=2
+        ),
+        encoding="utf-8"
+    )
+
+
     # ---------------------------------------------------------
     # SAVE RAW Q TABLES
     # ---------------------------------------------------------
@@ -1933,6 +4319,12 @@ def main():
         "node_bit_index": IDX,
         "state_design": {
             "standard": "L",
+            "component_reward": "L",
+            "component_doubleq": "L",
+            "component_state": "<L,D,T,H,A>",
+            "pair_reward_doubleq": "L",
+            "pair_reward_state": "<L,D,T,H,A>",
+            "pair_doubleq_state": "<L,D,T,H,A>",
             "modql": "<L,D,T,H,A>",
         },
         "state_discretization": {
@@ -1943,14 +4335,53 @@ def main():
             "observed_combined_states": 519,
         },
         "reward_design": {
-            "standard": "1 / TravelCost",
-            "modql": "Coverage * JainFairness * (1 / TravelCost)",
+            "standard": "1 / TravelTimeHours",
+            "component_reward": (
+                "DemandCoverage * JainFairness * "
+                "(1 / (1 + TravelTimeHours))"
+            ),
+            "component_doubleq": "1 / TravelTimeHours",
+            "component_state": "1 / TravelTimeHours",
+            "pair_reward_doubleq": (
+                "DemandCoverage * JainFairness * "
+                "(1 / (1 + TravelTimeHours))"
+            ),
+            "pair_reward_state": (
+                "DemandCoverage * JainFairness * "
+                "(1 / (1 + TravelTimeHours))"
+            ),
+            "pair_doubleq_state": "1 / TravelTimeHours",
+            "modql": (
+                "DemandCoverage * JainFairness * "
+                "(1 / (1 + TravelTimeHours))"
+            ),
         },
         "evaluation_summary": summary,
         "training_curves": {
             "episode": downsample(list(range(1, EPISODES + 1))),
             "standard_reward": downsample(standard_log),
+            "component_reward": downsample(component_reward_log),
+            "component_doubleq_reward": downsample(
+                component_doubleq_log
+            ),
+            "component_state_reward": downsample(component_state_log),
+            "pair_reward_doubleq_reward": downsample(
+                pair_reward_doubleq_log
+            ),
+            "pair_reward_state_reward": downsample(pair_reward_state_log),
+            "pair_doubleq_state_reward": downsample(
+                pair_doubleq_state_log
+            ),
             "modql_reward": downsample(modql_log),
+            "component_doubleq_q1_q2_spread": downsample(
+                component_doubleq_spread
+            ),
+            "pair_reward_doubleq_q1_q2_spread": downsample(
+                pair_reward_doubleq_spread
+            ),
+            "pair_doubleq_state_q1_q2_spread": downsample(
+                pair_doubleq_state_spread
+            ),
             "q1_q2_spread": downsample(q_spread),
         },
         "standard_policy": greedy_standard_policy(Q),

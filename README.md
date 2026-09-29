@@ -7,11 +7,11 @@ running the real trained agent locally, outside the browser.
 
 ## Status
 
-The live app now has its own **Maze Demo** tab (Research & Analysis →
-Algorithms → Maze Demo), built in `maze-demo.js` at the project root.
-It reproduces the same visual — a ball moving through a 10x10 grid
-from start to goal, walls, a dynamically-mutating maze — directly in
-the browser with plain Canvas, no Python/pygame required.
+The live app has a **Maze Demo** tab (Research & Analysis → Algorithms →
+Maze Demo), built in `maze-demo.js` at the project root. It adapts the
+dynamic environment and baseline confidence-agent behavior for the browser,
+including a 10x10 grid, changing obstacles, and moving goals. The demo runs
+directly in Canvas without Python or pygame.
 
 ## Missing pieces
 
@@ -22,16 +22,13 @@ do not exist anywhere else in this repository:
 - `baseline_confidence_agent.py` (`BaselineConfidenceAgent`)
 - `reflection_agent.py` (`ReflectionAgent`)
 
-Without them, this script cannot run as-is, and the in-browser tab
-currently substitutes a simple shortest-path search in their place
-(labeled "SIMULATED DATA" in the UI, consistent with the placeholder
-labeling already used elsewhere in the Analysis tab).
+Without them, the standalone Python script cannot run as-is. The browser demo
+is a separate JavaScript adaptation and does not import these Python modules.
 
 Add those three files here to:
 
 1. Run this pygame script locally against the real trained policy.
-2. Port the same policy logic into `maze-demo.js` so the in-app tab
-   shows actual learned behavior instead of the placeholder.
+2. Compare the standalone implementation against the browser adaptation.
 
 ## Running locally
 

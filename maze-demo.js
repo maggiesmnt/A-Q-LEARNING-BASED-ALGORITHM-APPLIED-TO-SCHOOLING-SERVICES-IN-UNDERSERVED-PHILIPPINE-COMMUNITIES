@@ -282,8 +282,8 @@
     ctx.fillStyle=themeColor('--maze-agent','#8A633F'); ctx.beginPath(); ctx.arc(env.currentPos[1]*cell+cell/2,env.currentPos[0]*cell+cell/2,cell*.30,0,Math.PI*2); ctx.fill();
   }
 
-  function startTimer(){ if(running||finished)return; running=true; if(el('mzPlay'))el('mzPlay').textContent='Pause'; timer=setInterval(stepOnce,STEP_MS); }
-  function stopTimer(){ running=false; if(timer)clearInterval(timer); timer=null; if(el('mzPlay'))el('mzPlay').textContent='Play'; }
+  function startTimer(){ if(running||finished)return; running=true; if(el('mzPlay'))el('mzPlay').textContent='Pause Animation'; timer=setInterval(stepOnce,STEP_MS); }
+  function stopTimer(){ running=false; if(timer)clearInterval(timer); timer=null; if(el('mzPlay'))el('mzPlay').textContent='Start Animation'; }
   function nextEpisode(){ stopTimer(); if(episode>=MAX_EPISODES){episode=1;agent=new BaselineConfidenceAgentBrowser();}else episode++; startEpisode(false); }
 
   function buildUI(){
@@ -299,14 +299,14 @@
         </div>
         <div style="display:grid;grid-template-columns:minmax(210px,300px) minmax(300px,500px);gap:18px;align-items:start" class="maze-layout">
           <div style="background:var(--maze-panel);border:1px solid var(--line);border-radius:12px;padding:14px;color:var(--txt);min-height:420px">
-            <div style="font-weight:800;margin-bottom:12px">Maze Demonstration - Ball Moving in Maze</div>
+            <div style="font-weight:800;margin-bottom:12px">Q-Learning Maze Status</div>
             <div style="font-size:13px;line-height:1.9">
               <div>Episode: <b id="mzEpisode">1 / 5</b></div>
               <div>Status: <b id="mzStatus">Ready</b></div>
-              <div>Goal Result: <b id="mzGoal">In Progress...</b></div>
-              <div>Steps Taken: <b id="mzSteps">0 / 100</b></div>
-              <div>Last Action: <b id="mzAction">None</b></div>
-              <div>Exploration ε: <b id="mzEpsilon">0.300</b></div>
+              <div>Goal: <b id="mzGoal">In Progress...</b></div>
+              <div>Steps: <b id="mzSteps">0 / 100</b></div>
+              <div>Latest Move: <b id="mzAction">None</b></div>
+              <div>Exploration Rate (&epsilon;): <b id="mzEpsilon">0.300</b></div>
               <hr style="border:0;border-top:1px solid var(--line);margin:10px 0">
               <div><span style="color:var(--maze-agent)">●</span> Red Ball: Baseline Agent</div>
               <div><span style="color:var(--maze-goal)">●</span> Green Circle: Goal</div>
@@ -317,8 +317,8 @@
           <div><canvas id="mzCanvas" width="500" height="500" style="display:block;width:100%;max-width:500px;aspect-ratio:1/1;background:var(--maze-cell);border:1px solid var(--line);border-radius:10px;margin:0 auto"></canvas></div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
-          <button class="btn p" id="mzPlay" style="flex:0 0 110px">Play</button>
-          <button class="btn g" id="mzStep" style="flex:0 0 110px">Step</button>
+          <button class="btn p" id="mzPlay" style="flex:0 0 150px">Start Animation</button>
+          <button class="btn g" id="mzStep" style="flex:0 0 150px">Advance One Step</button>
           <button class="btn g" id="mzReset" style="flex:0 0 140px">Restart Episode</button>
           <button class="btn k" id="mzNext" style="flex:0 0 140px">Next Episode</button>
         </div>

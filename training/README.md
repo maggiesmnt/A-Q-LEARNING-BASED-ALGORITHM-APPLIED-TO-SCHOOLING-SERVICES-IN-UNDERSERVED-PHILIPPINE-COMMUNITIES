@@ -1,24 +1,27 @@
 # Training - Barangay Laiban Q-Learning Experiment
 
-This folder contains the aligned comparison between Standard Q-Learning and MODQL.
+This folder contains the aligned baseline, component-ablation, pairwise-ablation,
+and Full MODQL experiments.
 
 ## Experiment setup
 
 - Standard state: S = L
-- Standard reward: 1 / Travel Cost
+- Standard reward: 1 / Travel Time (hours)
 - MODQL state: S = <L,D,T,H,A>
   - D = localized per-sitio demand using 2 buckets
   - T = remaining 480-minute service-time budget using 2 buckets
   - H = per-sitio Historical Visit Index using 2 recency buckets
   - A = per-sitio route-accessibility using 2 buckets
-- The current 2,000-episode run observes approximately 519 combined MODQL states.
-- MODQL reward: Coverage x Jain Fairness x (1 / Travel Cost)
-- Training episodes: 2000
+- MODQL reward: Normalized Learner Demand x Jain Fairness x
+  (1 / (1 + Travel Time Hours))
+- Training episodes: 5000
 - Held-out evaluation scenarios: 200
 - Shift length: 480 minutes
 - Service duration: 60 minutes per sitio
 
-Both algorithms use the same nine Barangay Laiban sitios, road graph, accessibility conditions, demand scenarios, historical-service initialization, time budget, and scenario seeds.
+All configurations use the same nine Barangay Laiban sitios, road graph,
+accessibility conditions, demand scenarios, historical-service initialization,
+time budget, and scenario seeds.
 
 ## Data status
 
@@ -42,6 +45,11 @@ The current authoritative experiment artifacts are regenerated from policy versi
 - `training/outputs_aligned/standard_policy.json`
 - `training/outputs_aligned/modql_policy.json`
 - `training/outputs_aligned/training_log.csv`
+- `training/outputs_aligned/reward_state_evaluation_diagnostic.json`
+- `training/outputs_aligned/reward_state_gamma_sensitivity.json`
+- `training/outputs_aligned/reward_state_bucket_sensitivity.json`
+- `training/outputs_aligned/reward_state_component_ablation.json`
+- `training/outputs_aligned/reward_state_demand_interaction.json`
 - root `trained_policy.js`
 
 `charts.js` reads the embedded `TRAINED_POLICY.training_curves` data directly. `make_sim_js.py` is an optional aligned export helper only.

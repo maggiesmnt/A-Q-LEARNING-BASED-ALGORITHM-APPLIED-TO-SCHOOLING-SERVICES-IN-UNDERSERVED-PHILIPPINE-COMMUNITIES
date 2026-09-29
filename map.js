@@ -14,6 +14,10 @@ L.control.scale({imperial:false,position:"bottomright"}).addTo(map);
 var gRoads=L.layerGroup().addTo(map), gRoute=L.layerGroup().addTo(map),
     gNodes=L.layerGroup().addTo(map), gHaz=L.layerGroup().addTo(map);
 
+function roadDisplayColor(status){
+  return status==="open"?"#218B62":status==="caut"?"#D58A22":status==="rest"?"#E46F22":"#C43D3D";
+}
+
 var DRIVE_ROUTE_FLOW_CLASS="drive-route-flow";
 (function installDriveRouteFlowStyle(){
   if(document.getElementById("driveRouteFlowStyle")) return;
@@ -32,7 +36,7 @@ function drawRoads(){
     var isQa=e.graph_status==="qa_connector";
     var isInferred=e.graph_status==="inferred_connector";
     var line=L.polyline(edgeGeom(e),{
-      color:b.col,
+      color:roadDisplayColor(b.k),
       weight:isQa?3:isInferred?4:(A<0.20?6:5),
       opacity:isQa?0.34:isInferred?0.52:(A<0.20?0.95:0.76),
       dashArray:isQa?"4 9":isInferred?"8 7":e.surf==="dirt"?"9 7":e.surf==="ford"?"3 8":null,
@@ -51,7 +55,7 @@ function drawRoads(){
     if(A<0.20){
       var g=edgeGeom(e),mid=g[Math.floor(g.length/2)];
       L.marker(mid,{icon:L.divIcon({className:"",iconSize:[30,30],iconAnchor:[15,15],
-        html:"<div style='width:30px;height:30px;border-radius:50%;background:#A24D42;border:2.5px solid #F4EAD8;box-shadow:0 3px 10px rgba(0,0,0,.5);display:grid;place-items:center;font-size:15px;color:#fff;font-weight:900'>&times;</div>"})}).addTo(gRoads);
+        html:"<div style='width:30px;height:30px;border-radius:50%;background:#C43D3D;border:2.5px solid #FFFFFF;box-shadow:0 3px 10px rgba(0,0,0,.35);display:grid;place-items:center;font-size:15px;color:#fff;font-weight:900'>&times;</div>"})}).addTo(gRoads);
     }
     if(A<0.75){
       var pts=edgeGeom(e),p=pts[Math.floor(pts.length/2)],reason=roadIssueReason(e,A);
@@ -85,13 +89,13 @@ function drawNodes(){
   NODES.forEach(function(n){
     if(n.kind==="depot"){
       L.marker([n.lat,n.lng],{icon:L.divIcon({className:"",iconSize:[34,34],iconAnchor:[17,17],
-        html:"<div style='width:34px;height:34px;border-radius:11px;background:#333D1C;border:2.5px solid #B9AB6B;display:grid;place-items:center;font-size:15px;box-shadow:0 4px 12px rgba(0,0,0,.5)'>\uD83C\uDFEB</div>"})})
+        html:"<div style='width:34px;height:34px;border-radius:8px;background:#71805C;border:2.5px solid #FCF9EA;display:grid;place-items:center;font-size:15px;box-shadow:0 4px 12px rgba(0,0,0,.35)'>\uD83C\uDFEB</div>"})})
         .addTo(gNodes).bindPopup("<b>"+n.name+"</b><br><span>Role:</span> Deployment origin / motor pool<br><span>Area:</span> "+n.sitios);
       return;
     }
     var idx=-1;PLAN.stops.forEach(function(s,i){if(s.id===n.id)idx=i});
     var def=PLAN.deferred.some(function(d){return d.id===n.id});
-    var col=def?"#A24D42":idx<0?"#6F7353":idx<PROGRESS?"#5E6828":"#919B3E";
+    var col=def?"#C43D3D":idx<0?"#A8BBA3":idx<PROGRESS?"#97A87A":"#DB9558";
     var lbl=def?"!":idx<0?"\u2013":String(idx+1);
     var r=13+Math.round(n.learners/9);
     L.circleMarker([n.lat,n.lng],{radius:r,color:col,weight:2,fillColor:col,fillOpacity:.16}).addTo(gNodes);
@@ -111,6 +115,17 @@ function drawNodes(){
 function drawRoute(){
   gRoute.clearLayers();
 
+  function drawVisibleRoute(geometry,style){
+    L.polyline(geometry,{
+      color:"#FCF9EA",
+      weight:style.weight+4,
+      opacity:Math.min(0.90,style.opacity+0.18),
+      lineCap:"round",
+      lineJoin:"round"
+    }).addTo(gRoute);
+    L.polyline(geometry,style).addTo(gRoute);
+  }
+
   /* Route visual hierarchy for the Drive tab:
      - completed legs: faded
      - current leg to the next destination: dashed/highlighted
@@ -119,15 +134,15 @@ function drawRoute(){
   PLAN.stops.forEach(function(s,i){
     var style;
     if(i<PROGRESS){
-      style={color:"#5E6828",weight:5,opacity:.38,lineCap:"round",dashArray:null};
+      style={color:"#97A87A",weight:5,opacity:.48,lineCap:"round",dashArray:null};
     }else if(i===PROGRESS){
-      style={color:"#DCC9AF",weight:4,opacity:.96,lineCap:"round",dashArray:"10 7",className:DRIVE_ROUTE_FLOW_CLASS};
+      style={color:"#DB9558",weight:5,opacity:.96,lineCap:"round",dashArray:"10 7",className:DRIVE_ROUTE_FLOW_CLASS};
     }else{
-      style={color:"#8E8655",weight:4,opacity:.34,lineCap:"round",dashArray:null};
+      style={color:"#A8BBA3",weight:4,opacity:.55,lineCap:"round",dashArray:null};
     }
 
     s.p.legs.forEach(function(e,j){
-      L.polyline(i===PROGRESS?routeLegGeom(s.p,j,e):edgeGeom(e),style).addTo(gRoute);
+      drawVisibleRoute(i===PROGRESS?routeLegGeom(s.p,j,e):edgeGeom(e),style);
     });
   });
 
@@ -137,7 +152,7 @@ function drawRoute(){
   var hasNextStop=!!PLAN.stops[PROGRESS];
   if(!hasNextStop&&PLAN.ret){
     PLAN.ret.legs.forEach(function(e,j){
-      L.polyline(routeLegGeom(PLAN.ret,j,e),{color:"#7B753B",weight:4,opacity:.75,dashArray:"10 7",lineCap:"round",className:DRIVE_ROUTE_FLOW_CLASS}).addTo(gRoute);
+      drawVisibleRoute(routeLegGeom(PLAN.ret,j,e),{color:"#71805C",weight:5,opacity:.82,dashArray:"10 7",lineCap:"round",className:DRIVE_ROUTE_FLOW_CLASS});
     });
   }
 }
@@ -149,7 +164,7 @@ function drawHaz(){
     var g=edgeGeom(e),p=g[Math.max(0,Math.floor(g.length/2)-0)];
     var off=[p[0]+0.0035,p[1]+0.0035];
     var hz=L.marker(off,{icon:L.divIcon({className:"",iconSize:[32,32],iconAnchor:[16,32],
-      html:"<div style='width:32px;height:32px;border-radius:11px 11px 11px 3px;background:#8A633F;border:2px solid #F4EAD8;display:grid;place-items:center;font-size:15px;box-shadow:0 4px 12px rgba(0,0,0,.5)'>"+r.em+"</div>"})})
+      html:"<div style='width:32px;height:32px;border-radius:8px 8px 8px 3px;background:#B86B16;border:2px solid #FFFFFF;display:grid;place-items:center;font-size:15px;box-shadow:0 4px 12px rgba(0,0,0,.35)'>"+r.em+"</div>"})})
       .addTo(gHaz).bindPopup("<b>"+r.type+"</b><br>"+N[e.a].name+" &harr; "+N[e.b].name+
         "<br>"+r.who+" &middot; "+(r.ago<1?Math.round(r.ago*60)+" min":r.ago.toFixed(1)+" h")+" ago"+
         "<br>Report confidence <b>"+(confidence(r)*100).toFixed(0)+"%</b>"+
@@ -159,7 +174,7 @@ function drawHaz(){
   });
 }
 var unit=L.marker([0,0],{icon:L.divIcon({className:"",iconSize:[30,30],iconAnchor:[15,15],
-  html:"<div style='width:30px;height:30px;border-radius:50%;background:#B9AB6B;border:3px solid #F4EAD8;box-shadow:0 0 0 8px rgba(185,171,107,.24),0 4px 12px rgba(0,0,0,.5)'></div>"})}).addTo(map);
+  html:"<div style='width:30px;height:30px;border-radius:50%;background:#DB9558;border:3px solid #FCF9EA;box-shadow:0 0 0 8px rgba(219,149,88,.24),0 4px 12px rgba(0,0,0,.35)'></div>"})}).addTo(map);
 function placeUnit(){
   var s=PLAN.stops[PROGRESS-1];
   var at = s? N[s.id] : N.hub;

@@ -4,12 +4,13 @@
    Existing/control:
      Standard Q-Learning
      State: S = L
-     Reward during training: 1 / Travel Cost
+     Reward during training: 1 / Travel Time (hours)
 
    Proposed/experimental:
      Multi-Objective Double Q-Learning (MODQL)
      State: S = <L,D,T,H,A>
-     Reward during training: Coverage * JainFairness * (1 / Travel Cost)
+     Reward during training:
+       Normalized Learner Demand * JainFairness * (1 / (1 + Travel Time Hours))
 
    Both algorithms use the same active Barangay Laiban road graph, the same
    feasibility rules, and the same operational constraints.

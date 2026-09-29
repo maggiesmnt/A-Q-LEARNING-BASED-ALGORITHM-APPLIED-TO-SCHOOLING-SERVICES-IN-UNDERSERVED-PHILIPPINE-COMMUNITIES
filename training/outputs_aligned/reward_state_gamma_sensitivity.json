@@ -1,0 +1,53 @@
+{
+  "configuration": "Reward + State",
+  "experiment_type": "diagnostic gamma sensitivity",
+  "only_varied_parameter": "gamma",
+  "gamma_values": [
+    0.5,
+    0.7,
+    0.9
+  ],
+  "episodes_trained": 5000,
+  "training_scenarios": 5000,
+  "evaluation_scenarios": 200,
+  "shared_training_seeds": true,
+  "shared_evaluation_seeds": true,
+  "fixed_parameters": {
+    "learning": "Standard Q-Learning",
+    "reward": "DemandCoverage * JainFairness * (1 / (1 + TravelTimeHours))",
+    "state": "<L,D,T,H,A>",
+    "alpha": 0.1,
+    "epsilon_start": 1.0,
+    "epsilon_min": 0.05,
+    "epsilon_decay": 0.995,
+    "training_seed": 7,
+    "scenario_seed": 2026,
+    "evaluation_seed": 991
+  },
+  "results": {
+    "0.50": {
+      "gamma": 0.5,
+      "travel_min": 113.22145248647892,
+      "fairness": 0.5253925322565673,
+      "stops": 3.775,
+      "deferred": 5.225,
+      "coverage": 116.155
+    },
+    "0.70": {
+      "gamma": 0.7,
+      "travel_min": 113.22145248647892,
+      "fairness": 0.5253925322565673,
+      "stops": 3.775,
+      "deferred": 5.225,
+      "coverage": 116.155
+    },
+    "0.90": {
+      "gamma": 0.9,
+      "travel_min": 113.22145248647892,
+      "fairness": 0.5253925322565673,
+      "stops": 3.775,
+      "deferred": 5.225,
+      "coverage": 116.155
+    }
+  }
+}
