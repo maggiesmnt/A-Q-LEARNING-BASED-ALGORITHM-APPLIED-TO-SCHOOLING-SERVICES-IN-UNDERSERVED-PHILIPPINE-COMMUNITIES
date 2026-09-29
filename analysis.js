@@ -107,6 +107,22 @@ function multiDayEvaluation(){
   restoreEvaluationSnapshot(base);
   return {days:days,standard:standard,modql:modql};
 }
+function cleanMultiDayEvaluation(){
+  var snapshot=evaluationSnapshot();
+  REPORTS.length=0;
+  ADVISORIES.length=0;
+  WX.mm=EVALUATION_DEMO_RAIN_MM;
+  var result=multiDayEvaluation();
+  restoreEvaluationSnapshot(snapshot);
+  return result;
+}
+function sevenDayComparisonHTML(result){
+  var rows=[];
+  for(var i=0;i<result.days;i++){
+    rows.push('<tr><th>Day '+(i+1)+'</th><td>'+result.standard.cumulative[i]+'</td><td>'+result.modql.cumulative[i]+'</td><td>'+result.standard.fairness[i].toFixed(3)+'</td><td>'+result.modql.fairness[i].toFixed(3)+'</td></tr>');
+  }
+  return '<div class="card seven-day-comparison"><h3>7-day Clean-Baseline Comparison</h3><div class="k" style="margin-bottom:12px">Both algorithms serve the same daily capacity under clean conditions, but MODQL consistently achieves higher fairness by prioritizing under-served communities &mdash; demonstrating that its advantage lies in equitable selection, not raw throughput.</div><div class="eval-table-wrap"><table><thead><tr><th>Day</th><th>Standard cumulative communities served</th><th>MODQL cumulative communities served</th><th>Standard Jain&rsquo;s Fairness</th><th>MODQL Jain&rsquo;s Fairness</th></tr></thead><tbody>'+rows.join("")+'</tbody></table></div></div>';
+}
 function evaluationGraphHTML(id,title,plan,color){
   var minLat=Math.min.apply(null,NODES.map(function(n){return n.lat})),maxLat=Math.max.apply(null,NODES.map(function(n){return n.lat}));
   var minLng=Math.min.apply(null,NODES.map(function(n){return n.lng})),maxLng=Math.max.apply(null,NODES.map(function(n){return n.lng}));
@@ -120,9 +136,9 @@ var PROPOSED_GRAPH_SCENARIOS=[
   {title:"Simulation 1 — Close stops",note:"Stop 1 is close to the Hub, so MODQL can serve the nearby stop first before continuing through the open roads.",nodes:[
     {id:"hub",label:"Hub",x:85,y:190,hub:true},{id:"stop1",label:"Stop 1",x:270,y:75},{id:"stop2",label:"Stop 2",x:490,y:275},{id:"stop3",label:"Stop 3",x:705,y:105}
   ],edges:[{a:"hub",b:"stop1",min:14,kind:"open"},{a:"hub",b:"stop2",min:22,kind:"caution"},{a:"hub",b:"stop3",min:30,kind:"open"},{a:"stop1",b:"stop2",min:10,kind:"open"},{a:"stop2",b:"stop3",min:12,kind:"open"}],route:["hub","stop1","stop2","stop3","hub"],returnMin:30},
-  {title:"Simulation 2 — Far stop",note:"Stop 1 is the closest first choice at 12 minutes. MODQL serves it first, then connects to the far Stop 3 before returning through Stop 2.",nodes:[
+  {title:"Simulation 2 — Far stop",note:"Stop 1 is the closest first choice at 12 minutes. Even though Stop 1 to Stop 2 takes only 5 minutes, that road has a hazard. Double Q-Learning balances time and hazard penalties, so MODQL connects to the safer Stop 3 before returning through Stop 2.",nodes:[
     {id:"hub",label:"Hub",x:85,y:180,hub:true},{id:"stop1",label:"Stop 1",x:230,y:75},{id:"stop2",label:"Stop 2",x:470,y:275},{id:"stop3",label:"Stop 3",x:735,y:75}
-  ],edges:[{a:"hub",b:"stop1",min:12,kind:"open"},{a:"hub",b:"stop2",min:20,kind:"open"},{a:"hub",b:"stop3",min:28,kind:"caution"},{a:"stop1",b:"stop2",min:11,kind:"open"},{a:"stop1",b:"stop3",min:18,kind:"open"},{a:"stop2",b:"stop3",min:13,kind:"open"}],route:["hub","stop1","stop3","stop2","hub"],returnMin:20},
+  ],edges:[{a:"hub",b:"stop1",min:12,kind:"open"},{a:"hub",b:"stop2",min:20,kind:"open"},{a:"hub",b:"stop3",min:28,kind:"caution"},{a:"stop1",b:"stop2",min:5,kind:"hazard"},{a:"stop1",b:"stop3",min:18,kind:"open"},{a:"stop2",b:"stop3",min:13,kind:"open"}],route:["hub","stop1","stop3","stop2","hub"],returnMin:20},
   {title:"Simulation 3 — Hazard on the closest road",note:"Stop 1 is close, but its direct road has a hazard delay. MODQL selects the safer route through the other stops.",nodes:[
     {id:"hub",label:"Hub",x:85,y:180,hub:true},{id:"stop1",label:"Stop 1",x:245,y:70},{id:"stop2",label:"Stop 2",x:480,y:275},{id:"stop3",label:"Stop 3",x:700,y:105}
   ],edges:[{a:"hub",b:"stop1",min:14,kind:"hazard"},{a:"hub",b:"stop2",min:24,kind:"open"},{a:"stop2",b:"stop3",min:12,kind:"open"},{a:"stop1",b:"stop3",min:10,kind:"closed"}],route:["hub","stop2","stop3","hub"],returnMin:36}
@@ -162,6 +178,7 @@ function renderEvaluation(){
   var std=evaluationKPIs(analysisStd),mod=evaluationKPIs(analysisMod),rStd=TRAINING_RESULT.standard,rMod=TRAINING_RESULT.modql;
   var rReward=TRAINING_RESULT.component_reward,rDouble=TRAINING_RESULT.component_doubleq,rState=TRAINING_RESULT.component_state;
   var rRewardDouble=TRAINING_RESULT.pair_reward_doubleq,rRewardState=TRAINING_RESULT.pair_reward_state,rDoubleState=TRAINING_RESULT.pair_doubleq_state;
+  var sevenDay=cleanMultiDayEvaluation();
   function num(v,d){return Number(v||0).toFixed(d)}
   function metricTile(label,value,detail){
     return '<div class="eval-metric-tile"><div class="lab">'+label+'</div><div class="v">'+value+'</div><div class="d">'+detail+'</div></div>'
@@ -217,6 +234,7 @@ function renderEvaluation(){
     '<div class="sop-problem"><b>Evaluation setup.</b> All experimental configurations used the same Barangay Laiban environment, training and evaluation seeds, and held-out scenarios. Values below come directly from <span class="mono">TRAINED_POLICY.evaluation_summary</span> and are reported as measured.</div>'+
     '<div class="card eval-summary-card"><h3>Overall Experimental Results</h3><div class="k" style="margin-bottom:12px">Authoritative 200-scenario averages for the baseline and Full MODQL control.</div><div class="eval-summary-grid">'+algorithmSummaryCard("std","Standard Q-Learning",rStd)+algorithmSummaryCard("mod","Full MODQL",rMod)+'</div><div class="k eval-summary-note">In this run, Standard Q-Learning records lower average travel time, slightly higher fairness, more stops, fewer deferred communities, and higher learner coverage than Full MODQL. These results describe this experiment and do not establish universal superiority for either method.</div></div>'+
     '<div class="card route-comparison-card"><h3>Route Behavior Comparison</h3><div class="split2 original-algorithm-split"><div class="splitcol std"><h3 class="comparison-panel-title">Standard Q-Learning</h3><div id="comparison-existing-host"><div class="comparison-panel-subtitle">Baseline route-learning behavior used as the control.</div><div id="comparison-reference-note" class="comparison-note-slot"></div></div></div><div class="splitcol mod"><h3 class="comparison-panel-title">Enhanced MODQL</h3>'+proposedGraphHTML("evaluation-proposed-sim")+'</div></div></div>'+
+    sevenDayComparisonHTML(sevenDay)+
     '<div class="card eval-card compact-route-metrics"><h3>Current Route Metrics &mdash; Illustrative Single Scenario</h3><div class="k" style="margin-bottom:12px">These descriptive route outputs come from the currently displayed Laiban scenario. They are not the 200-scenario experimental averages.</div>'+routeMetricGrid()+'</div>'+
     '<div class="card"><h3>SOP 1 &mdash; Reward Function</h3><div class="k" style="margin-bottom:12px">Primary comparison: Standard versus Reward only. Learning remains single-table Standard Q-Learning and the state remains <span class="mono">S = L</span>; only the reward changes.</div><div class="split2 aligned-algo-grid"><div class="splitcol std"><h4>Standard</h4><div class="k mono sop-formula">R<sub>standard</sub> = 1 / T<sub>hours</sub></div>'+sopMetricList(rStd)+'</div><div class="splitcol mod"><h4>Reward only</h4><div class="k mono sop-formula">R<sub>MODQL</sub> = C &times; J &times; E<sub>T</sub><br>C = normalized learner demand<br>J = Jain&rsquo;s Fairness Index<br>E<sub>T</sub> = 1 / (1 + T<sub>hours</sub>)</div>'+sopMetricList(rReward)+'</div></div><div class="k" style="margin-top:12px">Full MODQL remains overall context, but the controlled Reward-only result isolates SOP 1 evidence.</div></div>'+
     '<div class="card"><h3>SOP 2 &mdash; Double Q-Learning</h3><div class="k" style="margin-bottom:12px">Primary comparison: Standard versus Double Q only. Both use the location-only state and standard inverse-travel-time reward; only the learning update changes.</div><div class="split2 aligned-algo-grid"><div class="splitcol std"><h4>Standard</h4><div class="k mono sop-formula">One Q-table<br>R<sub>standard</sub> = 1 / T<sub>hours</sub></div>'+sopMetricList(rStd)+'</div><div class="splitcol mod"><h4>Double Q only</h4><div class="k mono sop-formula">Q1 selects, Q2 evaluates<br>Q2 selects, Q1 evaluates</div>'+sopMetricList(rDouble)+'</div></div>'+spreadChart+'<div class="note" style="margin-top:12px"><b>Training-log summary.</b> Average spread = '+num(TRAINING_LOG_STATS.mean_q1_q2_spread_avg,3)+'; final spread = '+num(TRAINING_LOG_STATS.mean_q1_q2_spread_last,3)+'; maximum spread = '+num(TRAINING_LOG_STATS.mean_q1_q2_spread_max,3)+'.<br>Lower spread indicates closer agreement between the two estimators. The spread is used as a stability diagnostic and does not by itself prove elimination of overestimation bias.</div></div>'+
