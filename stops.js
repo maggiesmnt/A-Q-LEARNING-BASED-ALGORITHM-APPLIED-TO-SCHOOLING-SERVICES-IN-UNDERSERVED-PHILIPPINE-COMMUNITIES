@@ -14,9 +14,9 @@ function renderStops(){
   if(PLAN.ret)totalKm+=PLAN.ret.km;
   var vis=[];NODES.forEach(function(n){if(n.kind==="node")vis.push(PLAN.visits[n.id])});
   document.getElementById("dayKpis").innerHTML=
-    '<div class="kpi a"><div class="lab">Learners reached</div><div class="v">'+learners+'</div><div class="d">'+PLAN.stops.length+' of '+(NODES.length-1)+' communities</div></div>'+
-    '<div class="kpi b"><div class="lab">Route length</div><div class="v">'+totalKm.toFixed(1)+'<span style="font-size:13px"> km</span></div><div class="d">'+Math.floor(totalMin/60)+'h '+Math.round(totalMin%60)+'m incl. service time</div></div>'+
-    '<div class="kpi c"><div class="lab">Visit balance</div><div class="v">'+jain(vis).toFixed(3)+'</div><div class="d">how evenly visits are shared</div></div>';
+    '<div class="kpi a"><div class="lab">Learner Coverage</div><div class="v">'+learners+'</div><div class="d">learners across '+PLAN.stops.length+' of '+(NODES.length-1)+' communities</div></div>'+
+    '<div class="kpi b"><div class="lab">Route Distance</div><div class="v">'+totalKm.toFixed(1)+'<span style="font-size:13px"> km</span></div><div class="d">'+Math.floor(totalMin/60)+'h '+Math.round(totalMin%60)+'m including service</div></div>'+
+    '<div class="kpi c"><div class="lab">Fairness (Jain&rsquo;s Index)</div><div class="v">'+jain(vis).toFixed(3)+'</div><div class="d">higher means visits are more evenly shared</div></div>';
 
   var weekly=document.getElementById("weeklySequence");
   if(weekly){
@@ -46,8 +46,8 @@ function renderStops(){
       '<div class="nm">'+n.name+'</div>'+
       '<div class="mt"><span class="tag">'+n.learners+' learners</span>'+
       '<span class="tag'+(n.days>=20?' hot':'')+'">last served '+n.days+'d ago</span>'+
-      '<span class="tag" style="color:'+b.col+'">road condition: '+roadLabel+'</span>'+
-      '<span class="tag">'+(s.usedPolicy?(PLAN.methodology.indexOf("MODQL")>=0?'trained Q1+Q2':'trained Q'):'fallback formula')+'</span>'+
+      '<span class="tag" style="color:'+roadDisplayColor(b.k)+'">road condition: '+roadLabel+'</span>'+
+      '<span class="tag" title="How this stop was selected">'+(s.usedPolicy?(PLAN.methodology.indexOf("MODQL")>=0?'MODQL policy (Q1 + Q2)':'Standard Q-Learning policy'):'rule-based fallback')+'</span>'+
       '<span class="tag">'+serviceMin(n)+' min on site</span>'+
       '</div>'+
       '<div class="k" style="margin-top:7px">via '+s.p.seq.map(function(x){return N[x].name.replace("Sitio ","")}).join(" \u2192 ")+'</div>'+
@@ -106,7 +106,7 @@ function renderHistory(){
       '<div class="k history-route"><b>Route taken:</b> '+r.route+'</div>'+
       '<div class="k"><b>Travel time:</b> '+r.travel+'</div>'+
       '<div class="k"><b>Missed/deferred:</b> '+(r.missed.length?r.missed.join("; "):"None")+'</div>'+
-      '<div class="k history-h"><b>H update fields:</b> date/week, visited IDs, learners served, completed route, travel minutes, and deferred IDs are separated for the next planning cycle.</div>'+
+      '<div class="k history-h"><b>History input (H):</b> this visit record is available to the next planning cycle.</div>'+
     '</div>';
   }).join("");
 }

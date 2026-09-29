@@ -110,7 +110,7 @@ function renderDrive(){
     document.getElementById("stopName").textContent="Return to Laiban ALS Hub";
     document.getElementById("stopTags").innerHTML='<span class="tag eq">all stops completed</span>';
     document.getElementById("etaMin").textContent=PLAN.ret?Math.round(PLAN.ret.min):0;
-    document.getElementById("etaClock").textContent="min to hub";
+    document.getElementById("etaClock").textContent="minutes to hub";
     document.getElementById("turnText").textContent="All scheduled stops served";
     document.getElementById("turnSub").textContent="Good work. Return to the hub, or start the next day when ready.";
     cb.style.display="none";
@@ -124,10 +124,10 @@ function renderDrive(){
       '<span class="tag'+(n.days>=20?' hot':'')+'">last served '+n.days+'d ago</span>'+
       '<span class="tag eq">'+s.p.km.toFixed(1)+' km</span>';
     document.getElementById("etaMin").textContent=Math.round(s.p.min);
-    document.getElementById("etaClock").textContent="min - arrive "+formatOperationalTime(s.arrive);
+    document.getElementById("etaClock").textContent="minutes - arrive "+formatOperationalTime(s.arrive);
     document.getElementById("turnText").textContent="Continue on "+routeInstructionLabel(N[leg.a])+" to "+routeInstructionLabel(N[leg.b])+" road";
     document.getElementById("turnSub").innerHTML=leg.km.toFixed(1)+" km &middot; "+SURF[leg.surf].lab+
-      ' &middot; <b style="color:'+b.col+'">Road condition: '+b.lab.charAt(0)+b.lab.slice(1).toLowerCase()+"</b>";
+      ' &middot; <b style="color:'+roadDisplayColor(b.k)+'">Road condition: '+b.lab.charAt(0)+b.lab.slice(1).toLowerCase()+"</b>";
     cb.textContent="Mark \u201c"+n.name+"\u201d as completed";
     cb.disabled=false;
     cb.style.display="block";

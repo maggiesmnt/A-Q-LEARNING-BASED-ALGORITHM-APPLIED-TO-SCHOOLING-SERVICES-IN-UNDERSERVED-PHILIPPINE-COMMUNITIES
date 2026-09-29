@@ -1,0 +1,96 @@
+{
+  "configuration": "Reward + State",
+  "experiment_type": "diagnostic state-component ablation",
+  "only_varied_parameter": "enriched-state component included with L",
+  "variants": [
+    "L+D",
+    "L+T",
+    "L+H",
+    "L+A",
+    "L+D+T+H+A"
+  ],
+  "buckets_per_dimension": 2,
+  "deployed_state_design_unchanged": true,
+  "episodes_trained": 5000,
+  "training_scenarios": 5000,
+  "evaluation_scenarios": 200,
+  "shared_training_seeds": true,
+  "shared_evaluation_seeds": true,
+  "fixed_parameters": {
+    "learning": "Standard Q-Learning",
+    "reward": "DemandCoverage * JainFairness * (1 / (1 + TravelTimeHours))",
+    "alpha": 0.1,
+    "gamma": 0.9,
+    "epsilon_start": 1.0,
+    "epsilon_min": 0.05,
+    "epsilon_decay": 0.995,
+    "training_seed": 7,
+    "scenario_seed": 2026,
+    "evaluation_seed": 991
+  },
+  "results": {
+    "L+D": {
+      "state_components": [
+        "L",
+        "D"
+      ],
+      "unique_training_states": 397,
+      "travel_min": 106.42345464537317,
+      "fairness": 0.5072554070361087,
+      "stops": 3.77,
+      "deferred": 5.23,
+      "coverage": 117.0
+    },
+    "L+T": {
+      "state_components": [
+        "L",
+        "T"
+      ],
+      "unique_training_states": 19,
+      "travel_min": 84.60192489460938,
+      "fairness": 0.5471964224286205,
+      "stops": 4.14,
+      "deferred": 4.86,
+      "coverage": 124.86
+    },
+    "L+H": {
+      "state_components": [
+        "L",
+        "H"
+      ],
+      "unique_training_states": 168,
+      "travel_min": 82.92427275829691,
+      "fairness": 0.536374269005848,
+      "stops": 4.14,
+      "deferred": 4.86,
+      "coverage": 124.315
+    },
+    "L+A": {
+      "state_components": [
+        "L",
+        "A"
+      ],
+      "unique_training_states": 149,
+      "travel_min": 88.38636662233263,
+      "fairness": 0.5865608465608466,
+      "stops": 3.87,
+      "deferred": 5.13,
+      "coverage": 119.02
+    },
+    "L+D+T+H+A": {
+      "state_components": [
+        "L",
+        "D",
+        "T",
+        "H",
+        "A"
+      ],
+      "unique_training_states": 509,
+      "travel_min": 113.22145248647892,
+      "fairness": 0.5253925322565673,
+      "stops": 3.775,
+      "deferred": 5.225,
+      "coverage": 116.155
+    }
+  }
+}

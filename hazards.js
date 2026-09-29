@@ -6,8 +6,8 @@ function renderHazards(){
   var closed=0,caut=0;
   EDGES.forEach(function(e){var A=accA(e);if(A<0.20)closed++;else if(A<0.75)caut++});
   document.getElementById("hzSummary").innerHTML=
-    '<div class="kpi"><div class="lab">Closed roads</div><div class="v" style="color:var(--bad)">'+closed+'</div><div class="d">not passable right now</div></div>'+
-    '<div class="kpi"><div class="lab">Roads needing caution</div><div class="v" style="color:var(--warn)">'+caut+'</div><div class="d">still passable, but slower</div></div>';
+    '<div class="kpi"><div class="lab">Closed Roads</div><div class="v" style="color:var(--bad)">'+closed+'</div><div class="d">not passable now</div></div>'+
+    '<div class="kpi"><div class="lab">Caution or Restricted</div><div class="v" style="color:var(--warn)">'+caut+'</div><div class="d">passable with delay or approval</div></div>';
 
   var box=document.getElementById("hazardList");box.innerHTML="";
   var all=REPORTS.slice().sort(function(a,b){return a.ago-b.ago});
@@ -27,4 +27,7 @@ function renderHazards(){
       '<div class="k">The same A value is used by Standard Q-Learning and MODQL.</div>';
     box.appendChild(d);
   });
+  if(!all.length){
+    box.innerHTML='<div class="empty-state"><b>No active road alerts</b><span>All available road information is shown in the accessibility tables below.</span></div>';
+  }
 }
