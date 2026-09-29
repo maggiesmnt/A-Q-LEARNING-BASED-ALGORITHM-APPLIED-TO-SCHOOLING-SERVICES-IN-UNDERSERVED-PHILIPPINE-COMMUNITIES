@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ALS Mobile Hub — Laiban Ops</title>
+<title>ALS Mobile Hub &mdash; Laiban Operations</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23DB9558'/%3E%3Cpath d='M32 10c-10 0-18 8-18 18 0 13 18 26 18 26s18-13 18-26c0-10-8-18-18-18zm0 25a7 7 0 1 1 0-14 7 7 0 0 1 0 14z' fill='%23FCF9EA'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -21,17 +22,17 @@
 </svg>
 </div>
 <div>Philippine Mobile Hub
-<small>Laiban · Tanay, Rizal — Deployment Site</small>
+<small>Laiban, Tanay, Rizal &mdash; Deployment Site</small>
 </div>
 </div>
 <div class="spacer"></div>
 <div class="mode-toggle" id="modeToggle">
-<button data-mode="operational" class="on">Operational</button>
+<button data-mode="operational" class="on">Field Operations</button>
 <button data-mode="research">Research &amp; Analysis</button>
 </div>
 <div class="spacer"></div>
 <div class="chip rain" id="wxChip"><span class="dot"></span>Weather: <b id="wxStatus">Heavy Rain</b></div>
-<div class="chip" id="shiftChip"><span class="dot"></span>Time Remaining: <b id="shiftLeft">8 hours</b></div>
+<div class="chip" id="shiftChip"><span class="dot"></span>Service Time Left: <b id="shiftLeft">8 hours</b></div>
 <div class="chip alert" id="hzChip"><span class="dot"></span>Road Alerts: <b id="hzCount">3</b></div>
 </header>
 <main>
@@ -44,23 +45,29 @@
 <h4 id="alertTitle">Road closed ahead</h4>
 <p id="alertText"></p>
 </div>
-<button class="x" id="alertClose">&times;</button>
+<button class="x" id="alertClose" aria-label="Dismiss road alert" title="Dismiss road alert">&times;</button>
 </div>
 <div class="mapctl">
-<button id="btnLayer" title="Terrain / street map">
+<button id="btnLayer" aria-label="Switch between terrain and street maps" title="Switch terrain / street map">
 <svg viewBox="0 0 24 24"><path d="M3 17l6-10 5 8 3-4 4 6z"/></svg>
 </button>
-<button id="btnCenter" title="Re-center on unit">
+<button id="btnCenter" aria-label="Center map on the mobile hub unit" title="Center map on mobile unit">
 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
 </button>
-<button id="btnRain" title="Toggle heavy-rain telemetry">
+<button id="btnRain" aria-label="Change the rainfall simulation" title="Change rainfall simulation">
 <svg viewBox="0 0 24 24"><path d="M6 14a4 4 0 010-8 5 5 0 019.6-1A4 4 0 1117 14z"/><path d="M9 17v2M13 17v3M17 17v2"/></svg>
 </button>
+</div>
+<div id="routeLegend" aria-label="Route progress guide">
+<h3>Route Progress</h3>
+<div><i class="route-current"></i><span><b>Current leg</b> Moving to the next stop</span></div>
+<div><i class="route-planned"></i><span><b>Planned</b> Later stops today</span></div>
+<div><i class="route-completed"></i><span><b>Completed</b> Already traveled</span></div>
 </div>
 <div id="navCard">
 <div class="panel-title">
 <span>Driver&rsquo;s Navigation</span>
-<small>Next stop and road conditions</small>
+<small>Current route, next location, and road accessibility</small>
 </div>
 <div class="turn">
 <div class="arrow"><svg viewBox="0 0 24 24" id="turnIcon"><path d="M12 20V7M12 7l-5 5M12 7l5 5"/></svg></div>
@@ -76,7 +83,7 @@
 </div>
 </div>
 <div style="padding:0 15px 12px">
-<button class="btn k" id="completeBtn" style="width:100%">Mark stop as completed</button>
+<button class="btn p" id="completeBtn" style="width:100%">Mark Stop as Completed</button>
 </div>
 <div class="destination-panel">
 <div class="destination-label">Next destination</div>
@@ -94,45 +101,42 @@
 </section>
 <!-- ============ STOPS ============ -->
 <section class="view pad" id="view-stops">
-<h1 class="sec">Today's Stops</h1>
+<h1 class="sec">Today&rsquo;s Service Plan</h1>
 <div class="g3" id="dayKpis"></div>
 <div style="height:12px"></div>
 <div class="card">
-<h3>Stop order</h3>
+<h3>Planned Stop Order</h3>
 <div class="k" id="weeklySequence"></div>
 </div>
 <div class="card">
-<h3>Remaining service time</h3>
+<h3>Remaining Service Time</h3>
 <div class="k" id="remainingService"></div>
 </div>
 <div id="stopsList"></div>
 <div class="card">
-<h3>Stops to try another day</h3>
+<h3>Deferred Communities</h3>
 <div class="k" id="deferList">None &mdash; every scheduled community is reachable under current conditions.</div>
 </div>
 </section>
 <!-- ============ HISTORY ============ -->
 <section class="view pad" id="view-history">
-<h1 class="sec">History</h1>
-<p class="lede">Completed deployment records are structured so each run can later feed the visit-history term <span class="mono">H</span> in the next planning cycle.</p>
+<h1 class="sec">Service History</h1>
+<p class="lede">Completed visits become the History value <span class="mono">H</span> used in the next planning cycle.</p>
 <div id="historyList"></div>
 </section>
 <!-- ============ HAZARDS DATA VIEW (kept for routing behavior, no separate tab) ============ -->
 <section class="view pad" id="view-hazards">
-<h2 class="sec">Road &amp; hazard status</h2>
-<p class="lede">This is the answer to &ldquo;how do we know a path is unavailable?&rdquo; Every road segment carries an accessibility
-coefficient <b>A</b> &mdash; the fifth term of the state vector <span class="mono">S = &lang;L, D, T, H, A&rang;</span>. A is not typed in by hand:
-it is fused from four independent signals, each of which decays over time unless it is re-confirmed.</p>
+<h2 class="sec">Road Accessibility &amp; Hazards</h2>
+<p class="lede">Every road has an accessibility score <b title="A ranges from 0 (closed) to 1 (fully accessible)">A</b> from 0 to 1. Weather, local risks, reports, and official advisories update this score for routing.</p>
 <div class="g2" id="hzSummary"></div>
 <div style="height:6px"></div>
-<h3 style="font-size:13px;color:var(--dim);letter-spacing:.4px;margin:16px 0 9px">ACTIVE ROAD ALERTS</h3>
+<h3 class="section-label">Active Road Alerts</h3>
 <div id="hazardList"></div>
 <div class="card">
-<h3>How A is computed</h3>
-<div class="k" style="margin-bottom:10px">A = baseline surface score &times; general weather factor &times; local-risk factor &times; report factor, clamped to [0, 1].
-The local-risk factor represents the SK-supported conditions of each corridor, such as landslide exposure, creek/river crossings, mountain paths, and conditional boat access. The same A value is supplied to both algorithms.</div>
+<h3>How the Accessibility Score (A) Is Calculated</h3>
+<div class="k" style="margin-bottom:10px"><span class="mono">A = surface &times; weather &times; local risk &times; reports</span>, limited to 0&ndash;1. The same score is supplied to both algorithms.</div>
 <table>
-<thead><tr><th>Signal</th><th>Where it comes from</th><th>Effect on A</th></tr></thead>
+<thead><tr><th>Input</th><th>Source</th><th>Effect on Accessibility</th></tr></thead>
 <tbody>
 <tr><td><b>Surface baseline</b></td><td>Provisional road type &mdash; concrete, gravel, mountain path, creek/river crossing</td><td>Sets the ceiling: 1.00 / 0.85 / 0.65 / 0.50</td></tr>
 <tr><td><b>Weather feed</b></td><td>Simulated rainfall scenario for QA until an official feed is integrated</td><td>Applies the same rainfall scenario to every algorithm run</td></tr>
@@ -145,18 +149,17 @@ The local-risk factor represents the SK-supported conditions of each corridor, s
 Confidence halves every 6 hours, so a segment re-opens on its own once no external source re-confirms the hazard.</div>
 </div>
 <div class="card">
-<h3>What the algorithm does with each band</h3>
+<h3>How Accessibility Affects Routing</h3>
 <table>
-<thead><tr><th>Band</th><th>Status</th><th>Effect on routing</th></tr></thead>
+<thead><tr><th title="Accessibility score (A)">A Score</th><th>Road Status</th><th>Routing Behavior</th></tr></thead>
 <tbody>
-<tr><td class="mono">A &ge; 0.75</td><td><span class="pill open">OPEN</span></td><td>Normal travel cost. Segment fully available.</td></tr>
-<tr><td class="mono">0.45&ndash;0.74</td><td><span class="pill caut">CAUTION</span></td><td>Soft penalty &mdash; travel time divided by A, so the reward term (1 / Travel Cost) drops and the path is only chosen when its coverage and fairness gains justify it.</td></tr>
-<tr><td class="mono">0.20&ndash;0.44</td><td><span class="pill rest">RESTRICTED</span></td><td>RESTRICTED roads remain available to the planner but receive a much higher travel-time penalty. Only roads below A &lt; 0.20 are hard-masked and unavailable to both algorithms.</td></tr>
-<tr><td class="mono">A &lt; 0.20</td><td><span class="pill cls">CLOSED</span></td><td><b>Hard mask.</b> The edge is deleted from the valid action set for that decision epoch, so the &epsilon;-greedy policy cannot select it even by random exploration. A community reachable only through it is deferred with an H-priority boost.</td></tr>
+<tr><td class="mono">A &ge; 0.75</td><td><span class="pill open">OPEN</span></td><td>Fully available with normal travel cost.</td></tr>
+<tr><td class="mono">0.45&ndash;0.74</td><td><span class="pill caut">CAUTION</span></td><td>Passable but slower. The planner applies a moderate travel-time penalty.</td></tr>
+<tr><td class="mono">0.20&ndash;0.44</td><td><span class="pill rest">RESTRICTED</span></td><td>Available only with approval and a high travel-time penalty.</td></tr>
+<tr><td class="mono">A &lt; 0.20</td><td><span class="pill cls">CLOSED</span></td><td>Removed from available actions. Communities with no other route are deferred.</td></tr>
 </tbody>
 </table>
-<div class="k" style="margin-top:11px">Because the state includes A, the same coordinate under a landslide and the same coordinate on a dry day are <i>different states</i> to the agent.
-This is exactly the &ldquo;structural amnesia&rdquo; that location-only standard Q-learning cannot represent. See the <b>Analysis</b> tab &rarr; SOP 3 for the full comparison.</div>
+<div class="k" style="margin-top:11px">Because MODQL includes <b>A</b> in its state, it can distinguish the same location under different road conditions. See <b>Research &amp; Analysis &rarr; Compare Algorithms &rarr; SOP 3</b>.</div>
 </div>
 </section>
 <!-- ============ ANALYSIS (separate from field operations) ============ -->
@@ -169,9 +172,9 @@ This is exactly the &ldquo;structural amnesia&rdquo; that location-only standard
 </div>
 <div class="rn-group">
 <div class="rn-label">Algorithms</div>
-<button data-sub="existing" class="on">Existing Algorithm</button>
-<button data-sub="proposed">Proposed Algorithm</button>
-<button data-sub="evaluation">Algorithm Evaluation</button>
+<button data-sub="existing" class="on">Standard Q-Learning</button>
+<button data-sub="proposed">Enhanced MODQL</button>
+<button data-sub="evaluation">Compare Algorithms</button>
 <div class="theme-dock" aria-label="Appearance">
 <button class="theme-icon-btn" id="themeSwitch" type="button" aria-label="Switch theme" title="Switch theme">
 <span class="theme-current theme-sun" aria-hidden="true">
@@ -208,9 +211,9 @@ Base map &copy; OpenStreetMap contributors. Sitio identities come from Barangay 
 </section>
 </main>
 <nav id="tabs">
-<button data-view="drive" class="on"><svg viewBox="0 0 24 24"><path d="M12 21s7-6.3 7-11a7 7 0 10-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>Drive</button>
-<button data-view="stops"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Stops</button>
-<button data-view="history"><svg viewBox="0 0 24 24"><path d="M12 8v5l3 2"/><path d="M3.05 11a9 9 0 113.4 7"/><path d="M3 18v-5h5"/></svg>History</button>
+<button data-view="drive" class="on"><svg viewBox="0 0 24 24"><path d="M12 21s7-6.3 7-11a7 7 0 10-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>Current Route</button>
+<button data-view="stops"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Today&rsquo;s Stops</button>
+<button data-view="history"><svg viewBox="0 0 24 24"><path d="M12 8v5l3 2"/><path d="M3.05 11a9 9 0 113.4 7"/><path d="M3 18v-5h5"/></svg>Service History</button>
 </nav>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

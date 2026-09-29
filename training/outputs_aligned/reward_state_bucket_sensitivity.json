@@ -1,0 +1,65 @@
+{
+  "configuration": "Reward + State",
+  "experiment_type": "diagnostic state-bucket sensitivity",
+  "only_varied_parameter": "bucket count for D, T, H, and A",
+  "bucket_values": [
+    2,
+    3,
+    4
+  ],
+  "deployed_state_design_unchanged": true,
+  "episodes_trained": 5000,
+  "training_scenarios": 5000,
+  "evaluation_scenarios": 200,
+  "shared_training_seeds": true,
+  "shared_evaluation_seeds": true,
+  "bucket_calibration": {
+    "D_normalized_upper_bound": 1.3,
+    "T_minutes_upper_bound": 480,
+    "H_days_upper_bound": 30.0,
+    "A_upper_bound": 0.9,
+    "two_bucket_encoding_matches_current_thresholds": true
+  },
+  "fixed_parameters": {
+    "learning": "Standard Q-Learning",
+    "reward": "DemandCoverage * JainFairness * (1 / (1 + TravelTimeHours))",
+    "state": "<L,D,T,H,A>",
+    "alpha": 0.1,
+    "gamma": 0.9,
+    "epsilon_start": 1.0,
+    "epsilon_min": 0.05,
+    "epsilon_decay": 0.995,
+    "training_seed": 7,
+    "scenario_seed": 2026,
+    "evaluation_seed": 991
+  },
+  "results": {
+    "2": {
+      "buckets_per_dimension": 2,
+      "unique_training_states": 509,
+      "travel_min": 113.22145248647892,
+      "fairness": 0.5253925322565673,
+      "stops": 3.775,
+      "deferred": 5.225,
+      "coverage": 116.155
+    },
+    "3": {
+      "buckets_per_dimension": 3,
+      "unique_training_states": 996,
+      "travel_min": 105.42475548848608,
+      "fairness": 0.5216750888907752,
+      "stops": 3.785,
+      "deferred": 5.215,
+      "coverage": 114.945
+    },
+    "4": {
+      "buckets_per_dimension": 4,
+      "unique_training_states": 764,
+      "travel_min": 98.57872698885339,
+      "fairness": 0.5117515821143271,
+      "stops": 3.715,
+      "deferred": 5.285,
+      "coverage": 114.04
+    }
+  }
+}

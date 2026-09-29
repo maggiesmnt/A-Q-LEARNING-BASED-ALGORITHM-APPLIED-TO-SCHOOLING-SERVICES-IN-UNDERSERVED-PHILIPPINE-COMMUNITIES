@@ -1,0 +1,102 @@
+{
+  "configuration": "Reward + State",
+  "experiment_type": "diagnostic demand interaction",
+  "purpose": "Test whether state Demand D negatively interacts with reward DemandCoverage C.",
+  "only_varied_parameter": "enriched-state component combination",
+  "variants": [
+    "L+T+H+A",
+    "L+D+T",
+    "L+D+H",
+    "L+D+A",
+    "L+D+T+H+A"
+  ],
+  "buckets_per_dimension": 2,
+  "deployed_state_design_unchanged": true,
+  "episodes_trained": 5000,
+  "training_scenarios": 5000,
+  "evaluation_scenarios": 200,
+  "shared_training_seeds": true,
+  "shared_evaluation_seeds": true,
+  "fixed_parameters": {
+    "learning": "Standard Q-Learning",
+    "reward": "DemandCoverage * JainFairness * (1 / (1 + TravelTimeHours))",
+    "alpha": 0.1,
+    "gamma": 0.9,
+    "epsilon_start": 1.0,
+    "epsilon_min": 0.05,
+    "epsilon_decay": 0.995,
+    "training_seed": 7,
+    "scenario_seed": 2026,
+    "evaluation_seed": 991
+  },
+  "results": {
+    "L+T+H+A": {
+      "state_components": [
+        "L",
+        "T",
+        "H",
+        "A"
+      ],
+      "unique_training_states": 250,
+      "travel_min": 106.06010541625717,
+      "fairness": 0.5002469135802469,
+      "stops": 3.74,
+      "deferred": 5.26,
+      "coverage": 115.875
+    },
+    "L+D+T": {
+      "state_components": [
+        "L",
+        "D",
+        "T"
+      ],
+      "unique_training_states": 406,
+      "travel_min": 106.42345464537317,
+      "fairness": 0.5072554070361087,
+      "stops": 3.77,
+      "deferred": 5.23,
+      "coverage": 117.0
+    },
+    "L+D+H": {
+      "state_components": [
+        "L",
+        "D",
+        "H"
+      ],
+      "unique_training_states": 397,
+      "travel_min": 106.42345464537317,
+      "fairness": 0.5072554070361087,
+      "stops": 3.77,
+      "deferred": 5.23,
+      "coverage": 117.0
+    },
+    "L+D+A": {
+      "state_components": [
+        "L",
+        "D",
+        "A"
+      ],
+      "unique_training_states": 509,
+      "travel_min": 113.22145248647892,
+      "fairness": 0.5253925322565673,
+      "stops": 3.775,
+      "deferred": 5.225,
+      "coverage": 116.155
+    },
+    "L+D+T+H+A": {
+      "state_components": [
+        "L",
+        "D",
+        "T",
+        "H",
+        "A"
+      ],
+      "unique_training_states": 509,
+      "travel_min": 113.22145248647892,
+      "fairness": 0.5253925322565673,
+      "stops": 3.775,
+      "deferred": 5.225,
+      "coverage": 116.155
+    }
+  }
+}
