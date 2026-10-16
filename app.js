@@ -1,10 +1,7 @@
 /* ============================================================================
-   APP.JS - chrome: the Operational/Research mode toggle, the operational
-   bottom tab bar, map layer toggle, and boot sequence.
+   APP.JS - page chrome, map controls, theme switch, and boot sequence.
    ============================================================================ */
 
-var MODE = "operational";
-var lastOperationalView = "drive";
 var THEME_KEY = "als-mobile-hub-theme";
 
 function getInitialTheme(){
@@ -29,24 +26,6 @@ function setTheme(theme){
   }
 }
 
-function setMode(m){
-  MODE = m;
-  document.querySelectorAll("#modeToggle button").forEach(function(b){
-    b.classList.toggle("on", b.getAttribute("data-mode")===m);
-  });
-  document.getElementById("tabs").style.display = (m==="operational") ? "flex" : "none";
-  document.querySelectorAll(".view").forEach(function(v){v.classList.remove("active")});
-  if(m==="operational"){
-    document.getElementById("view-"+lastOperationalView).classList.add("active");
-    if(lastOperationalView==="drive") setTimeout(function(){map.invalidateSize()},60);
-  }else{
-    document.getElementById("view-analysis").classList.add("active");
-  }
-}
-document.querySelectorAll("#modeToggle button").forEach(function(b){
-  b.onclick=function(){ setMode(b.getAttribute("data-mode")); };
-});
-
 setTheme(getInitialTheme());
 var themeSwitch = document.getElementById("themeSwitch");
 if(themeSwitch){
@@ -55,16 +34,6 @@ if(themeSwitch){
   };
 }
 
-document.querySelectorAll("#tabs button").forEach(function(b){
-  b.onclick=function(){
-    document.querySelectorAll("#tabs button").forEach(function(x){x.classList.remove("on")});
-    b.classList.add("on");
-    lastOperationalView=b.getAttribute("data-view");
-    document.querySelectorAll(".view").forEach(function(v){v.classList.remove("active")});
-    document.getElementById("view-"+lastOperationalView).classList.add("active");
-    if(lastOperationalView==="drive") setTimeout(function(){map.invalidateSize()},60);
-  };
-});
 document.getElementById("btnLayer").onclick=function(){
   layerTerrain=!layerTerrain;
   map.removeLayer(layerTerrain?street:terrain);
@@ -76,7 +45,8 @@ document.getElementById("btnCenter").onclick=function(){map.setView(unit.getLatL
 document.getElementById("btnRain").onclick=function(){
   WX.mm = WX.mm>=60?12:WX.mm<30?38:78;
   this.classList.toggle("on",WX.mm>=60);
-  document.getElementById("wxChip").className="chip"+(WX.mm>=30?" rain":"");
+  var wxChip=document.getElementById("wxChip");
+  if(wxChip) wxChip.className="chip"+(WX.mm>=30?" rain":"");
   refresh({t:"Weather telemetry updated",b:"Rainfall now <b>"+WX.mm+" mm/24h</b>. Accessibility coefficients rescaled &mdash; unpaved mountain paths and the river ford degrade first."});
 };
 

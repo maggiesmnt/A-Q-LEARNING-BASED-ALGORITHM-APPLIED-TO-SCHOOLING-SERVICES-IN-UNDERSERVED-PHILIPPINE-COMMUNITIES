@@ -154,11 +154,14 @@ function renderDrive(){
   if(pbar) pbar.style.width=(100*PROGRESS/Math.max(1,PLAN.stops.length))+"%";
   var used=DRIVE_USED_MIN;
   var left=Math.max(0,SHIFT_MIN-used);
-  document.getElementById("shiftLeft").textContent=formatTimeRemaining(left);
-  document.getElementById("wxStatus").textContent=weatherLabel();
-  document.getElementById("wxChip").className="chip"+(WX.mm>=30?" rain":"");
+  var shiftLeft=document.getElementById("shiftLeft");
+  if(shiftLeft) shiftLeft.textContent=formatTimeRemaining(left);
+  var wxStatus=document.getElementById("wxStatus"),wxChip=document.getElementById("wxChip");
+  if(wxStatus) wxStatus.textContent=weatherLabel();
+  if(wxChip) wxChip.className="chip"+(WX.mm>=30?" rain":"");
   var live=REPORTS.filter(function(r){return !r.cleared&&confidence(r)>=0.15}).length+ADVISORIES.length;
-  document.getElementById("hzCount").textContent=live;
+  var hzCount=document.getElementById("hzCount");
+  if(hzCount) hzCount.textContent=live;
   var tabBdg=document.getElementById("tabBdg");
   if(tabBdg){
     tabBdg.textContent=live;

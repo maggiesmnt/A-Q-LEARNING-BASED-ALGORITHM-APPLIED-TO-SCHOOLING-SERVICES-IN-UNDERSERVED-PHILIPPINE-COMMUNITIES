@@ -26,18 +26,10 @@
 </div>
 </div>
 <div class="spacer"></div>
-<div class="mode-toggle" id="modeToggle">
-<button data-mode="operational" class="on">Field Operations</button>
-<button data-mode="research">Research &amp; Analysis</button>
-</div>
-<div class="spacer"></div>
-<div class="chip rain" id="wxChip"><span class="dot"></span>Weather: <b id="wxStatus">Heavy Rain</b></div>
-<div class="chip" id="shiftChip"><span class="dot"></span>Service Time Left: <b id="shiftLeft">8 hours</b></div>
-<div class="chip alert" id="hzChip"><span class="dot"></span>Road Alerts: <b id="hzCount">3</b></div>
 </header>
 <main>
 <!-- ============ DRIVE ============ -->
-<section class="view active" id="view-drive">
+<section class="view" id="view-drive">
 <div id="map"></div>
 <div id="alertBar">
 <div class="ic">!</div>
@@ -163,7 +155,7 @@ Confidence halves every 6 hours, so a segment re-opens on its own once no extern
 </div>
 </section>
 <!-- ============ ANALYSIS (separate from field operations) ============ -->
-<section class="view" id="view-analysis">
+<section class="view active" id="view-analysis">
 <div class="research-shell">
 <nav class="research-nav" id="researchNav">
 <div class="rn-brand">
@@ -210,11 +202,6 @@ Base map &copy; OpenStreetMap contributors. Sitio identities come from Barangay 
 </div>
 </section>
 </main>
-<nav id="tabs">
-<button data-view="drive" class="on"><svg viewBox="0 0 24 24"><path d="M12 21s7-6.3 7-11a7 7 0 10-14 0c0 4.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>Current Route</button>
-<button data-view="stops"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Today&rsquo;s Stops</button>
-<button data-view="history"><svg viewBox="0 0 24 24"><path d="M12 8v5l3 2"/><path d="M3.05 11a9 9 0 113.4 7"/><path d="M3 18v-5h5"/></svg>Service History</button>
-</nav>
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="trained_policy.js"></script>
