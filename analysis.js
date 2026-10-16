@@ -107,15 +107,6 @@ function multiDayEvaluation(){
   restoreEvaluationSnapshot(base);
   return {days:days,standard:standard,modql:modql};
 }
-function evaluationGraphHTML(id,title,plan,color){
-  var minLat=Math.min.apply(null,NODES.map(function(n){return n.lat})),maxLat=Math.max.apply(null,NODES.map(function(n){return n.lat}));
-  var minLng=Math.min.apply(null,NODES.map(function(n){return n.lng})),maxLng=Math.max.apply(null,NODES.map(function(n){return n.lng}));
-  function xy(n){return {x:18+(n.lng-minLng)/(maxLng-minLng||1)*264,y:18+(maxLat-n.lat)/(maxLat-minLat||1)*184}}
-  var lines=EDGES.map(function(e){var a=xy(N[e.a]),b=xy(N[e.b]),bandName=band(accA(e)).k;return '<line class="eg-edge eg-'+bandName+'" x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'"/>'}).join("");
-  var route=plan.stops.map(function(s){return s.p.seq?s.p.seq.join(","):s.id}).join(" &rarr; ");
-  var nodes=NODES.map(function(n){var p=xy(n),idx=-1;plan.stops.forEach(function(s,i){if(s.id===n.id)idx=i});return '<g class="eg-node" data-step="'+(idx+1)+'"><circle cx="'+p.x+'" cy="'+p.y+'" r="'+(n.kind==="depot"?8:6)+'"/><text x="'+(p.x+8)+'" y="'+(p.y+3)+'">'+(idx>=0?idx+1:"")+'</text><title>'+n.name+'</title></g>'}).join("");
-  return '<div class="card eg-card"><h3>'+title+'</h3><div class="k">Numbered circles show the planned stop order for the same live scenario.</div><svg id="'+id+'" class="eval-graph" viewBox="0 0 300 220" role="img" aria-label="'+title+'">'+lines+nodes+'</svg><div class="eg-legend"><span><i class="eg-open"></i>Open</span><span><i class="eg-caution"></i>Caution</span><span><i class="eg-rest"></i>Restricted</span></div><div class="k"><b>Route:</b> '+(route||"No reachable stops")+'</div><button class="btn g eg-step" data-graph="'+id+'">Play Route Sequence</button><span class="k eg-status" id="'+id+'-status">Step 0 / '+plan.stops.length+'</span></div>';
-}
 var PROPOSED_GRAPH_SCENARIOS=[
   {title:"Simulation 1 — Close stops",note:"Stop 1 is close to the Hub, so MODQL can serve the nearby stop first before continuing through the open roads.",nodes:[
     {id:"hub",label:"Hub",x:85,y:190,hub:true},{id:"stop1",label:"Stop 1",x:270,y:75},{id:"stop2",label:"Stop 2",x:490,y:275},{id:"stop3",label:"Stop 3",x:705,y:105}
@@ -159,70 +150,81 @@ function wireEvaluationGraphs(){
   });
 }
 function renderEvaluation(){
-  var std=evaluationKPIs(analysisStd),mod=evaluationKPIs(analysisMod),rStd=TRAINING_RESULT.standard,rMod=TRAINING_RESULT.modql;
-  var rReward=TRAINING_RESULT.component_reward,rDouble=TRAINING_RESULT.component_doubleq,rState=TRAINING_RESULT.component_state;
-  var rRewardDouble=TRAINING_RESULT.pair_reward_doubleq,rRewardState=TRAINING_RESULT.pair_reward_state,rDoubleState=TRAINING_RESULT.pair_doubleq_state;
-  function num(v,d){return Number(v||0).toFixed(d)}
-  function metricTile(label,value,detail){
-    return '<div class="eval-metric-tile"><div class="lab">'+label+'</div><div class="v">'+value+'</div><div class="d">'+detail+'</div></div>'
-  }
-  function algorithmSummaryCard(kind,title,r){
-    return '<div class="eval-algo-card '+kind+'"><h4>'+title+'</h4><div class="eval-metric-grid">'+
-      metricTile("Avg travel time",num(r.travel_min,1)+'<span> min</span>',"200-scenario average")+
-      metricTile("Avg Jain&rsquo;s Fairness",num(r.fairness,3),"Jain index")+
-      metricTile("Avg stops served",num(r.stops,2),"communities")+
-      metricTile("Avg deferred",num(r.deferred,2),"communities")+
-      metricTile("Avg learner coverage",num(r.coverage,2),"learners")+
-    '</div></div>'
-  }
-  function compareMetricCard(label,stdVal,modVal,detail){
-    return '<div class="eval-compare-card"><div class="lab">'+label+'</div><div class="eval-pair"><div><b>'+stdVal+'</b><span>Standard</span></div><div><b>'+modVal+'</b><span>MODQL</span></div></div><div class="d">'+detail+'</div></div>'
-  }
-  function routeMetricGrid(){
-    return '<div class="eval-compare-grid">'+
-      compareMetricCard("Total travel distance",std.distance.toFixed(1)+" km",mod.distance.toFixed(1)+" km","current route")+
-      compareMetricCard("Total travel time",Math.round(std.travelMin)+" min",Math.round(mod.travelMin)+" min","current route")+
-      compareMetricCard("Communities served",std.served+" of "+(NODES.length-1),mod.served+" of "+(NODES.length-1),"current route")+
-      compareMetricCard("Communities deferred",std.deferred,mod.deferred,"current route")+
-      compareMetricCard("Jain&rsquo;s Fairness Index",std.fairness.toFixed(3),mod.fairness.toFixed(3),"current route")+
-      compareMetricCard("Learner Coverage",std.learners,mod.learners,"learners reached on current route")+
-    '</div>'
-  }
-  function sopMetricList(r){
-    return '<div class="sop-metrics">'+
-      metricTile("Coverage",num(r.coverage,2),"learners")+
-      metricTile("Fairness",num(r.fairness,3),"Jain index")+
-      metricTile("Travel time",num(r.travel_min,1)+'<span> min</span>',"average")+
-      metricTile("Stops",num(r.stops,2),"served")+
-      metricTile("Deferred",num(r.deferred,2),"communities")+
-    '</div>'
-  }
-  function ablationTable(rows){
-    return '<div class="eval-table-wrap"><table><thead><tr><th>Configuration</th><th title="Average travel time in minutes">Travel Time</th><th title="Jain&rsquo;s Fairness Index">Fairness</th><th>Stops Served</th><th>Deferred</th><th title="Average learners served">Learner Coverage</th></tr></thead><tbody>'+rows.map(function(row){var r=row[1];return '<tr><th>'+row[0]+'</th><td>'+num(r.travel_min,2)+' min</td><td>'+num(r.fairness,3)+'</td><td>'+num(r.stops,3)+'</td><td>'+num(r.deferred,3)+'</td><td>'+num(r.coverage,3)+'</td></tr>'}).join('')+'</tbody></table></div>'
-  }
-  var sitioRows=NODES.filter(function(n){return n.kind==="node"}).map(function(n){
-    var p=path("hub",n.id),worst=1,risk="No open approach in current graph";
-    if(p){p.legs.forEach(function(e){worst=Math.min(worst,accA(e));risk=accessibilityReason(e)||risk})}
-    return '<tr><td>'+n.name+'</td><td>'+n.learners+' learners</td><td>'+n.days+' days</td><td>'+(p?worst.toFixed(2):'n/a')+'</td><td>'+risk+'</td></tr>'
-  }).join("");
-  var rewardChart=SIM.mq&&SIM.sq&&SIM.mq.length>1&&SIM.sq.length>1
-    ? svgLine([{d:SIM.mq,c:"#DB9558"},{d:SIM.sq,c:"#97A87A"}],{xs:SIM.ep,dp:2,h:190})+
-      '<div class="lg"><span><i style="background:#DB9558"></i> MODQL reward</span><span><i style="background:#97A87A"></i> Standard Q-Learning reward</span></div>'
-    : '<div class="k">Training reward curve unavailable in the loaded policy bundle.</div>';
-  var spreadChart=SIM.sp&&SIM.sp.length>1
-    ? '<div style="margin-top:14px"><h4>Q1&ndash;Q2 Estimator Spread Across Training</h4><div style="display:grid;grid-template-columns:24px minmax(0,1fr);align-items:center"><div class="k" style="writing-mode:vertical-rl;transform:rotate(180deg);text-align:center">Mean Q1&ndash;Q2 Spread</div><div>'+svgLine([{d:SIM.sp,c:"#DB9558"}],{xs:SIM.ep,dp:3,h:180})+'</div></div><div class="k" style="text-align:center;margin-top:4px">Training Episode</div></div>'
-    : '<div class="k" style="margin-top:14px">Q1&ndash;Q2 estimator-spread curve unavailable in the loaded policy bundle.</div>';
+  var layout=buildFixedLaibanMaze(),mod=mapMazeRoute(analysisMod,layout);
   document.getElementById("sub-evaluation").innerHTML=
-    '<div class="algo-head mod"><div class="ic">&Delta;</div><div><h2>Algorithm Comparison</h2><p>Results for Standard Q-Learning, component tests, and enhanced MODQL</p></div></div>'+
-    '<div class="sop-problem"><b>Evaluation setup.</b> All experimental configurations used the same Barangay Laiban environment, training and evaluation seeds, and held-out scenarios. Values below come directly from <span class="mono">TRAINED_POLICY.evaluation_summary</span> and are reported as measured.</div>'+
-    '<div class="card eval-summary-card"><h3>Overall Experimental Results</h3><div class="k" style="margin-bottom:12px">Authoritative 200-scenario averages for the baseline and Full MODQL control.</div><div class="eval-summary-grid">'+algorithmSummaryCard("std","Standard Q-Learning",rStd)+algorithmSummaryCard("mod","Full MODQL",rMod)+'</div><div class="k eval-summary-note">In this run, Standard Q-Learning records lower average travel time, slightly higher fairness, more stops, fewer deferred communities, and higher learner coverage than Full MODQL. These results describe this experiment and do not establish universal superiority for either method.</div></div>'+
-    '<div class="card route-comparison-card"><h3>Route Behavior Comparison</h3><div class="split2 original-algorithm-split"><div class="splitcol std"><h3 class="comparison-panel-title">Standard Q-Learning</h3><div id="comparison-existing-host"><div class="comparison-panel-subtitle">Baseline route-learning behavior used as the control.</div><div id="comparison-reference-note" class="comparison-note-slot"></div></div></div><div class="splitcol mod"><h3 class="comparison-panel-title">Enhanced MODQL</h3>'+proposedGraphHTML("evaluation-proposed-sim")+'</div></div></div>'+
-    '<div class="card eval-card compact-route-metrics"><h3>Current Route Metrics &mdash; Illustrative Single Scenario</h3><div class="k" style="margin-bottom:12px">These descriptive route outputs come from the currently displayed Laiban scenario. They are not the 200-scenario experimental averages.</div>'+routeMetricGrid()+'</div>'+
-    '<div class="card"><h3>SOP 1 &mdash; Reward Function</h3><div class="k" style="margin-bottom:12px">Primary comparison: Standard versus Reward only. Learning remains single-table Standard Q-Learning and the state remains <span class="mono">S = L</span>; only the reward changes.</div><div class="split2 aligned-algo-grid"><div class="splitcol std"><h4>Standard</h4><div class="k mono sop-formula">R<sub>standard</sub> = 1 / T<sub>hours</sub></div>'+sopMetricList(rStd)+'</div><div class="splitcol mod"><h4>Reward only</h4><div class="k mono sop-formula">R<sub>MODQL</sub> = C &times; J &times; E<sub>T</sub><br>C = normalized learner demand<br>J = Jain&rsquo;s Fairness Index<br>E<sub>T</sub> = 1 / (1 + T<sub>hours</sub>)</div>'+sopMetricList(rReward)+'</div></div><div class="k" style="margin-top:12px">Full MODQL remains overall context, but the controlled Reward-only result isolates SOP 1 evidence.</div></div>'+
-    '<div class="card"><h3>SOP 2 &mdash; Double Q-Learning</h3><div class="k" style="margin-bottom:12px">Primary comparison: Standard versus Double Q only. Both use the location-only state and standard inverse-travel-time reward; only the learning update changes.</div><div class="split2 aligned-algo-grid"><div class="splitcol std"><h4>Standard</h4><div class="k mono sop-formula">One Q-table<br>R<sub>standard</sub> = 1 / T<sub>hours</sub></div>'+sopMetricList(rStd)+'</div><div class="splitcol mod"><h4>Double Q only</h4><div class="k mono sop-formula">Q1 selects, Q2 evaluates<br>Q2 selects, Q1 evaluates</div>'+sopMetricList(rDouble)+'</div></div>'+spreadChart+'<div class="note" style="margin-top:12px"><b>Training-log summary.</b> Average spread = '+num(TRAINING_LOG_STATS.mean_q1_q2_spread_avg,3)+'; final spread = '+num(TRAINING_LOG_STATS.mean_q1_q2_spread_last,3)+'; maximum spread = '+num(TRAINING_LOG_STATS.mean_q1_q2_spread_max,3)+'.<br>Lower spread indicates closer agreement between the two estimators. The spread is used as a stability diagnostic and does not by itself prove elimination of overestimation bias.</div></div>'+
-    '<div class="card"><h3>SOP 3 &mdash; State Representation</h3><div class="k" style="margin-bottom:12px">Primary comparison: Standard versus State only. Both use one Q-table and the standard reward; only the state representation changes.</div><div class="split2 aligned-algo-grid"><div class="splitcol std"><h4>Standard</h4><div class="k mono sop-formula">S = L</div>'+sopMetricList(rStd)+'</div><div class="splitcol mod"><h4>State only</h4><div class="k mono sop-formula">S = &lang;L,D,T,H,A&rang;</div><div class="k sop-copy">D = learner demand; T = remaining time; H = service recency; A = route accessibility.</div>'+sopMetricList(rState)+'</div></div><div class="k" style="margin-top:12px">Full MODQL remains overall context. Road/accessibility behavior follows the shared Laiban environment.</div><div class="eval-table-wrap"><table><thead><tr><th>Community</th><th title="Learner demand (D)">Learner Demand</th><th title="Days since last service (H)">Service History</th><th title="Road accessibility (A) from the hub">Accessibility</th><th>Road Condition Example</th></tr></thead><tbody>'+sitioRows+'</tbody></table></div></div>'+
-    '<div class="card"><h3>Component / Ablation Analysis</h3><div class="k" style="margin-bottom:12px">Controlled 5,000-episode results using identical training and evaluation seeds.</div>'+ablationTable([["Standard",rStd],["Reward only",rReward],["Double Q only",rDouble],["State only",rState],["Full MODQL",rMod]])+'<h4 style="margin-top:16px">Pairwise diagnostics</h4>'+ablationTable([["Reward + Double Q",rRewardDouble],["Reward + State",rRewardState],["Double Q + State",rDoubleState]])+'<div class="note" style="margin-top:12px">The diagnostic analysis found the strongest weak-performance interaction in Reward + State. Under the current configuration, the <span class="mono">L+D+A</span> diagnostic reproduced the Full MODQL result. These observations are specific to the stored experiment and do not establish a general ranking.</div></div>'+
-    '<div class="card"><h3>Training Evidence</h3><div class="g3"><div class="kpi"><div class="lab">Training episodes</div><div class="v">'+TRAINING_RESULT.episodes_trained+'</div><div class="d">current experiment</div></div><div class="kpi"><div class="lab">Held-out scenarios</div><div class="v">'+TRAINING_RESULT.evaluation_scenarios+'</div><div class="d">identical evaluation scenarios</div></div><div class="kpi"><div class="lab">Environment and seeds</div><div class="v" style="font-size:18px;line-height:1.2">same Laiban setup</div><div class="d">same environment and seeds</div></div></div><h3 style="margin-top:14px">Training Reward Across '+TRAINING_RESULT.episodes_trained+' Episodes</h3>'+rewardChart+'</div>';
+    '<div class="card route-comparison-card"><h3>Route Behavior Comparison</h3><p class="route-maze-note">The Standard panel is the original random-maze demonstration. The MODQL panel visualizes its actual Laiban service route. These are different environments and their displayed paths are not a controlled performance comparison; controlled results use the separate shared-Laiban evaluation.</p><div class="split2 original-algorithm-split">'+
+      '<section class="splitcol std"><h3 class="comparison-panel-title">Standard Q-Learning</h3><div id="comparison-standard-maze-host"></div></section>'+
+      fixedMazePanel("modql-route-maze","Enhanced MODQL",analysisMod,mod,"route-modql",layout)+
+    '</div></div>';
+  wireFixedMaze("modql-route-maze",analysisMod,mod,layout,"route-modql");
+}
+
+// Coordinates are deterministic schematic cells, not geographic locations.
+// Every edge maps to an orthogonal, exclusive corridor except the shared hub junction.
+var FIXED_MAZE_NODES={hub:[5,5],toyang:[1,1],ibucao:[9,1],maysawa:[5,0],iwi_iw:[0,5],old_laiban:[5,8],banatas:[9,7],kilabuwan:[2,8],manggahan:[0,8],magata:[0,9]};
+var FIXED_MAZE_EDGES={
+  "hub|toyang":[[5,5],[4,5],[4,4],[3,4],[3,3],[3,2],[3,1],[2,1],[1,1]],
+  "hub|ibucao":[[5,5],[6,5],[6,4],[7,4],[8,4],[9,4],[9,3],[9,2],[9,1]],
+  "hub|maysawa":[[5,5],[5,4],[5,3],[5,2],[5,1],[5,0]],
+  "hub|old_laiban":[[5,5],[5,6],[5,7],[5,8]],
+  "banatas|hub":[[5,5],[6,5],[6,6],[7,6],[8,6],[9,6],[9,7]],
+  "hub|iwi_iw":[[5,5],[5,6],[4,6],[3,6],[2,6],[1,6],[0,6],[0,5]],
+  "kilabuwan|old_laiban":[[5,8],[4,8],[3,8],[2,8]],
+  "kilabuwan|manggahan":[[2,8],[1,8],[0,8]],
+  "magata|manggahan":[[0,8],[0,9]],
+  "banatas|old_laiban":[[9,7],[9,8],[8,8],[7,8],[6,8],[5,8]]
+};
+function fixedMazeKey(p){return p[0]+","+p[1]}
+function buildFixedLaibanMaze(){
+  var layout={size:10,nodes:{},edges:{},open:new Set(),junction:new Set(),errors:[]};
+  Object.keys(FIXED_MAZE_NODES).forEach(function(id){layout.nodes[id]=FIXED_MAZE_NODES[id].slice();layout.open.add(fixedMazeKey(layout.nodes[id]))});
+  for(var r=4;r<=6;r++)for(var c=4;c<=6;c++){layout.junction.add(r+","+c);layout.open.add(r+","+c)}
+  NODES.forEach(function(n){if(!layout.nodes[n.id])layout.errors.push("No fixed cell mapped for "+n.id)});
+  EDGES.forEach(function(e){var k=ek(e.a,e.b),path=FIXED_MAZE_EDGES[k];if(!path){layout.errors.push("No schematic corridor for "+k);return}
+    if(fixedMazeKey(path[0])!==fixedMazeKey(layout.nodes[e.a])||fixedMazeKey(path[path.length-1])!==fixedMazeKey(layout.nodes[e.b]))layout.errors.push("Corridor endpoints mismatch: "+k);
+    path.forEach(function(p,i){if(p[0]<0||p[0]>9||p[1]<0||p[1]>9)layout.errors.push("Cell outside grid: "+k);if(i&&Math.abs(p[0]-path[i-1][0])+Math.abs(p[1]-path[i-1][1])!==1)layout.errors.push("Non-adjacent corridor cells: "+k);if(!layout.junction.has(fixedMazeKey(p)))layout.open.add(fixedMazeKey(p))});
+    layout.edges[k]=path.map(function(p){return p.slice()});
+  });
+  return layout;
+}
+function mapMazeRoute(plan,layout){
+  var frames=[],errors=[],stops=plan&&plan.stops||[];
+  function append(p,label){if(!p||!p.seq||!p.legs||p.seq.length!==p.legs.length+1){errors.push(label+": incomplete route leg data");return}
+    p.legs.forEach(function(leg,i){var from=p.seq[i],to=p.seq[i+1],key=ek(from,to),edge=EK[key],cells=layout.edges[key];if(!edge||!leg||leg.key!==key||!cells){errors.push(label+": graph edge has no validated schematic path ("+key+")");return}if(accA(edge)<.20){errors.push(label+": actual route uses a currently blocked edge ("+key+")");return}cells=cells.map(function(cell){return cell.slice()});if(edge.a!==from)cells.reverse();frames.push({from:from,to:to,target:p.seq[p.seq.length-1],cells:cells,label:label})});
+  }
+  stops.forEach(function(s,i){append(s.p,"Stop "+(i+1))});if(plan&&plan.ret)append(plan.ret,"Return");
+  return {frames:frames,errors:errors};
+}
+function fixedMazePanel(id,title,plan,mapped,cls,layout){
+  var summary=[N[plan.start||"hub"].name].concat((plan.stops||[]).map(function(s){return N[s.id].name+" ("+Math.round(s.p.min)+" min)"}));if(plan.ret)summary.push("Hub return ("+Math.round(plan.ret.min)+" min)");
+  var stops={};(plan.stops||[]).forEach(function(s,i){stops[s.id]=i+1});
+  var legend=NODES.map(function(n){var idx=Object.keys(layout.nodes).filter(function(k){return k!=="hub"}).indexOf(n.id),mark=n.id==="hub"?"H":String.fromCharCode(65+idx);return "<span><b>"+mark+"</b> "+n.name+(stops[n.id]?" · stop "+stops[n.id]:"")+"</span>"}).join("");
+  var errs=layout.errors.concat(mapped.errors);
+  return '<section class="splitcol route-maze-column '+cls+'"><h3 class="comparison-panel-title">'+title+'</h3><div class="route-maze-map"><div class="route-maze-status-card"><h4>'+title+' Maze Status</h4><div><span>Status</span><b id="'+id+'-playback">Ready</b></div><div><span>Animation step</span><b id="'+id+'-steps">0 / 0</b></div><div><span>Current location</span><b id="'+id+'-location">Laiban Proper / ALS Hub</b></div><div><span>Next destination</span><b id="'+id+'-destination">No planned stop</b></div><div><span>Goal / route</span><b id="'+id+'-goal">Ready at starting hub</b></div><div><span>Current movement</span><b id="'+id+'-action">None</b></div></div><canvas id="'+id+'" width="500" height="500" class="route-maze-canvas" role="img" aria-label="'+title+' on a fixed 10 by 10 cell maze"></canvas><div class="route-maze-legend"><span><i class="maze-cell-key"></i>Graph-connected corridor</span><span><i class="maze-wall-key"></i>Blocked road cell</span><span><i class="maze-bg-key"></i>Decorative only; not traversable</span><span><i class="maze-route-key '+cls+'"></i>Actual route trail</span><span>Access dot: <em style="color:#3D8A60">open</em> / <em style="color:#C28A2C">caution</em> / <em style="color:#B5683C">restricted</em></span></div><div class="route-maze-community-legend">'+legend+'</div><div class="route-maze-sequence"><b>Actual route:</b> '+summary.join(" &rarr; ")+'<br>Corridor cells are visualization-only; stop order and travel minutes come from the algorithm plan.</div>'+(errs.length?'<div class="route-maze-warning">Display limitation: '+errs.join("; ")+'. Unverified segments are not drawn.</div>':'')+'<div class="route-maze-controls"><button class="btn p" id="'+id+'-play" type="button">Start Route Animation</button><button class="btn g" id="'+id+'-step" type="button">Advance One Cell</button><button class="btn g" id="'+id+'-reset" type="button">Reset</button></div></div></section>';
+}
+var FIXED_MAZE_TIMERS={};
+function wireFixedMaze(id,plan,mapped,layout,cls){
+  if(FIXED_MAZE_TIMERS[id])clearInterval(FIXED_MAZE_TIMERS[id]);FIXED_MAZE_TIMERS[id]=null;
+  var canvas=document.getElementById(id),play=document.getElementById(id+"-play"),next=document.getElementById(id+"-step"),reset=document.getElementById(id+"-reset");
+  if(!canvas||!canvas.getContext)return;var ctx=canvas.getContext("2d"),steps=[],current=0,color=cls==="route-standard"?"#456B32":"#D47E35";
+  function theme(name,fallback){var css=window.getComputedStyle(document.body).getPropertyValue(name).trim();return css||fallback}
+  mapped.frames.forEach(function(f){f.cells.forEach(function(cell,i){if(i===0)return;steps.push({cell:cell,from:f.cells[i-1],frame:f})})});
+  var stopMap={};(plan.stops||[]).forEach(function(s,i){stopMap[s.id]=i+1});
+  var playback=document.getElementById(id+"-playback"),stepReadout=document.getElementById(id+"-steps"),locationReadout=document.getElementById(id+"-location"),destinationReadout=document.getElementById(id+"-destination"),goalReadout=document.getElementById(id+"-goal"),actionReadout=document.getElementById(id+"-action"),serviceByCell={};
+  Object.keys(layout.nodes).forEach(function(nodeId){serviceByCell[fixedMazeKey(layout.nodes[nodeId])]=nodeId});
+  function direction(from,to){var dr=to[0]-from[0],dc=to[1]-from[1];return dr<0?"Up":dr>0?"Down":dc<0?"Left":dc>0?"Right":"At location"}
+  function updateStatus(state){if(!playback)return;stepReadout.textContent=current+" / "+steps.length;playback.textContent=state;var at=current?steps[current-1].cell:layout.nodes.hub,nodeId=serviceByCell[fixedMazeKey(at)],frame=current?steps[current-1].frame:null,nextFrame=frame||mapped.frames[0],target=nextFrame&&nextFrame.target,destination=target?N[target].name:"No planned stop";locationReadout.textContent=nodeId?N[nodeId].name:"Schematic corridor";destinationReadout.textContent=current&&nodeId===target?(stopMap[target]?"Reached stop "+stopMap[target]+" · "+destination:"Reached "+destination):destination;goalReadout.textContent=state==="Complete"?(fixedMazeKey(at)===fixedMazeKey(layout.nodes.hub)?"Route complete · returned to hub":"Route playback complete"):current===0?"Ready at starting hub":current===steps.length?"Final route cell reached":"In progress";actionReadout.textContent=current?direction(steps[current-1].from,at):"None"}
+  function draw(){
+    var size=50,wall=theme("--maze-wall","#B9AB6B"),cell=theme("--maze-cell","#F7F0E2"),grid=theme("--maze-grid","#C9B99B"),goal=theme("--maze-goal","#5E6828"),agent=theme("--maze-agent","#8A633F");ctx.clearRect(0,0,500,500);
+    for(var r=0;r<10;r++)for(var c=0;c<10;c++){var key=r+","+c,open=layout.open.has(key),node=Object.keys(layout.nodes).filter(function(id){return fixedMazeKey(layout.nodes[id])===key})[0],closed=false,access=1;EDGES.forEach(function(e){if(layout.edges[e.key].some(function(p){return fixedMazeKey(p)===key})){var a=accA(e);if(a<.20)closed=true;else access=Math.min(access,a)}});ctx.fillStyle=closed?wall:open?cell:"#E7E6DD";ctx.fillRect(c*size,r*size,size,size);ctx.strokeStyle=grid;ctx.lineWidth=1;ctx.strokeRect(c*size+.5,r*size+.5,size,size);if(open&&!closed&&!node){ctx.beginPath();ctx.arc(c*size+size-7,r*size+7,3,0,Math.PI*2);ctx.fillStyle=access>=.75?"#3D8A60":access>=.45?"#C28A2C":"#B5683C";ctx.fill()}}
+    for(var i=0;i<current;i++){var p=steps[i].cell;ctx.beginPath();ctx.arc(p[1]*size+25,p[0]*size+25,size*.10,0,Math.PI*2);ctx.fillStyle=color;ctx.fill()}
+    Object.keys(layout.nodes).filter(function(id){return id!=="hub"}).forEach(function(id){var p=layout.nodes[id],letter=String.fromCharCode(65+Object.keys(layout.nodes).filter(function(k){return k!=="hub"}).indexOf(id)),n=stopMap[id];ctx.beginPath();ctx.arc(p[1]*size+25,p[0]*size+25,13,0,Math.PI*2);ctx.fillStyle=cell;ctx.fill();ctx.strokeStyle=goal;ctx.lineWidth=2;ctx.stroke();ctx.fillStyle=theme("--txt","#29351E");ctx.font="bold 13px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(letter,p[1]*size+25,p[0]*size+25);if(n){ctx.beginPath();ctx.arc(p[1]*size+40,p[0]*size+10,8,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 9px sans-serif";ctx.fillText(String(n),p[1]*size+40,p[0]*size+10)}});
+    var h=layout.nodes.hub;ctx.beginPath();ctx.arc(h[1]*size+25,h[0]*size+25,14,0,Math.PI*2);ctx.fillStyle=goal;ctx.fill();ctx.fillStyle="#fff";ctx.font="bold 13px sans-serif";ctx.fillText("H",h[1]*size+25,h[0]*size+25);
+    if(current&&steps.length){var a=steps[Math.min(current-1,steps.length-1)].cell;ctx.beginPath();ctx.arc(a[1]*size+25,a[0]*size+25,8,0,Math.PI*2);ctx.fillStyle=agent;ctx.fill();ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.stroke()}
+  }
+  function advance(){if(current>=steps.length)return;current++;draw();if(current===steps.length){if(FIXED_MAZE_TIMERS[id])clearInterval(FIXED_MAZE_TIMERS[id]);FIXED_MAZE_TIMERS[id]=null;play.textContent="Start Route Animation";updateStatus("Complete")}else updateStatus(FIXED_MAZE_TIMERS[id]?"Playing":"Paused")}
+  play.onclick=function(){if(FIXED_MAZE_TIMERS[id]){clearInterval(FIXED_MAZE_TIMERS[id]);FIXED_MAZE_TIMERS[id]=null;play.textContent="Start Route Animation";updateStatus("Paused")}else{if(current>=steps.length)current=0;if(!steps.length){updateStatus("No route steps");return}advance();if(current<steps.length){FIXED_MAZE_TIMERS[id]=setInterval(advance,200);play.textContent="Pause Animation";updateStatus("Playing")}}};
+  next.onclick=function(){if(FIXED_MAZE_TIMERS[id]){clearInterval(FIXED_MAZE_TIMERS[id]);FIXED_MAZE_TIMERS[id]=null;play.textContent="Start Route Animation"}if(current<steps.length)advance()};reset.onclick=function(){if(FIXED_MAZE_TIMERS[id])clearInterval(FIXED_MAZE_TIMERS[id]);FIXED_MAZE_TIMERS[id]=null;current=0;play.textContent="Start Route Animation";draw();updateStatus("Ready")};draw();updateStatus("Ready");
 }
 
 function resultCard(title,r,label){
@@ -265,7 +267,6 @@ function evidenceNote(){
 }
 
 function renderExisting(){
-  var k=planKPIs(analysisStd);
   var hp=TRAINING_RESULT.hyperparameters||{};
   function fmt(v,d){return Number(v||0).toFixed(d)}
   var trainingEvidence=SIM.sq&&SIM.sq.length>1
@@ -284,11 +285,11 @@ function renderExisting(){
     '</div>'+
     '<div class="card"><h3>Why Enhancement Was Needed</h3><div class="split2"><div class="splitcol std"><h4>Single-objective reward</h4><div class="k">The reward directly focuses on travel time.</div></div><div class="splitcol std"><h4>Overestimation Bias</h4><div class="k">Using the maximum estimated next-state Q-value can lead to overestimation of action values.</div></div><div class="splitcol std"><h4>Limited state representation</h4><div class="k">The baseline state is centered on current location only.</div></div></div><div class="k" style="margin-top:10px">Standard Q-Learning remains the valid baseline that the proposed method enhances.</div></div>'+
     '<div class="card"><h3>Actual Training Evidence</h3><div class="g3"><div class="kpi"><div class="lab">Training episodes</div><div class="v">'+TRAINING_RESULT.episodes_trained+'</div><div class="d">existing experiment</div></div><div class="kpi"><div class="lab">Held-out scenarios</div><div class="v">'+TRAINING_RESULT.evaluation_scenarios+'</div><div class="d">evaluation rollout</div></div><div class="kpi"><div class="lab">Comparison setup</div><div class="v" style="font-size:18px;line-height:1.2">same seeds</div><div class="d">same environment</div></div></div><div style="height:12px"></div>'+trainingEvidence+'</div>'+
-    '<div class="card"><h3>Current Standard Q-Learning Route</h3><div class="g3"><div class="kpi"><div class="lab">Learner Coverage</div><div class="v">'+k.learners+'</div><div class="d">current Laiban scenario</div></div><div class="kpi"><div class="lab">Route Distance</div><div class="v">'+k.totalKm.toFixed(1)+'<span style="font-size:13px"> km</span></div><div class="d">current Laiban scenario</div></div><div class="kpi"><div class="lab">Travel + Service Time</div><div class="v">'+Math.round(k.totalMin)+'<span style="font-size:13px"> min</span></div><div class="d">current route total</div></div></div><div style="height:12px"></div>'+stopRowsHTML(analysisStd)+'</div>'
+    ''
 }
 
 function renderProposed(){
-  var k=planKPIs(analysisMod),r=TRAINING_RESULT.modql;
+  var r=TRAINING_RESULT.modql;
   var hp=TRAINING_RESULT.hyperparameters||{};
   function fmt(v,d){return Number(v||0).toFixed(d)}
   var trainingEvidence=SIM.mq&&SIM.mq.length>1
@@ -307,8 +308,7 @@ function renderProposed(){
     '</div>'+
     '<div class="card"><h3>Why It Is the Enhancement</h3><div class="g3"><div class="splitcol mod"><h4>Multi-objective reward</h4><div class="k">Uses <span class="mono">R<sub>MODQL</sub> = C &times; J &times; E<sub>T</sub></span> to combine normalized learner demand, Jain fairness, and bounded travel efficiency.</div></div><div class="splitcol mod"><h4>Double Q-Learning</h4><div class="k">Addresses overestimation bias by using Q1 and Q2 with decoupled selection and evaluation.</div></div><div class="splitcol mod"><h4>Richer state representation</h4><div class="k">Addresses limited state representation by using <span class="mono">S = &lang;L,D,T,H,A&rang;</span>.</div></div></div><div class="k" style="margin-top:10px">MODQL is the proposed structural enhancement. Its current stored results are reported neutrally and do not show superiority across all metrics.</div></div>'+
     '<div class="card"><h3>Training Evidence</h3><div class="g3"><div class="kpi"><div class="lab">Training episodes</div><div class="v">'+TRAINING_RESULT.episodes_trained+'</div><div class="d">current stored run</div></div><div class="kpi"><div class="lab">Held-out scenarios</div><div class="v">'+TRAINING_RESULT.evaluation_scenarios+'</div><div class="d">evaluation rollout</div></div><div class="kpi"><div class="lab">Avg learner coverage</div><div class="v">'+fmt(r.coverage,1)+'</div><div class="d">stored MODQL evaluation</div></div></div><div style="height:12px"></div>'+trainingEvidence+'</div>'+
-    '<div class="g3"><div class="kpi"><div class="lab">Live learners reached</div><div class="v">'+k.learners+'</div><div class="d">Laiban simulation today</div></div><div class="kpi"><div class="lab">Live route length</div><div class="v">'+k.totalKm.toFixed(1)+'<span style="font-size:13px"> km</span></div><div class="d">shared Laiban environment</div></div><div class="kpi"><div class="lab">Live Jain&rsquo;s J</div><div class="v">'+k.J.toFixed(3)+'</div><div class="d">descriptive only</div></div></div><div style="height:12px"></div>'+
-    '<div class="split2 eg-grid proposed-route-row">'+proposedGraphHTML("tab-proposed-sim").replace("card eg-card","card eg-card proposed-route-visual")+'<div class="card proposed-route-stops"><h3>Current MODQL Stop Plan</h3>'+stopRowsHTML(analysisMod)+'</div></div><div class="card proposed-route-deferred"><h3>Deferred Communities</h3>'+deferredHTML(analysisMod)+'</div>'
+    ''
 }
 
 function renderAnalysis(){
@@ -317,22 +317,24 @@ function renderAnalysis(){
   renderProposed();
   renderEvaluation();
   setTimeout(function(){
-    var maze=document.getElementById("sub-maze"),host=document.getElementById("comparison-existing-host");
-    if(maze&&host){
-      maze.classList.remove("subview","active");
-      maze.classList.add("evaluation-maze");
-      host.appendChild(maze);
-      var implementationNote=maze.querySelector(".note");
-      var implementationTarget=document.getElementById("comparison-implementation-note");
-      if(implementationNote&&implementationTarget)implementationTarget.appendChild(implementationNote);
-      var note=document.createElement("div");
-      note.className="note";
-      note.textContent="This reference implementation uses a grid environment with a single goal. The controlled comparison against the proposed algorithm is performed on the shared Laiban road network under Algorithm Evaluation.";
-      var referenceTarget=document.getElementById("comparison-reference-note");
-      if(referenceTarget)referenceTarget.appendChild(note);
-    }
+    mountOriginalStandardMaze();
     if(document.getElementById("tab-proposed-sim-svg"))wireProposedGraph("tab-proposed-sim");
-    if(document.getElementById("evaluation-proposed-sim-svg"))wireProposedGraph("evaluation-proposed-sim");
   },0);
 }
-document.querySelectorAll('.rn-group button[data-sub]').forEach(function(b){b.onclick=function(){document.querySelectorAll('.rn-group button[data-sub]').forEach(function(x){x.classList.remove('on')});b.classList.add('on');document.querySelectorAll('.subview').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('sub-'+b.getAttribute('data-sub'));if(target)target.classList.add('active')}})
+var ORIGINAL_STANDARD_MAZE=null;
+function mountOriginalStandardMaze(){
+  var maze=ORIGINAL_STANDARD_MAZE||document.getElementById("sub-maze"),host=document.getElementById("comparison-standard-maze-host");
+  if(!maze||!host||!maze.children.length)return false;
+  ORIGINAL_STANDARD_MAZE=maze;
+  maze.classList.remove("subview","active");
+  maze.classList.add("evaluation-maze");
+  if(maze.parentNode!==host)host.appendChild(maze);
+  if(!host.querySelector(".standard-maze-context-note")){
+    var note=document.createElement("div");note.className="note standard-maze-context-note";note.textContent="This original maze uses its own randomly generated single-goal environment. It does not depict Laiban roads or the MODQL service route.";host.appendChild(note);
+  }
+  return true;
+}
+// The maze demo builds on DOMContentLoaded. Defer this callback so its own
+// listener can finish first, even if the initial comparison render ran earlier.
+document.addEventListener("DOMContentLoaded",function(){setTimeout(mountOriginalStandardMaze,0)});
+document.querySelectorAll('.rn-group button[data-sub]').forEach(function(b){b.onclick=function(){document.querySelectorAll('.rn-group button[data-sub]').forEach(function(x){x.classList.remove('on')});b.classList.add('on');document.querySelectorAll('.subview').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('sub-'+b.getAttribute('data-sub'));if(target)target.classList.add('active');if(b.getAttribute('data-sub')==="evaluation")mountOriginalStandardMaze()}})
