@@ -2235,6 +2235,22 @@ body[data-theme="dark"] #routeLegend span b{color:#FCF9EA}
 .route-maze-status-card>div{display:flex;justify-content:space-between;gap:12px;font-size:12px;line-height:1.8}
 .route-maze-status-card>div span{color:var(--dim)}
 .route-maze-status-card>div b{text-align:right}
+.modql-maze-layout{display:grid;grid-template-columns:minmax(150px,.72fr) minmax(0,1fr);gap:12px;align-items:start}
+.modql-maze-status-card{min-width:0;min-height:0;font-size:13px;line-height:1.9}
+.modql-maze-status-card h4{font-size:14px;margin:0 0 8px;font-weight:800}
+.modql-maze-status-card>div{font-size:13px;line-height:1.9}
+.modql-maze-status-card>div span{color:var(--txt)}
+.modql-maze-status-card>div b{overflow-wrap:anywhere}
+.modql-maze-key{display:flex;flex-direction:column;border-top:1px solid var(--line);padding-top:8px;margin-top:6px}
+.modql-maze-key span{color:var(--dim)!important;font-size:12px;line-height:1.8}
+.modql-maze-key i{display:inline-block;width:12px;height:12px;margin-right:5px;border:1px solid var(--line);vertical-align:-1px;border-radius:50%}
+.modql-maze-key .maze-agent-key{background:var(--maze-agent,#8A633F)}
+.modql-maze-key .maze-goal-key{background:var(--maze-goal,#5E6828)}
+.modql-maze-key .maze-wall-key{background:var(--maze-wall,#B9AB6B);border-radius:2px}
+.modql-route-legend{font-size:12px;line-height:1.8}
+.modql-route-legend i{width:12px;height:12px}
+.modql-route-legend .route-maze-legend-wall{display:inline-block;width:12px;height:12px;margin:0 5px 0 0;border:1px solid #8f866a;background:var(--maze-wall,#B9AB6B);vertical-align:middle}
+.modql-maze-controls .btn{min-width:0;flex:0 0 auto;padding-left:12px;padding-right:12px}
 .route-maze-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 0;font-size:11px;color:var(--dim)}
 .route-maze-legend i{display:inline-block;width:14px;height:14px;margin:0 5px 0 0;border:1px solid #8f866a;vertical-align:middle}
 .route-maze-legend .maze-cell-key{background:var(--maze-cell,#F7F0E2)}
@@ -2349,6 +2365,10 @@ body[data-theme="dark"] #routeLegend span b{color:#FCF9EA}
   line-height:1.2;
   white-space:normal;
   box-sizing:border-box;
+}
+@media(max-width:620px){
+  .modql-maze-layout{grid-template-columns:1fr}
+  .modql-maze-status-card{min-height:0}
 }
 @media (max-width:1000px){
   .original-algorithm-split{
