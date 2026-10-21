@@ -149,14 +149,84 @@ function wireEvaluationGraphs(){
     btn.onclick=function(){if(timer){clearInterval(timer);timer=null;btn.textContent="Play Route Sequence"}else{advance();timer=setInterval(advance,700);btn.textContent="Pause Route Sequence"}};
   });
 }
+var LAIBAN_GRID_POSITIONS={
+  maysawa:[0,0],toyang:[1,0],hub:[2,0],iwi_iw:[3,0],magata:[4,0],
+  ibucao:[0,1],banatas:[1,1],old_laiban:[2,1],kilabuwan:[3,1],manggahan:[4,1]
+};
+var LAIBAN_GRID_TIMERS={};
+function laibanGridPoint(id){
+  var p=LAIBAN_GRID_POSITIONS[id];
+  return {x:130+p[0]*230,y:155+p[1]*270};
+}
+function laibanGridEscape(value){
+  return String(value).replace(/[&<>"']/g,function(ch){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]});
+}
+function laibanGridRoute(plan){
+  var sequence=["hub"];
+  (plan.stops||[]).forEach(function(stop){
+    if(stop.p&&stop.p.seq)sequence=sequence.concat(stop.p.seq.slice(1));
+  });
+  if(plan.ret&&plan.ret.seq)sequence=sequence.concat(plan.ret.seq.slice(1));
+  return sequence.filter(function(id,index){return index===0||id!==sequence[index-1]});
+}
+function laibanGridPanelHTML(id,title,plan,comparison){
+  var stops={};(plan.stops||[]).forEach(function(stop,index){stops[stop.id]=index+1});
+  var edgeMarkup=EDGES.map(function(edge,index){
+    var start=laibanGridPoint(edge.a),end=laibanGridPoint(edge.b),dx=end.x-start.x,dy=end.y-start.y,length=Math.sqrt(dx*dx+dy*dy)||1;
+    var bend=[-42,0,42][index%3],cx=(start.x+end.x)/2-(dy/length)*bend,cy=(start.y+end.y)/2+(dx/length)*bend;
+    var labelX=.25*start.x+.5*cx+.25*end.x,labelY=.25*start.y+.5*cy+.25*end.y-6;
+    var access=accA(edge),status=band(access),color=roadDisplayColor(status.k),travel=Math.round(edgeMin(edge));
+    var dash=edge.graph_status==="qa_connector"?"5 7":edge.graph_status==="inferred_connector"?"8 6":status.k==="caut"?"7 5":status.k==="rest"?"4 5":status.k==="cls"?"3 5":"";
+    return '<g class="laiban-grid-road '+status.k+'" data-edge="'+ek(edge.a,edge.b)+'"><title>'+laibanGridEscape(N[edge.a].name+' ↔ '+N[edge.b].name+' · '+travel+' min · '+status.lab+' · A='+access.toFixed(2))+'</title><path d="M '+start.x+' '+start.y+' Q '+cx+' '+cy+' '+end.x+' '+end.y+'" fill="none" stroke="'+color+'" stroke-width="'+(edge.graph_status==="qa_connector"?3.5:5)+'" stroke-linecap="round" stroke-dasharray="'+dash+'" opacity="'+(edge.graph_status==="qa_connector"?.55:.92)+'"/><rect class="laiban-grid-time-bg" x="'+(labelX-29)+'" y="'+(labelY-12)+'" width="58" height="22" rx="8"/><text class="laiban-grid-time" x="'+labelX+'" y="'+labelY+'">'+travel+' min</text></g>';
+  }).join("");
+  var nodeMarkup=NODES.map(function(node){
+    var point=laibanGridPoint(node.id),order=stops[node.id],hub=node.kind==="depot",name=laibanGridEscape(node.name),detail=hub?"Deployment hub":node.learners+" learners";
+    return '<g class="laiban-grid-node'+(hub?" hub":"")+'" transform="translate('+point.x+' '+point.y+')" data-node="'+node.id+'"><rect x="-82" y="-50" width="164" height="100" rx="13"/><circle class="laiban-grid-node-icon" cx="-53" cy="-18" r="16"/><text class="laiban-grid-node-mark" x="-53" y="-18">'+(hub?"H":String.fromCharCode(65+SERVICE_IDS.indexOf(node.id)))+'</text><text class="laiban-grid-node-name" x="0" y="7">'+name+'</text><text class="laiban-grid-node-detail" x="0" y="29">'+detail+'</text>'+(order?'<circle class="laiban-grid-order" cx="65" cy="-35" r="13"/><text class="laiban-grid-order-text" x="65" y="-35">'+order+'</text>':'')+'</g>';
+  }).join("");
+  var routeNames=laibanGridRoute(plan).map(function(nodeId){return laibanGridEscape(N[nodeId].name)}).join(" &rarr; ");
+  return '<section class="card laiban-grid-card'+(comparison?" laiban-grid-comparison":"")+'"><h3>'+title+'</h3><p class="k laiban-grid-description">Schematic grid of the active Laiban road network. Each tile is the actual hub or one of the nine sitios; road colors use the current accessibility bands. Tile placement is schematic, not geographic. The existing Drive map remains available.</p><div class="laiban-grid-scroll"><svg id="'+id+'-svg" class="laiban-grid-svg" viewBox="0 0 1260 590" role="img" aria-label="Schematic grid of the Laiban hub, nine sitios, and road accessibility"><rect class="laiban-grid-board" x="20" y="20" width="1220" height="550" rx="18"/>'+edgeMarkup+'<g id="'+id+'-route-trail"></g>'+nodeMarkup+'<g id="'+id+'-van" class="laiban-grid-van" transform="translate('+laibanGridPoint("hub").x+' '+laibanGridPoint("hub").y+')"><rect x="-16" y="-11" width="32" height="20" rx="6"/><path d="M-8 -11l5 -7h11l7 7"/><circle cx="-8" cy="11" r="4"/><circle cx="9" cy="11" r="4"/></g></svg></div><div class="laiban-grid-legend"><span><i class="open"></i>Open</span><span><i class="caut"></i>Caution</span><span><i class="rest"></i>Restricted</span><span><i class="cls"></i>Closed</span><span><i class="route"></i>Planned route / vehicle</span></div><div class="laiban-grid-route-summary"><b>Current MODQL route:</b> '+(routeNames||"No planned route")+'</div><div class="laiban-grid-status" id="'+id+'-status" aria-live="polite">Ready at Laiban Proper / ALS Hub</div><div class="laiban-grid-controls"><button class="btn p" id="'+id+'-play" type="button">Play Route</button><button class="btn g" id="'+id+'-step" type="button">Step</button><button class="btn g" id="'+id+'-reset" type="button">Reset</button></div></section>';
+}
+function wireLaibanGrid(id,plan){
+  if(LAIBAN_GRID_TIMERS[id])clearInterval(LAIBAN_GRID_TIMERS[id]);
+  LAIBAN_GRID_TIMERS[id]=null;
+  var svg=document.getElementById(id+"-svg"),van=document.getElementById(id+"-van"),status=document.getElementById(id+"-status"),play=document.getElementById(id+"-play"),step=document.getElementById(id+"-step"),reset=document.getElementById(id+"-reset");
+  if(!svg||!van||!status||!play||!step||!reset)return;
+  var sequence=laibanGridRoute(plan),position=0,trail=document.getElementById(id+"-route-trail");
+  function draw(){
+    var point=laibanGridPoint(sequence[position]);
+    van.setAttribute("transform","translate("+point.x+" "+point.y+")");
+    trail.innerHTML="";
+    for(var i=1;i<=position;i++){
+      var from=laibanGridPoint(sequence[i-1]),to=laibanGridPoint(sequence[i]);
+      trail.innerHTML+='<path class="laiban-grid-trail" d="M '+from.x+' '+from.y+' L '+to.x+' '+to.y+'"/>';
+    }
+    var current=N[sequence[position]],next=position<sequence.length-1?N[sequence[position+1]]:null;
+    status.textContent=(current?current.name:"Laiban Proper / ALS Hub")+" · "+position+" / "+(sequence.length-1)+" road steps"+(next?" · next: "+next.name:" · route complete");
+  }
+  function advance(){
+    if(position>=sequence.length-1){if(LAIBAN_GRID_TIMERS[id])clearInterval(LAIBAN_GRID_TIMERS[id]);LAIBAN_GRID_TIMERS[id]=null;play.textContent="Play Route";return false}
+    position++;draw();
+    if(position>=sequence.length-1){if(LAIBAN_GRID_TIMERS[id])clearInterval(LAIBAN_GRID_TIMERS[id]);LAIBAN_GRID_TIMERS[id]=null;play.textContent="Play Route";return false}
+    return true;
+  }
+  play.onclick=function(){
+    if(LAIBAN_GRID_TIMERS[id]){clearInterval(LAIBAN_GRID_TIMERS[id]);LAIBAN_GRID_TIMERS[id]=null;play.textContent="Play Route";return}
+    if(position>=sequence.length-1){position=0;draw()}
+    play.textContent="Pause";
+    LAIBAN_GRID_TIMERS[id]=setInterval(function(){if(!advance()){play.textContent="Play Route"}},850);
+    advance();
+  };
+  step.onclick=function(){if(LAIBAN_GRID_TIMERS[id]){clearInterval(LAIBAN_GRID_TIMERS[id]);LAIBAN_GRID_TIMERS[id]=null;play.textContent="Play Route"}advance()};
+  reset.onclick=function(){if(LAIBAN_GRID_TIMERS[id])clearInterval(LAIBAN_GRID_TIMERS[id]);LAIBAN_GRID_TIMERS[id]=null;position=0;play.textContent="Play Route";draw()};
+  draw();
+}
 function renderEvaluation(){
-  var layout=buildFixedLaibanMaze(),mod=mapMazeRoute(analysisMod,layout);
   document.getElementById("sub-evaluation").innerHTML=
     '<div class="card route-comparison-card"><h3>Route Behavior Comparison</h3><p class="route-maze-note">The Standard panel is the original random-maze demonstration. The MODQL panel visualizes its actual Laiban service route. These are different environments and their displayed paths are not a controlled performance comparison; controlled results use the separate shared-Laiban evaluation.</p><div class="split2 original-algorithm-split">'+
       '<section class="splitcol std"><h3 class="comparison-panel-title">Standard Q-Learning</h3><div id="comparison-standard-maze-host"></div></section>'+
-      fixedMazePanel("modql-route-maze","Enhanced MODQL",analysisMod,mod,"route-modql",layout)+
+      laibanGridPanelHTML("comparison-laiban-route","Enhanced MODQL — Laiban grid route",analysisMod,true)+
     '</div></div>';
-  wireFixedMaze("modql-route-maze",analysisMod,mod,layout,"route-modql");
+  wireLaibanGrid("comparison-laiban-route",analysisMod);
 }
 
 // Coordinates are deterministic schematic cells, not geographic locations.
@@ -306,8 +376,10 @@ function renderProposed(){
       '<div class="card"><h3>Symbol Guide</h3><div class="symbol-grid"><div class="symbol-card"><div class="sym">s</div><div class="desc">current MODQL state</div></div><div class="symbol-card"><div class="sym">a</div><div class="desc">selected action</div></div><div class="symbol-card"><div class="sym">R</div><div class="desc">multi-objective reward</div></div><div class="symbol-card"><div class="sym">Q1 selects</div><div class="desc">Q2 evaluates when Q1 is updated</div></div><div class="symbol-card"><div class="sym">Q2 selects</div><div class="desc">Q1 evaluates when Q2 is updated</div></div><div class="symbol-card"><div class="sym">s&prime;</div><div class="desc">next enriched state after the action</div></div></div></div>'+
     '</div>'+
     '<div class="card"><h3>Why It Is the Enhancement</h3><div class="g3"><div class="splitcol mod"><h4>Multi-objective reward</h4><div class="k">Uses <span class="mono">R<sub>MODQL</sub> = C &times; J &times; E<sub>T</sub></span> to combine normalized learner demand, Jain fairness, and bounded travel efficiency.</div></div><div class="splitcol mod"><h4>Double Q-Learning</h4><div class="k">Addresses overestimation bias by using Q1 and Q2 with decoupled selection and evaluation.</div></div><div class="splitcol mod"><h4>Richer state representation</h4><div class="k">Addresses limited state representation by using <span class="mono">S = &lang;L,D,T,H,A&rang;</span>.</div></div></div><div class="k" style="margin-top:10px">MODQL is the proposed structural enhancement. Its current stored results are reported neutrally and do not show superiority across all metrics.</div></div>'+
+    laibanGridPanelHTML("proposed-laiban-route","Laiban Route Network — Grid View",analysisMod,false)+
     '<div class="card"><h3>Training Evidence</h3><div class="g3"><div class="kpi"><div class="lab">Training episodes</div><div class="v">'+TRAINING_RESULT.episodes_trained+'</div><div class="d">current stored run</div></div><div class="kpi"><div class="lab">Held-out scenarios</div><div class="v">'+TRAINING_RESULT.evaluation_scenarios+'</div><div class="d">evaluation rollout</div></div><div class="kpi"><div class="lab">Avg learner coverage</div><div class="v">'+fmt(r.coverage,1)+'</div><div class="d">stored MODQL evaluation</div></div></div><div style="height:12px"></div>'+trainingEvidence+'</div>'+
-    ''
+   '';
+ wireLaibanGrid("proposed-laiban-route",analysisMod);
 }
 
 function renderAnalysis(){
