@@ -289,7 +289,7 @@
   function buildUI(){
     const host=el('sub-maze'); if(!host)return;
     host.innerHTML=`
-      <div class="card" style="padding:16px">
+      <div class="card maze-demo-card" style="padding:16px">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
           <div>
             <h3 style="font-size:16px;margin-bottom:4px">Maze Demonstration — Baseline Confidence Agent</h3>
@@ -298,25 +298,26 @@
           <span class="pill open">SYS REPOSITORY LOGIC</span>
         </div>
         <div style="display:grid;grid-template-columns:minmax(210px,300px) minmax(300px,500px);gap:18px;align-items:start" class="maze-layout">
-          <div style="background:var(--maze-panel);border:1px solid var(--line);border-radius:12px;padding:14px;color:var(--txt);min-height:420px">
-            <div style="font-weight:800;margin-bottom:12px">Q-Learning Maze Status</div>
-            <div style="font-size:13px;line-height:1.9">
-              <div>Episode: <b id="mzEpisode">1 / 5</b></div>
-              <div>Status: <b id="mzStatus">Ready</b></div>
-              <div>Goal: <b id="mzGoal">In Progress...</b></div>
-              <div>Steps: <b id="mzSteps">0 / 100</b></div>
-              <div>Latest Move: <b id="mzAction">None</b></div>
-              <div>Exploration Rate (&epsilon;): <b id="mzEpsilon">0.300</b></div>
-              <hr style="border:0;border-top:1px solid var(--line);margin:10px 0">
-              <div><span style="color:var(--maze-agent)">●</span> Red Ball: Baseline Agent</div>
-              <div><span style="color:var(--maze-goal)">●</span> Green Circle: Goal</div>
-              <div><span style="color:var(--maze-wall)">■</span> Yellow Blocks: Walls</div>
-              <div style="margin-top:10px;color:var(--dim)">Maze changes every 20 environment steps.</div>
+          <div class="maze-status-panel">
+            <div class="maze-status-heading">Q-Learning Maze Status</div>
+            <div class="maze-status-grid">
+              <div><span>Episode</span><b id="mzEpisode">1 / 5</b></div>
+              <div><span>Status</span><b id="mzStatus">Ready</b></div>
+              <div><span>Goal</span><b id="mzGoal">In Progress...</b></div>
+              <div><span>Steps</span><b id="mzSteps">0 / 100</b></div>
+              <div><span>Latest Move</span><b id="mzAction">None</b></div>
+              <div><span>Exploration Rate (&epsilon;)</span><b id="mzEpsilon">0.300</b></div>
             </div>
+            <div class="maze-status-legend">
+              <div><span class="maze-agent-dot">●</span> Red Ball: Baseline Agent</div>
+              <div><span class="maze-goal-dot">●</span> Green Circle: Goal</div>
+              <div><span class="maze-wall-dot">■</span> Yellow Blocks: Walls</div>
+            </div>
+            <div class="maze-status-note">Maze changes every 20 environment steps.</div>
           </div>
           <div><canvas id="mzCanvas" width="500" height="500" style="display:block;width:100%;max-width:500px;aspect-ratio:1/1;background:var(--maze-cell);border:1px solid var(--line);border-radius:10px;margin:0 auto"></canvas></div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+        <div class="maze-demo-controls" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
           <button class="btn p" id="mzPlay" style="flex:0 0 150px">Start Animation</button>
           <button class="btn g" id="mzStep" style="flex:0 0 150px">Advance One Step</button>
           <button class="btn g" id="mzReset" style="flex:0 0 140px">Restart Episode</button>
