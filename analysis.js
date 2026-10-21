@@ -193,7 +193,8 @@ function wireLaibanGrid(id,plan){
   if(!svg||!van||!status||!play||!step||!reset)return;
   var sequence=laibanGridRoute(plan),position=0,trail=document.getElementById(id+"-route-trail");
   function draw(){
-    var point=laibanGridPoint(sequence[position]);
+    var point=laibanGridPoint(sequence[position]),isHub=sequence[position]==="hub";
+    if(isHub){point.x+=62;point.y-=34}
     van.setAttribute("transform","translate("+point.x+" "+point.y+")");
     trail.innerHTML="";
     for(var i=1;i<=position;i++){
@@ -222,10 +223,10 @@ function wireLaibanGrid(id,plan){
 }
 function renderEvaluation(){
   document.getElementById("sub-evaluation").innerHTML=
-    '<div class="card route-comparison-card"><h3>Route Behavior Comparison</h3><p class="route-maze-note">The Standard panel is the original random-maze demonstration. The MODQL panel visualizes its actual Laiban service route. These are different environments and their displayed paths are not a controlled performance comparison; controlled results use the separate shared-Laiban evaluation.</p><div class="split2 original-algorithm-split">'+
+    '<header class="route-comparison-intro"><h2>Route Behavior Comparison</h2><p class="route-maze-note">The Standard panel is the original random-maze demonstration. The MODQL panel visualizes its actual Laiban service route. These are different environments and their displayed paths are not a controlled performance comparison; controlled results use the separate shared-Laiban evaluation.</p></header><div class="split2 original-algorithm-split">'+
       '<section class="splitcol std"><h3 class="comparison-panel-title">Standard Q-Learning</h3><div id="comparison-standard-maze-host"></div></section>'+
       laibanGridPanelHTML("comparison-laiban-route","Enhanced MODQL — Laiban grid route",analysisMod,true)+
-    '</div></div>';
+    '</div>';
   wireLaibanGrid("comparison-laiban-route",analysisMod);
 }
 
@@ -408,4 +409,30 @@ function mountOriginalStandardMaze(){
 // The maze demo builds on DOMContentLoaded. Defer this callback so its own
 // listener can finish first, even if the initial comparison render ran earlier.
 document.addEventListener("DOMContentLoaded",function(){setTimeout(mountOriginalStandardMaze,0)});
-document.querySelectorAll('.rn-group button[data-sub]').forEach(function(b){b.onclick=function(){document.querySelectorAll('.rn-group button[data-sub]').forEach(function(x){x.classList.remove('on')});b.classList.add('on');document.querySelectorAll('.subview').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('sub-'+b.getAttribute('data-sub'));if(target)target.classList.add('active');if(b.getAttribute('data-sub')==="evaluation")mountOriginalStandardMaze()}})
+var researchTabs=Array.prototype.slice.call(document.querySelectorAll('#researchNav [role="tab"][data-sub]'));
+function activateResearchTab(tab,moveFocus){
+  researchTabs.forEach(function(item){
+    var selected=item===tab;
+    item.classList.toggle('on',selected);
+    item.setAttribute('aria-selected',String(selected));
+    item.tabIndex=selected?0:-1;
+  });
+  document.querySelectorAll('.subview').forEach(function(view){view.classList.remove('active')});
+  var target=document.getElementById('sub-'+tab.getAttribute('data-sub'));
+  if(target)target.classList.add('active');
+  if(tab.getAttribute('data-sub')==="evaluation")mountOriginalStandardMaze();
+  if(moveFocus)tab.focus();
+}
+researchTabs.forEach(function(tab,index){
+  tab.addEventListener('click',function(){activateResearchTab(tab,false)});
+  tab.addEventListener('keydown',function(event){
+    var next=index;
+    if(event.key==="ArrowRight")next=(index+1)%researchTabs.length;
+    else if(event.key==="ArrowLeft")next=(index+researchTabs.length-1)%researchTabs.length;
+    else if(event.key==="Home")next=0;
+    else if(event.key==="End")next=researchTabs.length-1;
+    else return;
+    event.preventDefault();
+    activateResearchTab(researchTabs[next],true);
+  });
+});
