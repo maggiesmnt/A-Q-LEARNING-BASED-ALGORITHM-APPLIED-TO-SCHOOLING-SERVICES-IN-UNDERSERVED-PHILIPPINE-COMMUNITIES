@@ -290,12 +290,12 @@
     const host=el('sub-maze'); if(!host)return;
     host.innerHTML=`
       <div class="card maze-demo-card" style="padding:16px">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
-          <div>
-            <h3 style="font-size:16px;margin-bottom:4px">Maze Demonstration — Baseline Confidence Agent</h3>
-            <div class="k">Browser adaptation of the <span class="mono">iboasay/sys</span> maze demo, using its dynamic environment and baseline Q-learning agent behavior while preserving this system's existing Maze Demo interface.</div>
+        <div class="maze-demo-header">
+          <div class="maze-demo-heading">
+            <h3 class="maze-demo-subtitle">Maze Demonstration — Baseline Confidence Agent</h3>
+            <span class="pill open">SYS REPOSITORY LOGIC</span>
           </div>
-          <span class="pill open">SYS REPOSITORY LOGIC</span>
+          <div class="k maze-demo-description">Browser adaptation of the <span class="mono">iboasay/sys</span> maze demo, using its dynamic environment and baseline Q-learning agent behavior while preserving this system's existing Maze Demo interface.</div>
         </div>
         <div style="display:grid;grid-template-columns:minmax(210px,300px) minmax(300px,500px);gap:18px;align-items:start" class="maze-layout">
           <div class="maze-status-panel">

@@ -169,22 +169,42 @@ function laibanGridRoute(plan){
   if(plan.ret&&plan.ret.seq)sequence=sequence.concat(plan.ret.seq.slice(1));
   return sequence.filter(function(id,index){return index===0||id!==sequence[index-1]});
 }
+function laibanGridRoadControl(start,end,edge){
+  var dx=end.x-start.x,dy=end.y-start.y,length=Math.sqrt(dx*dx+dy*dy)||1;
+  var nx=-dy/length,ny=dx/length,candidates=[-180,180,-216,216,-144,144,-108,108,-72,72,-36,36,0],best=null,bestHits=Infinity;
+  candidates.forEach(function(offset){
+    var control={x:(start.x+end.x)/2+nx*offset,y:(start.y+end.y)/2+ny*offset},hits=0;
+    for(var step=1;step<10;step++){
+      var t=step/10,u=1-t,x=u*u*start.x+2*u*t*control.x+t*t*end.x,y=u*u*start.y+2*u*t*control.y+t*t*end.y;
+      NODES.forEach(function(node){
+        if(node.id===edge.a||node.id===edge.b)return;
+        var point=laibanGridPoint(node.id);
+        if(Math.abs(x-point.x)<96&&Math.abs(y-point.y)<64)hits++;
+      });
+    }
+    if(hits<bestHits){best=control;bestHits=hits}
+    if(hits===0)return;
+  });
+  return best;
+}
 function laibanGridPanelHTML(id,title,plan,comparison){
   var stops={};(plan.stops||[]).forEach(function(stop,index){stops[stop.id]=index+1});
-  var edgeMarkup=EDGES.map(function(edge,index){
-    var start=laibanGridPoint(edge.a),end=laibanGridPoint(edge.b),dx=end.x-start.x,dy=end.y-start.y,length=Math.sqrt(dx*dx+dy*dy)||1;
-    var bend=[-42,0,42][index%3],cx=(start.x+end.x)/2-(dy/length)*bend,cy=(start.y+end.y)/2+(dx/length)*bend;
-    var labelX=.25*start.x+.5*cx+.25*end.x,labelY=.25*start.y+.5*cy+.25*end.y-6;
+  var edgeMarkup=EDGES.map(function(edge){
+    var start=laibanGridPoint(edge.a),end=laibanGridPoint(edge.b),control=laibanGridRoadControl(start,end,edge);
+    var cx=control.x,cy=control.y,labelX=.25*start.x+.5*cx+.25*end.x,labelY=.25*start.y+.5*cy+.25*end.y;
     var access=accA(edge),status=band(access),color=roadDisplayColor(status.k),travel=Math.round(edgeMin(edge));
     var dash=edge.graph_status==="qa_connector"?"5 7":edge.graph_status==="inferred_connector"?"8 6":status.k==="caut"?"7 5":status.k==="rest"?"4 5":status.k==="cls"?"3 5":"";
-    return '<g class="laiban-grid-road '+status.k+'" data-edge="'+ek(edge.a,edge.b)+'"><title>'+laibanGridEscape(N[edge.a].name+' ↔ '+N[edge.b].name+' · '+travel+' min · '+status.lab+' · A='+access.toFixed(2))+'</title><path d="M '+start.x+' '+start.y+' Q '+cx+' '+cy+' '+end.x+' '+end.y+'" fill="none" stroke="'+color+'" stroke-width="'+(edge.graph_status==="qa_connector"?3.5:5)+'" stroke-linecap="round" stroke-dasharray="'+dash+'" opacity="'+(edge.graph_status==="qa_connector"?.55:.92)+'"/><rect class="laiban-grid-time-bg" x="'+(labelX-29)+'" y="'+(labelY-12)+'" width="58" height="22" rx="8"/><text class="laiban-grid-time" x="'+labelX+'" y="'+labelY+'">'+travel+' min</text></g>';
+    return '<g class="laiban-grid-road '+status.k+'" data-edge="'+ek(edge.a,edge.b)+'"><title>'+laibanGridEscape(N[edge.a].name+' ↔ '+N[edge.b].name+' · '+travel+' min · '+status.lab+' · A='+access.toFixed(2))+'</title><path d="M '+start.x+' '+start.y+' Q '+cx+' '+cy+' '+end.x+' '+end.y+'" fill="none" stroke="'+color+'" stroke-width="'+(edge.graph_status==="qa_connector"?3.5:5)+'" stroke-linecap="round" stroke-dasharray="'+dash+'" opacity="'+(edge.graph_status==="qa_connector"?.55:.92)+'"/><rect class="laiban-grid-time-bg" x="'+(labelX-40)+'" y="'+(labelY-15)+'" width="80" height="30" rx="15"/><text class="laiban-grid-time" x="'+labelX+'" y="'+labelY+'">'+travel+' min</text></g>';
   }).join("");
   var nodeMarkup=NODES.map(function(node){
-    var point=laibanGridPoint(node.id),order=stops[node.id],hub=node.kind==="depot",name=laibanGridEscape(node.name),detail=hub?"Deployment hub":node.learners+" learners";
-    return '<g class="laiban-grid-node'+(hub?" hub":"")+'" transform="translate('+point.x+' '+point.y+')" data-node="'+node.id+'"><rect x="-82" y="-50" width="164" height="100" rx="13"/><circle class="laiban-grid-node-icon" cx="-53" cy="-18" r="16"/><text class="laiban-grid-node-mark" x="-53" y="-18">'+(hub?"H":String.fromCharCode(65+SERVICE_IDS.indexOf(node.id)))+'</text><text class="laiban-grid-node-name" x="0" y="7">'+name+'</text><text class="laiban-grid-node-detail" x="0" y="29">'+detail+'</text>'+(order?'<circle class="laiban-grid-order" cx="65" cy="-35" r="13"/><text class="laiban-grid-order-text" x="65" y="-35">'+order+'</text>':'')+'</g>';
+    var point=laibanGridPoint(node.id),order=stops[node.id],hub=node.kind==="depot",fullName=laibanGridEscape(node.name),name=laibanGridEscape(hub?"Laiban Hub":node.name.replace(/^Sitio /,"")),detail=hub?"Deployment hub":node.learners+" learners";
+    return '<g class="laiban-grid-node'+(hub?" hub":"")+'" transform="translate('+point.x+' '+point.y+')" data-node="'+node.id+'"><title>'+fullName+'</title><rect x="-82" y="-50" width="164" height="100" rx="13"/><circle class="laiban-grid-node-icon" cx="-62" cy="-31" r="13"/><text class="laiban-grid-node-mark" x="-62" y="-31">'+(hub?"H":String.fromCharCode(65+SERVICE_IDS.indexOf(node.id)))+'</text><text class="laiban-grid-node-name" x="0" y="7">'+name+'</text><text class="laiban-grid-node-detail" x="0" y="29">'+detail+'</text>'+(order?'<circle class="laiban-grid-order" cx="65" cy="-35" r="13"/><text class="laiban-grid-order-text" x="65" y="-35">'+order+'</text>':'')+'</g>';
   }).join("");
-  var routeNames=laibanGridRoute(plan).map(function(nodeId){return laibanGridEscape(N[nodeId].name)}).join(" &rarr; ");
-  return '<section class="card laiban-grid-card'+(comparison?" laiban-grid-comparison":"")+'"><h3>'+title+'</h3><p class="k laiban-grid-description">Schematic grid of the active Laiban road network. Each tile is the actual hub or one of the nine sitios; road colors use the current accessibility bands. Tile placement is schematic, not geographic. The existing Drive map remains available.</p><div class="laiban-grid-scroll"><svg id="'+id+'-svg" class="laiban-grid-svg" viewBox="0 0 1260 590" role="img" aria-label="Schematic grid of the Laiban hub, nine sitios, and road accessibility"><rect class="laiban-grid-board" x="20" y="20" width="1220" height="550" rx="18"/>'+edgeMarkup+'<g id="'+id+'-route-trail"></g>'+nodeMarkup+'<g id="'+id+'-van" class="laiban-grid-van" transform="translate('+laibanGridPoint("hub").x+' '+laibanGridPoint("hub").y+')"><rect x="-16" y="-11" width="32" height="20" rx="6"/><path d="M-8 -11l5 -7h11l7 7"/><circle cx="-8" cy="11" r="4"/><circle cx="9" cy="11" r="4"/></g></svg></div><div class="laiban-grid-legend"><span><i class="open"></i>Open</span><span><i class="caut"></i>Caution</span><span><i class="rest"></i>Restricted</span><span><i class="cls"></i>Closed</span><span><i class="route"></i>Planned route / vehicle</span></div><div class="laiban-grid-route-summary"><b>Current MODQL route:</b> '+(routeNames||"No planned route")+'</div><div class="laiban-grid-status" id="'+id+'-status" aria-live="polite">Ready at Laiban Proper / ALS Hub</div><div class="laiban-grid-controls"><button class="btn p" id="'+id+'-play" type="button">Play Route</button><button class="btn g" id="'+id+'-step" type="button">Step</button><button class="btn g" id="'+id+'-reset" type="button">Reset</button></div></section>';
+  var routeNodes=laibanGridRoute(plan).map(function(nodeId,index){
+    return (index?'<span class="laiban-grid-route-arrow" aria-hidden="true">→</span>':'')+'<span class="laiban-grid-route-chip">'+laibanGridEscape(N[nodeId].name)+'</span>';
+  }).join("");
+  var hubPoint=laibanGridPoint("hub");
+  return '<section class="card laiban-grid-card'+(comparison?" laiban-grid-comparison":"")+'"><h3>'+title+'</h3><p class="k laiban-grid-description">Schematic grid of the active Laiban road network. Each tile is the actual hub or one of the nine sitios; road colors use the current accessibility bands. Tile placement is schematic, not geographic. The existing Drive map remains available.</p><div class="laiban-grid-scroll"><svg id="'+id+'-svg" class="laiban-grid-svg" viewBox="25 70 1110 455" role="img" aria-label="Schematic grid of the Laiban hub, nine sitios, and road accessibility"><rect class="laiban-grid-board" x="30" y="75" width="1100" height="445" rx="18"/>'+edgeMarkup+'<g id="'+id+'-route-trail"></g>'+nodeMarkup+'<g id="'+id+'-van" class="laiban-grid-van" transform="translate('+(hubPoint.x+62)+' '+(hubPoint.y-34)+')"><rect x="-16" y="-11" width="32" height="20" rx="6"/><path d="M-8 -11l5 -7h11l7 7"/><circle cx="-8" cy="11" r="4"/><circle cx="9" cy="11" r="4"/></g></svg></div><div class="laiban-grid-legend"><span><i class="open"></i>Open</span><span><i class="caut"></i>Caution</span><span><i class="rest"></i>Restricted</span><span><i class="cls"></i>Closed</span><span><i class="route"></i>Planned route / vehicle</span></div><div class="laiban-grid-route-summary"><b>Current MODQL route:</b><div class="laiban-grid-route-chips">'+(routeNodes||'<span class="laiban-grid-route-chip">No planned route</span>')+'</div></div><div class="laiban-grid-status" id="'+id+'-status" aria-live="polite">Ready at Laiban Proper / ALS Hub</div><div class="laiban-grid-controls"><button class="btn p" id="'+id+'-play" type="button">Play Route</button><button class="btn g" id="'+id+'-step" type="button">Step</button><button class="btn g" id="'+id+'-reset" type="button">Reset</button></div></section>';
 }
 function wireLaibanGrid(id,plan){
   if(LAIBAN_GRID_TIMERS[id])clearInterval(LAIBAN_GRID_TIMERS[id]);
