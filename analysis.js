@@ -241,13 +241,331 @@ function wireLaibanGrid(id,plan){
   reset.onclick=function(){if(LAIBAN_GRID_TIMERS[id])clearInterval(LAIBAN_GRID_TIMERS[id]);LAIBAN_GRID_TIMERS[id]=null;position=0;play.textContent="Play Route";draw()};
   draw();
 }
+var COMPARISON_GRID_POSITIONS={
+  maysawa:[1,1],toyang:[4,1],ibucao:[7,1],hub:[4,4],iwi_iw:[8,4],
+  banatas:[1,6],old_laiban:[4,6],kilabuwan:[4,8],manggahan:[6,8],magata:[8,8]
+};
+var COMPARISON_GRID_ROAD_WAYPOINTS={
+  "hub|toyang":[[4,4],[4,1]],
+  "hub|ibucao":[[4,4],[5,4],[5,2],[7,2],[7,1]],
+  "hub|maysawa":[[4,4],[1,4],[1,1]],
+  "hub|old_laiban":[[4,4],[4,6]],
+  "banatas|hub":[[1,6],[1,5],[4,5],[4,4]],
+  "hub|iwi_iw":[[4,4],[4,5],[8,5],[8,4]],
+  "kilabuwan|old_laiban":[[4,8],[4,6]],
+  "kilabuwan|manggahan":[[4,8],[6,8]],
+  "magata|manggahan":[[8,8],[6,8]],
+  "banatas|old_laiban":[[1,6],[4,6]]
+};
+var COMPARISON_GRID_ROUTE_WAYPOINTS={
+  "hub|maysawa":[[4,4],[4,3],[1,3],[1,1]],
+  "hub|iwi_iw":[[4,4],[5,4],[5,3],[8,3],[8,4]],
+  "banatas|old_laiban":[[4,6],[3,6],[3,7],[1,7],[1,6]]
+};
+var COMPARISON_GRID_HAZARD_POINTS={
+  "hub|toyang":[[4,2]],
+  "hub|ibucao":[[6,2]],
+  "hub|maysawa":[[2,4]],
+  "banatas|hub":[[2,5]],
+  "hub|iwi_iw":[[6,5]],
+  "kilabuwan|old_laiban":[[4,7]],
+  "kilabuwan|manggahan":[[5,8]],
+  "magata|manggahan":[[7,8]],
+  "banatas|old_laiban":[[2,6]]
+};
+var COMPARISON_GRID_COLUMNS=10,COMPARISON_GRID_ROWS=10,COMPARISON_GRID_CELL=50;
+function comparisonGridKey(point){return point[0]+","+point[1]}
+function comparisonGridPath(points){
+  var cells=[points[0].slice()];
+  for(var i=1;i<points.length;i++){
+    var from=points[i-1],to=points[i],x=from[0],y=from[1];
+    while(x!==to[0]){x+=x<to[0]?1:-1;cells.push([x,y])}
+    while(y!==to[1]){y+=y<to[1]?1:-1;cells.push([x,y])}
+  }
+  return cells;
+}
+function comparisonGridPathForEdge(edge,waypoints){
+  var cells=comparisonGridPath(waypoints);
+  if(comparisonGridKey(cells[0])!==comparisonGridKey(COMPARISON_GRID_POSITIONS[edge.a])||
+     comparisonGridKey(cells[cells.length-1])!==comparisonGridKey(COMPARISON_GRID_POSITIONS[edge.b])){
+    cells.reverse();
+  }
+  if(comparisonGridKey(cells[0])!==comparisonGridKey(COMPARISON_GRID_POSITIONS[edge.a])||
+     comparisonGridKey(cells[cells.length-1])!==comparisonGridKey(COMPARISON_GRID_POSITIONS[edge.b])){
+    throw new Error("MODQL comparison grid corridor endpoints mismatch for "+edge.key);
+  }
+  cells.forEach(function(cell){
+    if(cell[0]<0||cell[0]>=COMPARISON_GRID_COLUMNS||cell[1]<0||cell[1]>=COMPARISON_GRID_ROWS){
+      throw new Error("MODQL comparison grid corridor leaves the grid for "+edge.key);
+    }
+  });
+  return cells;
+}
+function comparisonGridTargetData(plan){
+  var servedOrder={};(plan.stops||[]).forEach(function(stop,index){servedOrder[stop.id]=index+1});
+  var deferred={};(plan.deferred||[]).forEach(function(site){deferred[site.id]=true});
+  return NODES.map(function(node){
+    var isHub=node.kind==="depot";
+    return {
+      id:node.id,
+      name:node.name,
+      letter:isHub?"Hub":String.fromCharCode(65+SERVICE_IDS.indexOf(node.id)),
+      position:COMPARISON_GRID_POSITIONS[node.id],
+      order:servedOrder[node.id]||null,
+      deferred:!!deferred[node.id],
+      isHub:isHub
+    };
+  });
+}
+function comparisonGridModel(plan){
+  var edgePaths={},roadCells={},hazardCells={},hazardRoadKeys=[],steps=[],stopEvents=[],activeEdgeKeys={},stopOrder=(plan.stops||[]).map(function(stop){return stop.id});
+  var deferredIds=(plan.deferred||[]).map(function(item){return item.id});
+  plan.stops.forEach(function(stop){stop.p.legs.forEach(function(edge){activeEdgeKeys[edge.key]=true})});
+  if(plan.ret)plan.ret.legs.forEach(function(edge){activeEdgeKeys[edge.key]=true});
+  EDGES.forEach(function(edge){
+    var key=ek(edge.a,edge.b),roadWaypoints=COMPARISON_GRID_ROAD_WAYPOINTS[key];
+    if(!roadWaypoints)throw new Error("Missing MODQL comparison grid corridor for "+key);
+    var status=band(accA(edge)).k,isHazard=status==="rest"||status==="cls";
+    var roadPath=comparisonGridPathForEdge(edge,roadWaypoints);
+    var routePath=activeEdgeKeys[key]&&COMPARISON_GRID_ROUTE_WAYPOINTS[key]
+      ?comparisonGridPathForEdge(edge,COMPARISON_GRID_ROUTE_WAYPOINTS[key])
+      :roadPath;
+    edgePaths[key]=routePath;
+    roadPath.forEach(function(cell){
+      var cellKey=comparisonGridKey(cell),existing=roadCells[cellKey],active=!!activeEdgeKeys[key];
+      if(!existing||(active&&!existing.active)){
+        roadCells[cellKey]={status:status,edge:key,active:active,route:active&&routePath.some(function(routeCell){return comparisonGridKey(routeCell)===cellKey})};
+      }
+    });
+    routePath.forEach(function(cell){
+      var cellKey=comparisonGridKey(cell),existing=roadCells[cellKey];
+      if(!existing||activeEdgeKeys[key]){
+        roadCells[cellKey]={status:status,edge:key,active:!!activeEdgeKeys[key],route:!!activeEdgeKeys[key]};
+      }
+    });
+    if(isHazard){
+      var hazardWaypoints=COMPARISON_GRID_HAZARD_POINTS[key];
+      if(!hazardWaypoints)throw new Error("Missing MODQL road hazard cell for "+key);
+      var hazardPath=hazardWaypoints;
+      hazardPath.forEach(function(cell){
+        var cellKey=comparisonGridKey(cell);
+        if(roadPath.every(function(roadCell){return comparisonGridKey(roadCell)!==cellKey})){
+          throw new Error("MODQL road hazard is outside its corridor for "+key);
+        }
+        if(comparisonGridKey(cell)===comparisonGridKey(COMPARISON_GRID_POSITIONS[edge.a])||
+           comparisonGridKey(cell)===comparisonGridKey(COMPARISON_GRID_POSITIONS[edge.b])){
+          throw new Error("MODQL road hazard overlaps a target for "+key);
+        }
+        hazardCells[cellKey]=hazardCells[cellKey]||[];
+        if(hazardCells[cellKey].indexOf(key)<0)hazardCells[cellKey].push(key);
+      });
+      hazardRoadKeys.push(key);
+    }
+  });
+  Object.keys(COMPARISON_GRID_HAZARD_POINTS).forEach(function(key){
+    if(!EK[key])throw new Error("Unknown MODQL grid hazard road "+key);
+  });
+  var blockedKeys=Object.keys(hazardCells),targetKeys={};
+  NODES.forEach(function(node){targetKeys[comparisonGridKey(COMPARISON_GRID_POSITIONS[node.id])]=true});
+  var blockedTarget=blockedKeys.some(function(key){return !!targetKeys[key]});
+  var travelMin=0;
+  function appendSegment(pathData,targetId,completesStop){
+    if(!pathData||!pathData.seq||!pathData.legs||pathData.seq.length!==pathData.legs.length+1){
+      throw new Error("Incomplete MODQL route leg data for "+(targetId||"hub return"));
+    }
+    pathData.legs.forEach(function(edge,index){
+      var fromId=pathData.seq[index],toId=pathData.seq[index+1],key=ek(fromId,toId),cells=edgePaths[key];
+      if(!cells||!EK[key]||edge.key!==key)throw new Error("MODQL route is missing its grid corridor for "+key);
+      if(accA(EK[key])<.20)throw new Error("MODQL route uses a closed grid corridor for "+key);
+      var directed=cells.map(function(cell){return cell.slice()});
+      if(EK[key].a!==fromId)directed.reverse();
+      directed.forEach(function(cell){
+        if(hazardCells[comparisonGridKey(cell)]){
+          throw new Error("MODQL comparison route enters a blocked road hazard on "+key);
+        }
+      });
+      travelMin+=edgeMin(EK[key]);
+      for(var cellIndex=1;cellIndex<directed.length;cellIndex++){
+        steps.push({
+          cell:directed[cellIndex],
+          from:directed[cellIndex-1],
+          fromId:cellIndex===1?fromId:null,
+          toId:cellIndex===directed.length-1?toId:null,
+          targetId:targetId,
+          completesStopId:completesStop&&cellIndex===directed.length-1?targetId:null
+        });
+      }
+    });
+    if(completesStop){
+      if(!steps.length)throw new Error("MODQL stop has no grid movement: "+targetId);
+      stopEvents.push({id:targetId,step:steps.length});
+    }
+  }
+  (plan.stops||[]).forEach(function(stop){
+    appendSegment(stop.p,stop.id,true);
+  });
+  if(plan.ret)appendSegment(plan.ret,"hub",false);
+  return {
+    edgePaths:edgePaths,
+    roadCells:roadCells,
+    hazardCells:hazardCells,
+    hazardRoadKeys:hazardRoadKeys,
+    blockedTarget:blockedTarget,
+    steps:steps,
+    stopEvents:stopEvents,
+    stopOrder:stopOrder,
+    deferredIds:deferredIds,
+    travelMin:travelMin,
+    targets:comparisonGridTargetData(plan)
+  };
+}
+function comparisonGridAssertConsistency(plan,model){
+  var expectedStops=(plan.stops||[]).map(function(stop){return stop.id});
+  var renderedStops=model.stopEvents.map(function(stop){return stop.id});
+  var expectedServed=expectedStops.slice().sort();
+  var renderedServed=model.targets.filter(function(target){return target.order!==null}).map(function(target){return target.id}).sort();
+  var expectedDeferred=(plan.deferred||[]).map(function(item){return item.id}).sort();
+  var renderedDeferred=model.targets.filter(function(target){return target.deferred}).map(function(target){return target.id}).sort();
+  var expectedHazards=EDGES.filter(function(edge){var status=band(accA(edge)).k;return status==="rest"||status==="cls"}).map(function(edge){return ek(edge.a,edge.b)}).sort();
+  var renderedHazards=model.hazardRoadKeys.slice().sort();
+  var expectedMinutes=(plan.stops||[]).reduce(function(total,stop){return total+stop.p.min},0)+(plan.ret?plan.ret.min:0);
+  var expectedTravel=expectedStops.reduce(function(total,id,index){return total+plan.stops[index].p.min},0)+(plan.ret?plan.ret.min:0);
+  var routesAvoidHazards=model.steps.every(function(step){return !model.hazardCells[comparisonGridKey(step.cell)]});
+  var routeTargetCollision=model.steps.some(function(step){
+    return model.targets.some(function(target){return comparisonGridKey(target.position)===comparisonGridKey(step.cell)&&step.toId!==target.id});
+  });
+  var expectedLetters=NODES.map(function(node){return node.kind==="depot"?"Hub":String.fromCharCode(65+SERVICE_IDS.indexOf(node.id))});
+  var renderedLetters=model.targets.map(function(target){return target.letter});
+  var expectedTargetIds=NODES.map(function(node){return node.id});
+  var renderedTargetIds=model.targets.map(function(target){return target.id});
+  var targetsMatchData=model.targets.every(function(target,index){
+    return target.name===NODES[index].name&&comparisonGridKey(target.position)===comparisonGridKey(COMPARISON_GRID_POSITIONS[NODES[index].id]);
+  });
+  var targetPositions=model.targets.map(function(target){return comparisonGridKey(target.position)});
+  var result={
+    stopCount:expectedStops.length===model.stopEvents.length,
+    stopOrder:expectedStops.join("|")===renderedStops.join("|"),
+    servedSitios:expectedServed.join("|")===renderedServed.join("|"),
+    deferredSitios:expectedDeferred.join("|")===renderedDeferred.join("|"),
+    hazardRoads:expectedHazards.join("|")===renderedHazards.join("|"),
+    hazardCells:!model.blockedTarget&&expectedHazards.every(function(key){return Object.keys(model.hazardCells).some(function(cell){return model.hazardCells[cell].indexOf(key)>=0})})&&Object.keys(model.hazardCells).every(function(key){return model.hazardCells[key].every(function(roadKey){return expectedHazards.indexOf(roadKey)>=0})}),
+    routesAvoidHazards:routesAvoidHazards,
+    routeAvoidsUnplannedTargets:!routeTargetCollision,
+    travelTime:Math.abs(expectedTravel-model.travelMin)<1e-8&&Math.abs(expectedMinutes-model.travelMin)<1e-8,
+    targetData:expectedTargetIds.join("|")===renderedTargetIds.join("|")&&expectedLetters.join("|")===renderedLetters.join("|")&&targetsMatchData&&new Set(targetPositions).size===NODES.length&&new Set(renderedLetters).size===NODES.length
+  };
+  result.passed=result.stopCount&&result.stopOrder&&result.servedSitios&&result.deferredSitios&&result.hazardRoads&&result.hazardCells&&result.routesAvoidHazards&&result.travelTime&&result.targetData;
+  var isDevelopment=location.protocol==="file:"||location.hostname==="localhost"||location.hostname==="127.0.0.1";
+  if(isDevelopment){
+    if(!result.passed)throw new Error("MODQL grid consistency check failed: "+JSON.stringify(result));
+    window.__MODQL_GRID_CONSISTENCY__=result;
+    console.assert(result.passed,"MODQL grid consistency check",result);
+  }
+  return result;
+}
+function comparisonGridPanelHTML(plan,model){
+  var targets=model.targets.map(function(target){
+    var x=target.position[0]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2;
+    var y=target.position[1]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2;
+    var label=target.isHub?"Laiban Proper / ALS Hub":target.name;
+    return '<g class="comparison-grid-target'+(target.isHub?" is-hub":"")+(target.deferred?" is-deferred":"")+'" data-target="'+target.id+'" transform="translate('+x+' '+y+')" tabindex="0" role="img" aria-label="'+laibanGridEscape(label)+(target.order?", stop "+target.order:target.deferred?", deferred":"")+'"><title>'+laibanGridEscape(label)+(target.order?" · stop "+target.order:target.deferred?" · deferred":"")+'</title><circle class="comparison-grid-marker" r="18"/>'+(target.isHub?'<path class="comparison-grid-hub-icon" d="M-10 0L0-9 10 0V9H-10ZM-3 9V2H3V9"/>':'<text class="comparison-grid-letter" y="1">'+target.letter+'</text>')+(target.order?'<circle class="comparison-grid-order" cx="14" cy="-14" r="8"/><text class="comparison-grid-order-text" x="14" y="-14">'+target.order+'</text>':'')+'</g>';
+  }).join("");
+  var cells=[];
+  for(var row=0;row<COMPARISON_GRID_ROWS;row++)for(var col=0;col<COMPARISON_GRID_COLUMNS;col++){
+    var key=col+","+row,road=model.roadCells[key],hazards=model.hazardCells[key]||[],status=road?road.status:"floor";
+    var classes="comparison-grid-cell "+(hazards.length?"hazard "+(hazards.some(function(roadKey){return band(accA(EK[roadKey])).k==="cls"})?"closed":"restricted"):road?"road-"+status+(road.route?" planned-route":""):"floor");
+    var title=hazards.length?'<title>Road hazard: '+hazards.map(function(roadKey){return laibanGridEscape(N[EK[roadKey].a].name+" ↔ "+N[EK[roadKey].b].name+" · "+band(accA(EK[roadKey])).lab)}).join("; ")+'</title>':road?'<title>'+laibanGridEscape(N[EK[road.edge].a].name+" ↔ "+N[EK[road.edge].b].name+" · "+band(accA(EK[road.edge])).lab)+'</title>':'';
+    cells.push('<rect class="'+classes+'" data-cell="'+key+'" x="'+(col*COMPARISON_GRID_CELL+1)+'" y="'+(row*COMPARISON_GRID_CELL+1)+'" width="'+(COMPARISON_GRID_CELL-2)+'" height="'+(COMPARISON_GRID_CELL-2)+'" rx="3">'+title+'</rect>');
+  }
+  var siteLegend=model.targets.map(function(target){
+    return '<span class="'+(target.deferred?"is-deferred":"")+'"><b>'+target.letter+'</b> '+laibanGridEscape(target.name)+(target.order?" · stop "+target.order:target.deferred?" · deferred":"")+'</span>';
+  }).join("");
+  var hub=COMPARISON_GRID_POSITIONS.hub,vanX=hub[0]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2-14,vanY=hub[1]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2+14;
+  return '<section class="comparison-grid-panel" id="comparison-modql-grid"><h3 class="comparison-panel-title">Proposed System — MODQL</h3><p class="comparison-grid-description">The grid uses the existing MODQL route plan and real node data. Tile placement is schematic, not geographic.</p><div class="comparison-grid-status" aria-label="MODQL route status"><div><span>Animation step</span><b id="comparison-modql-grid-step-count">0 / '+model.steps.length+'</b></div><div><span>Current stop</span><b id="comparison-modql-grid-location">Laiban Proper / ALS Hub</b></div><div><span>Next destination</span><b id="comparison-modql-grid-destination">'+(plan.stops.length?laibanGridEscape(N[plan.stops[0].id].name):"No planned stop")+'</b></div><div><span>Stops completed</span><b id="comparison-modql-grid-completed">0 / '+plan.stops.length+'</b></div><div><span>Latest movement</span><b id="comparison-modql-grid-movement">At start</b></div><div><span>Total travel time</span><b id="comparison-modql-grid-time">'+model.travelMin.toFixed(1)+' min</b></div></div><div class="comparison-grid-scroll"><svg class="comparison-grid-svg" viewBox="0 0 500 500" role="img" aria-label="Ten by ten MODQL grid with the Laiban hub and nine sitios"><rect class="comparison-grid-board" x="0" y="0" width="500" height="500" rx="10"/>'+cells.join("")+'<g id="comparison-modql-grid-trail"></g>'+targets+'<g id="comparison-modql-grid-van" transform="translate('+vanX+' '+vanY+')"><circle class="comparison-grid-agent" r="9"/></g></svg></div><div class="comparison-grid-controls"><button class="btn p" id="comparison-modql-grid-play" type="button">Start Animation</button><button class="btn g" id="comparison-modql-grid-next" type="button">Advance One Step</button><button class="btn g" id="comparison-modql-grid-reset" type="button">Reset</button></div><div class="comparison-grid-legend"><div class="comparison-grid-keys"><span><i class="floor"></i>Traversable road</span><span><i class="blocked"></i>Blocked cell = road hazard (closed / restricted)</span><span><i class="trail"></i>Route trail</span><span><i class="open"></i>Open</span><span><i class="caut"></i>Caution</span><span><i class="rest"></i>Restricted</span><span><i class="cls"></i>Closed</span></div><div class="comparison-grid-sites">'+siteLegend+'</div></div><div class="comparison-grid-deferred" id="comparison-modql-grid-deferred">Deferred: '+(model.deferredIds.length?model.deferredIds.map(function(id){return laibanGridEscape(N[id].name)}).join(", "):"none")+'</div></section>';
+}
+var COMPARISON_GRID_TIMERS={};
+function wireComparisonGrid(plan,model){
+  var id="comparison-modql-grid",svg=document.querySelector("#"+id+" .comparison-grid-svg"),van=document.getElementById(id+"-van"),trail=document.getElementById(id+"-trail"),play=document.getElementById(id+"-play"),next=document.getElementById(id+"-next"),reset=document.getElementById(id+"-reset");
+  if(!svg||!van||!trail||!play||!next||!reset)return;
+  if(COMPARISON_GRID_TIMERS[id])clearInterval(COMPARISON_GRID_TIMERS[id]);
+  COMPARISON_GRID_TIMERS[id]=null;
+  var current=0,completed={};
+  var stepReadout=document.getElementById(id+"-step-count"),locationReadout=document.getElementById(id+"-location"),destinationReadout=document.getElementById(id+"-destination"),completedReadout=document.getElementById(id+"-completed"),movementReadout=document.getElementById(id+"-movement");
+  function coord(cell){return {x:cell[0]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2,y:cell[1]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2}}
+  function updateTargets(){
+    svg.querySelectorAll(".comparison-grid-target").forEach(function(target){
+      var nodeId=target.getAttribute("data-target");
+      target.classList.toggle("is-served",!!completed[nodeId]);
+      target.classList.toggle("is-next",plan.stops.some(function(stop,index){return stop.id===nodeId&&index===Object.keys(completed).length}));
+    });
+  }
+  function draw(){
+    var step=current?model.steps[current-1]:null,point=step?step.cell:COMPARISON_GRID_POSITIONS.hub,position=coord(point),nodeId=step?step.toId:"hub";
+    if(nodeId&&comparisonGridKey(point)===comparisonGridKey(COMPARISON_GRID_POSITIONS[nodeId])){
+      position.x-=14;
+      position.y+=14;
+    }
+    van.setAttribute("transform","translate("+position.x+" "+position.y+")");
+    var visited={};
+    for(var i=0;i<current;i++)visited[comparisonGridKey(model.steps[i].cell)]=true;
+    trail.innerHTML=Object.keys(visited).map(function(key){
+      var cell=key.split(",").map(Number);
+      return '<circle class="comparison-grid-trail-cell" cx="'+(cell[0]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2)+'" cy="'+(cell[1]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2)+'" r="8"/>';
+    }).join("");
+    for(var stepIndex=0;stepIndex<current;stepIndex++){
+      var stopId=model.steps[stepIndex].completesStopId;
+      if(stopId)completed[stopId]=true;
+    }
+    updateTargets();
+    var locationId=current?(step.toId||null):"hub",currentStop=locationId?N[locationId]:null;
+    var completedCount=Object.keys(completed).length,nextStop=plan.stops[completedCount];
+    stepReadout.textContent=current+" / "+model.steps.length;
+    locationReadout.textContent=currentStop?currentStop.name:"Schematic road corridor";
+    destinationReadout.textContent=nextStop?N[nextStop.id].name:(plan.ret?"Return to Laiban Proper / ALS Hub":"No planned stop");
+    completedReadout.textContent=completedCount+" / "+plan.stops.length;
+    movementReadout.textContent=step?step.cell[0]<step.from[0]?"Left":step.cell[0]>step.from[0]?"Right":step.cell[1]<step.from[1]?"Up":"Down":"At start";
+  }
+  function advance(){
+    if(current>=model.steps.length)return false;
+    current++;
+    draw();
+    if(current>=model.steps.length){
+      if(COMPARISON_GRID_TIMERS[id])clearInterval(COMPARISON_GRID_TIMERS[id]);
+      COMPARISON_GRID_TIMERS[id]=null;
+      play.textContent="Start Animation";
+      return false;
+    }
+    return true;
+  }
+  play.onclick=function(){
+    if(COMPARISON_GRID_TIMERS[id]){
+      clearInterval(COMPARISON_GRID_TIMERS[id]);COMPARISON_GRID_TIMERS[id]=null;play.textContent="Start Animation";return;
+    }
+    if(current>=model.steps.length){current=0;completed={};draw()}
+    if(!model.steps.length)return;
+    play.textContent="Pause Animation";
+    COMPARISON_GRID_TIMERS[id]=setInterval(function(){if(!advance())play.textContent="Start Animation"},260);
+    advance();
+  };
+  next.onclick=function(){
+    if(COMPARISON_GRID_TIMERS[id]){clearInterval(COMPARISON_GRID_TIMERS[id]);COMPARISON_GRID_TIMERS[id]=null;play.textContent="Start Animation"}
+    advance();
+  };
+  reset.onclick=function(){
+    if(COMPARISON_GRID_TIMERS[id])clearInterval(COMPARISON_GRID_TIMERS[id]);
+    COMPARISON_GRID_TIMERS[id]=null;current=0;completed={};play.textContent="Start Animation";draw();
+  };
+  draw();
+}
 function renderEvaluation(){
+  var comparisonGrid=comparisonGridModel(analysisMod);
+  comparisonGridAssertConsistency(analysisMod,comparisonGrid);
   document.getElementById("sub-evaluation").innerHTML=
     '<header class="route-comparison-intro"><h2>Route Behavior Comparison</h2><p class="route-maze-note">The Standard panel is the original random-maze demonstration. The MODQL panel visualizes its actual Laiban service route. These are different environments and their displayed paths are not a controlled performance comparison; controlled results use the separate shared-Laiban evaluation.</p></header><div class="split2 original-algorithm-split">'+
       '<section class="splitcol std"><h3 class="comparison-panel-title">Standard Q-Learning</h3><div id="comparison-standard-maze-host"></div></section>'+
-      laibanGridPanelHTML("comparison-laiban-route","Enhanced MODQL — Laiban grid route",analysisMod,true)+
+      comparisonGridPanelHTML(analysisMod,comparisonGrid)+
     '</div>';
-  wireLaibanGrid("comparison-laiban-route",analysisMod);
+  wireComparisonGrid(analysisMod,comparisonGrid);
 }
 
 // Coordinates are deterministic schematic cells, not geographic locations.
