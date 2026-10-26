@@ -303,16 +303,25 @@ function comparisonGridPathForEdge(edge,waypoints){
 }
 function comparisonGridTargetData(plan){
   var servedOrder={};(plan.stops||[]).forEach(function(stop,index){servedOrder[stop.id]=index+1});
-  var deferred={};(plan.deferred||[]).forEach(function(site){deferred[site.id]=true});
+  var deferred={};(plan.deferred||[]).forEach(function(site){deferred[site.id]=site.reason||""});
   return NODES.map(function(node){
     var isHub=node.kind==="depot";
+    var reason=deferred[node.id]||"";
+    var order=servedOrder[node.id]||null;
+    var isUnreachable=!!reason&&reason.indexOf("no open corridor")>=0;
+    var status=isHub?"Hub":order?"Stop "+order:isUnreachable?"Closed road":"Deferred";
     return {
       id:node.id,
       name:node.name,
       letter:isHub?"Hub":String.fromCharCode(65+SERVICE_IDS.indexOf(node.id)),
       position:COMPARISON_GRID_POSITIONS[node.id],
-      order:servedOrder[node.id]||null,
-      deferred:!!deferred[node.id],
+      order:order,
+      deferred:!!reason,
+      reason:reason||(!isHub&&!order?"Reason not recorded":""),
+      status:status,
+      tooltipStatus:isHub?"Hub (start / return)":order?"Stop "+order:isUnreachable?"Unreachable - closed road":"Deferred - not selected",
+      learners:node.learners,
+      days:node.days,
       isHub:isHub
     };
   });
@@ -439,7 +448,14 @@ function comparisonGridAssertConsistency(plan,model){
   var expectedTargetIds=NODES.map(function(node){return node.id});
   var renderedTargetIds=model.targets.map(function(target){return target.id});
   var targetsMatchData=model.targets.every(function(target,index){
-    return target.name===NODES[index].name&&comparisonGridKey(target.position)===comparisonGridKey(COMPARISON_GRID_POSITIONS[NODES[index].id]);
+    var node=NODES[index],expectedReason=(plan.deferred||[]).filter(function(item){return item.id===node.id})[0];
+    var reason=expectedReason?expectedReason.reason||"":"";
+    var order=expectedStops.indexOf(node.id);
+    var status=node.kind==="depot"?"Hub":order>=0?"Stop "+(order+1):reason.indexOf("no open corridor")>=0?"Closed road":"Deferred";
+    return target.name===node.name&&target.learners===node.learners&&target.days===node.days&&
+      target.order===(order>=0?order+1:null)&&target.deferred===!!expectedReason&&
+      target.reason===(reason||(!target.isHub&&order<0?"Reason not recorded":""))&&target.status===status&&
+      comparisonGridKey(target.position)===comparisonGridKey(COMPARISON_GRID_POSITIONS[node.id]);
   });
   var targetPositions=model.targets.map(function(target){return comparisonGridKey(target.position)});
   var result={
@@ -463,12 +479,37 @@ function comparisonGridAssertConsistency(plan,model){
   }
   return result;
 }
+function comparisonGridAssertTableData(model){
+  var isDevelopment=location.protocol==="file:"||location.hostname==="localhost"||location.hostname==="127.0.0.1";
+  if(!isDevelopment)return true;
+  var rows=document.querySelectorAll("#comparison-modql-grid .comparison-grid-table tbody tr"),byId={};
+  rows.forEach(function(row){byId[row.getAttribute("data-site")]=row});
+  var rowDataMatches=model.targets.every(function(target){
+    var row=byId[target.id];
+    if(!row)return false;
+    var cells=row.querySelectorAll("td"),shortName=target.name.replace(/^Sitio /,"");
+    return Number(row.getAttribute("data-learners"))===target.learners&&
+      Number(row.getAttribute("data-last-visit"))===target.days&&
+      Number(row.getAttribute("data-order")||0)===(target.order||0)&&
+      (row.getAttribute("data-deferred")==="true")===target.deferred&&
+      cells.length===4&&cells[0].querySelector(".comparison-grid-table-letter").textContent===target.letter&&
+      cells[0].textContent.indexOf(shortName)>=0&&Number(cells[1].textContent)===target.learners&&
+      cells[2].textContent===target.days+" d"&&cells[3].textContent===target.status&&
+      cells[3].getAttribute("title")===(target.reason||target.status);
+  });
+  var result={rowCount:rows.length===model.targets.length,learnersAndVisitDays:rowDataMatches,stopOrder:model.targets.filter(function(target){return target.order!==null}).length===model.stopEvents.length,deferredSet:model.targets.filter(function(target){return target.deferred}).map(function(target){return target.id}).sort().join("|")===model.deferredIds.slice().sort().join("|")};
+  result.passed=result.rowCount&&result.learnersAndVisitDays&&result.stopOrder&&result.deferredSet;
+  if(!result.passed)throw new Error("MODQL grid table consistency check failed: "+JSON.stringify(result));
+  window.__MODQL_GRID_TABLE_CONSISTENCY__=result;
+  return result;
+}
 function comparisonGridPanelHTML(plan,model){
   var targets=model.targets.map(function(target){
     var x=target.position[0]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2;
     var y=target.position[1]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2;
     var label=target.isHub?"Laiban Proper / ALS Hub":target.name;
-    return '<g class="comparison-grid-target'+(target.isHub?" is-hub":"")+(target.deferred?" is-deferred":"")+'" data-target="'+target.id+'" transform="translate('+x+' '+y+')" tabindex="0" role="img" aria-label="'+laibanGridEscape(label)+(target.order?", stop "+target.order:target.deferred?", deferred":"")+'"><title>'+laibanGridEscape(label)+(target.order?" · stop "+target.order:target.deferred?" · deferred":"")+'</title><circle class="comparison-grid-marker" r="18"/>'+(target.isHub?'<path class="comparison-grid-hub-icon" d="M-10 0L0-9 10 0V9H-10ZM-3 9V2H3V9"/>':'<text class="comparison-grid-letter" y="1">'+target.letter+'</text>')+(target.order?'<circle class="comparison-grid-order" cx="14" cy="-14" r="8"/><text class="comparison-grid-order-text" x="14" y="-14">'+target.order+'</text>':'')+'</g>';
+    var markerDescription=label+(target.isHub?"":" · "+target.learners+" learners · last visit "+target.days+" days ago · "+target.tooltipStatus+(target.reason?": "+target.reason:""));
+    return '<g class="comparison-grid-target'+(target.isHub?" is-hub":"")+(target.deferred?" is-deferred":"")+'" data-target="'+target.id+'" transform="translate('+x+' '+y+')" tabindex="0" role="img" aria-label="'+laibanGridEscape(markerDescription)+'"><title>'+laibanGridEscape(markerDescription)+'</title><circle class="comparison-grid-marker" r="18"/>'+(target.isHub?'<path class="comparison-grid-hub-icon" d="M-10 0L0-9 10 0V9H-10ZM-3 9V2H3V9"/>':'<text class="comparison-grid-letter" y="1">'+target.letter+'</text>')+(target.order?'<circle class="comparison-grid-order" cx="14" cy="-14" r="8"/><text class="comparison-grid-order-text" x="14" y="-14">'+target.order+'</text>':'')+(!target.isHub?'<circle class="comparison-grid-learners" cx="14" cy="14" r="8"/><text class="comparison-grid-learners-text" x="14" y="14">'+target.learners+'</text>':'')+'</g>';
   }).join("");
   var cells=[];
   for(var row=0;row<COMPARISON_GRID_ROWS;row++)for(var col=0;col<COMPARISON_GRID_COLUMNS;col++){
@@ -477,30 +518,77 @@ function comparisonGridPanelHTML(plan,model){
     var title=hazards.length?'<title>Road hazard: '+hazards.map(function(roadKey){return laibanGridEscape(N[EK[roadKey].a].name+" ↔ "+N[EK[roadKey].b].name+" · "+band(accA(EK[roadKey])).lab)}).join("; ")+'</title>':road?'<title>'+laibanGridEscape(N[EK[road.edge].a].name+" ↔ "+N[EK[road.edge].b].name+" · "+band(accA(EK[road.edge])).lab)+'</title>':'';
     cells.push('<rect class="'+classes+'" data-cell="'+key+'" x="'+(col*COMPARISON_GRID_CELL+1)+'" y="'+(row*COMPARISON_GRID_CELL+1)+'" width="'+(COMPARISON_GRID_CELL-2)+'" height="'+(COMPARISON_GRID_CELL-2)+'" rx="3">'+title+'</rect>');
   }
-  var siteLegend=model.targets.map(function(target){
-    return '<span class="'+(target.deferred?"is-deferred":"")+'"><b>'+target.letter+'</b> '+laibanGridEscape(target.name)+(target.order?" · stop "+target.order:target.deferred?" · deferred":"")+'</span>';
+  var tableTargets=model.targets.filter(function(target){return !target.isHub}).sort(function(a,b){
+    return a.letter.localeCompare(b.letter);
+  });
+  tableTargets.push(model.targets.filter(function(target){return target.isHub})[0]);
+  var tableRows=tableTargets.map(function(target){
+    var rowStatus=target.status,tooltip=target.reason||rowStatus;
+    return '<tr data-site="'+target.id+'" data-learners="'+target.learners+'" data-last-visit="'+target.days+'" data-order="'+(target.order||"")+'" data-deferred="'+(target.deferred?"true":"false")+'" tabindex="0" aria-label="'+laibanGridEscape(target.letter+" · "+target.name+" · "+rowStatus+(target.reason?" · "+target.reason:""))+'"><td><span class="comparison-grid-table-letter">'+target.letter+'</span>&nbsp;'+laibanGridEscape(target.name.replace(/^Sitio /,""))+'</td><td>'+target.learners+'</td><td>'+target.days+' d</td><td title="'+laibanGridEscape(tooltip)+'" aria-label="'+laibanGridEscape(rowStatus+(target.reason?" · "+target.reason:""))+'"><span class="comparison-grid-row-status">'+laibanGridEscape(rowStatus)+'</span></td></tr>';
   }).join("");
   var hub=COMPARISON_GRID_POSITIONS.hub,vanX=hub[0]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2-14,vanY=hub[1]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2+14;
   return '<section class="comparison-grid-panel" id="comparison-modql-grid">'+
     '<h3 class="comparison-panel-title">Proposed System — MODQL</h3>'+
     '<p class="comparison-grid-description">The grid uses the existing MODQL route plan and real node data. Tile placement is schematic, not geographic.</p>'+
     '<div class="comparison-grid-layout">'+
-      '<div class="comparison-grid-status" aria-label="MODQL route status"><div><span>Animation step</span><b id="comparison-modql-grid-step-count">0 / '+model.steps.length+'</b></div><div><span>Current stop</span><b id="comparison-modql-grid-location">Laiban Proper / ALS Hub</b></div><div><span>Next destination</span><b id="comparison-modql-grid-destination">'+(plan.stops.length?laibanGridEscape(N[plan.stops[0].id].name):"No planned stop")+'</b></div><div><span>Stops completed</span><b id="comparison-modql-grid-completed">0 / '+plan.stops.length+'</b></div><div><span>Latest movement</span><b id="comparison-modql-grid-movement">At start</b></div><div><span>Total travel time</span><b id="comparison-modql-grid-time">'+model.travelMin.toFixed(1)+' min</b></div></div>'+
+      '<div class="comparison-grid-info"><section class="comparison-grid-status" aria-label="MODQL route status"><h4 class="comparison-grid-status-heading">MODQL Maze Status</h4><div class="comparison-grid-status-grid"><div><span>Animation step</span><b id="comparison-modql-grid-step-count">0 / '+model.steps.length+'</b></div><div><span>Current stop</span><b id="comparison-modql-grid-location">Laiban Proper / ALS Hub</b></div><div><span>Next destination</span><b id="comparison-modql-grid-destination">'+(plan.stops.length?laibanGridEscape(N[plan.stops[0].id].name):"No planned stop")+'</b></div><div><span>Stops completed</span><b id="comparison-modql-grid-completed">0 / '+plan.stops.length+'</b></div><div><span>Latest movement</span><b id="comparison-modql-grid-movement">At start</b></div><div><span>Total travel time</span><b id="comparison-modql-grid-time">'+model.travelMin.toFixed(1)+' min</b></div></div><div class="comparison-grid-decision" id="comparison-modql-grid-decision"></div><h4 class="comparison-grid-sites-heading">Sitios</h4><div class="comparison-grid-table-scroll"><table class="comparison-grid-table"><thead><tr><th>Sitio</th><th>Learners</th><th>Last visit</th><th>Status</th></tr></thead><tbody>'+tableRows+'</tbody></table></div><p class="comparison-grid-footnote">Learner counts and visit history are simulated allocations, not verified sitio-level records.</p></section></div>'+
       '<div class="comparison-grid-visual"><div class="comparison-grid-scroll"><svg class="comparison-grid-svg" viewBox="0 0 500 500" role="img" aria-label="Ten by ten MODQL grid with the Laiban hub and nine sitios"><rect class="comparison-grid-board" x="0" y="0" width="500" height="500" rx="10"/>'+cells.join("")+'<g id="comparison-modql-grid-trail"></g>'+targets+'<g id="comparison-modql-grid-van" transform="translate('+vanX+' '+vanY+')"><circle class="comparison-grid-agent" r="9"/></g></svg></div>'+
-      '<div class="comparison-grid-controls"><button class="btn p" id="comparison-modql-grid-play" type="button">Start Animation</button><button class="btn g" id="comparison-modql-grid-next" type="button">Advance One Step</button><button class="btn g" id="comparison-modql-grid-reset" type="button">Reset</button></div></div>'+
+      '<div class="comparison-grid-controls"><button class="btn p" id="comparison-modql-grid-play" type="button">Start Animation</button><button class="btn g" id="comparison-modql-grid-next" type="button">Advance One Step</button><button class="btn g" id="comparison-modql-grid-reset" type="button">Reset</button></div>'+
+      '</div>'+
     '</div>'+
-    '<div class="comparison-grid-legend"><div class="comparison-grid-keys"><span><i class="floor"></i>Traversable road</span><span><i class="blocked"></i>Blocked cell = road hazard (closed / restricted)</span><span><i class="trail"></i>Route trail</span><span><i class="open"></i>Open</span><span><i class="caut"></i>Caution</span><span><i class="rest"></i>Restricted</span><span><i class="cls"></i>Closed</span></div><div class="comparison-grid-sites">'+siteLegend+'</div></div>'+
-    '<div class="comparison-grid-deferred" id="comparison-modql-grid-deferred">Deferred: '+(model.deferredIds.length?model.deferredIds.map(function(id){return laibanGridEscape(N[id].name)}).join(", "):"none")+'</div></section>';
+    '<div class="comparison-grid-legend"><div class="comparison-grid-keys"><span><i class="floor"></i>Traversable road</span><span><i class="blocked"></i>Road hazard</span><span class="comparison-grid-hazard-outlines"><i class="rest"></i>Restricted <i class="cls"></i>Closed</span><span><i class="open"></i>Open</span><span><i class="caut"></i>Caution</span><span><i class="trail"></i>Route trail</span></div></div></section>';
 }
 var COMPARISON_GRID_TIMERS={};
 function wireComparisonGrid(plan,model){
   var id="comparison-modql-grid",svg=document.querySelector("#"+id+" .comparison-grid-svg"),van=document.getElementById(id+"-van"),trail=document.getElementById(id+"-trail"),play=document.getElementById(id+"-play"),next=document.getElementById(id+"-next"),reset=document.getElementById(id+"-reset");
   if(!svg||!van||!trail||!play||!next||!reset)return;
+  comparisonGridAssertTableData(model);
   if(COMPARISON_GRID_TIMERS[id])clearInterval(COMPARISON_GRID_TIMERS[id]);
   COMPARISON_GRID_TIMERS[id]=null;
   var current=0,completed={};
   var stepReadout=document.getElementById(id+"-step-count"),locationReadout=document.getElementById(id+"-location"),destinationReadout=document.getElementById(id+"-destination"),completedReadout=document.getElementById(id+"-completed"),movementReadout=document.getElementById(id+"-movement");
+  var decisionReadout=document.getElementById(id+"-decision"),table=document.querySelector("#"+id+" .comparison-grid-table");
+  var activeTargetId=null,pinnedTarget=false;
   function coord(cell){return {x:cell[0]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2,y:cell[1]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2}}
+  function highlightLinkedTarget(nodeId,pin){
+    if(pin){pinnedTarget=!(pinnedTarget&&activeTargetId===nodeId);activeTargetId=pinnedTarget?nodeId:null}
+    svg.querySelectorAll(".comparison-grid-target").forEach(function(target){
+      target.classList.toggle("is-linked-highlight",target.getAttribute("data-target")===activeTargetId);
+    });
+    if(table)table.querySelectorAll("tbody tr").forEach(function(row){
+      row.classList.toggle("is-linked-highlight",row.getAttribute("data-site")===activeTargetId);
+    });
+  }
+  function hoverLinkedTarget(nodeId){
+    if(pinnedTarget)return;
+    activeTargetId=nodeId;
+    highlightLinkedTarget(nodeId,false);
+  }
+  function clearLinkedTarget(nodeId){
+    if(pinnedTarget||activeTargetId!==nodeId)return;
+    activeTargetId=null;
+    highlightLinkedTarget(null,false);
+  }
+  function syncTableRows(currentId,nextId){
+    if(!table)return;
+    table.querySelectorAll("tbody tr").forEach(function(row){
+      var nodeId=row.getAttribute("data-site");
+      row.classList.toggle("is-done",!!completed[nodeId]);
+      row.classList.toggle("is-current",nodeId===currentId);
+      row.classList.toggle("is-next",nodeId===nextId);
+    });
+  }
+  function updateDecision(nextStop){
+    if(!decisionReadout)return;
+    if(nextStop){
+      var access=band(routeAccessibility(nextStop.p)).lab;
+      decisionReadout.textContent="Next: "+N[nextStop.id].name+" - "+nextStop.p.min.toFixed(1)+" min, "+N[nextStop.id].learners+" learners, access "+access;
+    }else if(plan.ret){
+      decisionReadout.textContent="Next: Laiban Proper / ALS Hub - "+plan.ret.min.toFixed(1)+" min, 0 learners, access "+band(routeAccessibility(plan.ret)).lab;
+    }else{
+      decisionReadout.textContent="Next: No planned stop";
+    }
+  }
   function updateTargets(){
     svg.querySelectorAll(".comparison-grid-target").forEach(function(target){
       var nodeId=target.getAttribute("data-target");
@@ -528,11 +616,17 @@ function wireComparisonGrid(plan,model){
     updateTargets();
     var locationId=current?(step.toId||null):"hub",currentStop=locationId?N[locationId]:null;
     var completedCount=Object.keys(completed).length,nextStop=plan.stops[completedCount];
+    var latestNodeId="hub";
+    for(var nodeStep=0;nodeStep<current;nodeStep++){
+      if(model.steps[nodeStep].toId)latestNodeId=model.steps[nodeStep].toId;
+    }
     stepReadout.textContent=current+" / "+model.steps.length;
     locationReadout.textContent=currentStop?currentStop.name:"Schematic road corridor";
     destinationReadout.textContent=nextStop?N[nextStop.id].name:(plan.ret?"Return to Laiban Proper / ALS Hub":"No planned stop");
     completedReadout.textContent=completedCount+" / "+plan.stops.length;
     movementReadout.textContent=step?step.cell[0]<step.from[0]?"Left":step.cell[0]>step.from[0]?"Right":step.cell[1]<step.from[1]?"Up":"Down":"At start";
+    syncTableRows(locationId||latestNodeId,nextStop?nextStop.id:(plan.ret?"hub":null));
+    updateDecision(nextStop);
   }
   function advance(){
     if(current>=model.steps.length)return false;
@@ -564,6 +658,36 @@ function wireComparisonGrid(plan,model){
     if(COMPARISON_GRID_TIMERS[id])clearInterval(COMPARISON_GRID_TIMERS[id]);
     COMPARISON_GRID_TIMERS[id]=null;current=0;completed={};play.textContent="Start Animation";draw();
   };
+  svg.querySelectorAll(".comparison-grid-target").forEach(function(target){
+    var nodeId=target.getAttribute("data-target");
+    target.addEventListener("mouseenter",function(){hoverLinkedTarget(nodeId)});
+    target.addEventListener("mouseleave",function(){clearLinkedTarget(nodeId)});
+    target.addEventListener("focus",function(){hoverLinkedTarget(nodeId)});
+    target.addEventListener("blur",function(){clearLinkedTarget(nodeId)});
+    target.addEventListener("click",function(){highlightLinkedTarget(nodeId,true)});
+    target.addEventListener("keydown",function(event){
+      if(event.key==="Enter"||event.key===" "){event.preventDefault();highlightLinkedTarget(nodeId,true)}
+    });
+  });
+  if(table){
+    table.querySelectorAll("tbody tr").forEach(function(row){
+      var nodeId=row.getAttribute("data-site");
+      row.addEventListener("mouseenter",function(){hoverLinkedTarget(nodeId)});
+      row.addEventListener("mouseleave",function(){clearLinkedTarget(nodeId)});
+      row.addEventListener("focus",function(){hoverLinkedTarget(nodeId)});
+      row.addEventListener("blur",function(){clearLinkedTarget(nodeId)});
+      row.addEventListener("click",function(){highlightLinkedTarget(nodeId,true)});
+      row.addEventListener("keydown",function(event){
+        if(event.key==="Enter"||event.key===" "){event.preventDefault();highlightLinkedTarget(nodeId,true)}
+      });
+    });
+  }
+  var panel=document.getElementById(id);
+  panel.addEventListener("click",function(event){
+    if(!event.target.closest(".comparison-grid-table tr")&&!event.target.closest(".comparison-grid-target")){
+      activeTargetId=null;pinnedTarget=false;highlightLinkedTarget(null,false);
+    }
+  });
   draw();
 }
 function renderEvaluation(){
@@ -737,9 +861,20 @@ function renderAnalysis(){
   renderEvaluation();
   setTimeout(function(){
     mountOriginalStandardMaze();
+    alignComparisonGridBody();
     if(document.getElementById("tab-proposed-sim-svg"))wireProposedGraph("tab-proposed-sim");
   },0);
 }
+function alignComparisonGridBody(){
+  var leftLayout=document.querySelector("#comparison-standard-maze-host .maze-layout");
+  var rightPanel=document.getElementById("comparison-modql-grid");
+  var rightLayout=rightPanel&&rightPanel.querySelector(".comparison-grid-layout");
+  if(!leftLayout||!rightLayout||!leftLayout.getBoundingClientRect().height)return;
+  var offset=leftLayout.getBoundingClientRect().top-rightLayout.getBoundingClientRect().top;
+  var current=parseFloat(rightLayout.style.marginTop)||0;
+  rightLayout.style.marginTop=Math.max(0,current+offset)+"px";
+}
+window.addEventListener("resize",alignComparisonGridBody);
 var ORIGINAL_STANDARD_MAZE=null;
 function mountOriginalStandardMaze(){
   var maze=ORIGINAL_STANDARD_MAZE||document.getElementById("sub-maze"),host=document.getElementById("comparison-standard-maze-host");
@@ -779,7 +914,10 @@ function activateResearchTab(tab,moveFocus){
   document.querySelectorAll('.subview').forEach(function(view){view.classList.remove('active')});
   var target=document.getElementById('sub-'+tab.getAttribute('data-sub'));
   if(target)target.classList.add('active');
-  if(tab.getAttribute('data-sub')==="evaluation")mountOriginalStandardMaze();
+  if(tab.getAttribute('data-sub')==="evaluation"){
+    mountOriginalStandardMaze();
+    requestAnimationFrame(alignComparisonGridBody);
+  }
   if(moveFocus)tab.focus();
 }
 researchTabs.forEach(function(tab,index){
