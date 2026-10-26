@@ -4496,3 +4496,157 @@ body[data-theme] .original-algorithm-split > .splitcol.std .note{
     grid-row:2;
   }
 }
+.route-comparison-intro .route-maze-note{
+  width:100%;
+  max-width:none;
+}
+.route-comparison-intro{
+  width:100%;
+  max-width:none;
+}
+.original-algorithm-split>.splitcol.std{
+  border-top:1px solid var(--border);
+}
+.original-algorithm-split .maze-status-legend,
+.original-algorithm-split .maze-status-note{
+  width:auto;
+  max-width:100%;
+  margin:10px 0 0;
+}
+.original-algorithm-split .maze-status-legend{
+  display:grid;
+  gap:6px;
+  font-size:12px;
+}
+.original-algorithm-split .maze-status-note{
+  font-size:12px;
+}
+.comparison-grid-panel .comparison-grid-header{
+  display:flex;
+  min-width:0;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:8px;
+  margin:12px 0 0;
+  padding:0 0 20px;
+  border-bottom:1px solid var(--border);
+}
+.comparison-grid-panel .comparison-grid-heading{
+  display:flex;
+  min-width:0;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px 12px;
+}
+.comparison-grid-panel .comparison-grid-subtitle{
+  margin:0;
+  color:var(--text-muted);
+  font-size:14px;
+  font-weight:400;
+  line-height:1.5;
+}
+.comparison-grid-panel .comparison-grid-heading .pill{
+  border:1px solid currentColor;
+  font-size:11px;
+  font-weight:500;
+}
+.comparison-grid-panel .comparison-grid-description{
+  width:100%;
+  max-width:none;
+  margin:0;
+  padding:0;
+  border:0;
+}
+.comparison-grid-panel .comparison-grid-layout{
+  margin-top:12px;
+}
+.comparison-grid-panel .comparison-grid-info{
+  align-self:stretch;
+}
+.comparison-grid-panel .comparison-grid-status{
+  margin:0;
+}
+.comparison-grid-panel .comparison-grid-decision{
+  display:block;
+  margin:8px 0 0;
+  white-space:normal;
+}
+.comparison-grid-panel .comparison-grid-legend{
+  margin:12px 0 0;
+  padding:0;
+  border:0;
+}
+.comparison-grid-panel .comparison-grid-keys{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:6px;
+  font-size:12px;
+}
+.comparison-grid-panel .comparison-grid-table-section{
+  width:100%;
+  min-width:0;
+  margin-top:16px;
+  padding-top:12px;
+  border-top:1px solid var(--border);
+}
+.comparison-grid-panel .comparison-grid-sites-heading{
+  margin:0 0 8px;
+}
+.comparison-grid-panel .comparison-grid-table-scroll{
+  overflow:hidden;
+}
+.comparison-grid-panel .comparison-grid-table{
+  width:100%;
+  min-width:0;
+  table-layout:fixed;
+  font-size:12px;
+}
+.comparison-grid-panel .comparison-grid-table th,
+.comparison-grid-panel .comparison-grid-table td{
+  padding:5px 4px;
+  overflow-wrap:anywhere;
+}
+.comparison-grid-panel .comparison-grid-table th{
+  white-space:normal;
+}
+.comparison-grid-panel .comparison-grid-table th:nth-child(1),
+.comparison-grid-panel .comparison-grid-table td:nth-child(1){width:54%}
+.comparison-grid-panel .comparison-grid-table th:nth-child(2),
+.comparison-grid-panel .comparison-grid-table td:nth-child(2){width:15%}
+.comparison-grid-panel .comparison-grid-table th:nth-child(3),
+.comparison-grid-panel .comparison-grid-table td:nth-child(3){width:16%}
+.comparison-grid-panel .comparison-grid-table th:nth-child(4),
+.comparison-grid-panel .comparison-grid-table td:nth-child(4){width:15%}
+.comparison-grid-panel .comparison-grid-table td{
+  white-space:normal;
+}
+.comparison-grid-panel .comparison-grid-row-status{
+  white-space:normal;
+}
+.comparison-grid-panel .comparison-grid-table tbody tr[data-site="hub"] td:first-child{
+  white-space:nowrap;
+  font-size:10px;
+}
+.comparison-grid-panel .comparison-grid-footnote{
+  width:100%;
+  max-width:none;
+  margin-top:8px;
+}
+@media(max-width:1000px){
+  .comparison-grid-panel .comparison-grid-table-section{
+    grid-column:1;
+  }
+}
+@media(max-width:360px){
+  .comparison-grid-panel .comparison-grid-table th:nth-child(1),
+  .comparison-grid-panel .comparison-grid-table td:nth-child(1){width:64%}
+  .comparison-grid-panel .comparison-grid-table th:nth-child(2),
+  .comparison-grid-panel .comparison-grid-table td:nth-child(2){width:12%}
+  .comparison-grid-panel .comparison-grid-table th:nth-child(3),
+  .comparison-grid-panel .comparison-grid-table td:nth-child(3){width:12%}
+  .comparison-grid-panel .comparison-grid-table th:nth-child(4),
+  .comparison-grid-panel .comparison-grid-table td:nth-child(4){width:12%}
+  .comparison-grid-panel .comparison-grid-table tbody tr[data-site="hub"] td:first-child{
+    font-size:9px;
+  }
+}

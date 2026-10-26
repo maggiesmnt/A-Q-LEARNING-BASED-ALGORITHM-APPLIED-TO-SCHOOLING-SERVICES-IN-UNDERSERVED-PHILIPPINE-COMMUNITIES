@@ -524,19 +524,20 @@ function comparisonGridPanelHTML(plan,model){
   tableTargets.push(model.targets.filter(function(target){return target.isHub})[0]);
   var tableRows=tableTargets.map(function(target){
     var rowStatus=target.status,tooltip=target.reason||rowStatus;
-    return '<tr data-site="'+target.id+'" data-learners="'+target.learners+'" data-last-visit="'+target.days+'" data-order="'+(target.order||"")+'" data-deferred="'+(target.deferred?"true":"false")+'" tabindex="0" aria-label="'+laibanGridEscape(target.letter+" · "+target.name+" · "+rowStatus+(target.reason?" · "+target.reason:""))+'"><td><span class="comparison-grid-table-letter">'+target.letter+'</span>&nbsp;'+laibanGridEscape(target.name.replace(/^Sitio /,""))+'</td><td>'+target.learners+'</td><td>'+target.days+' d</td><td title="'+laibanGridEscape(tooltip)+'" aria-label="'+laibanGridEscape(rowStatus+(target.reason?" · "+target.reason:""))+'"><span class="comparison-grid-row-status">'+laibanGridEscape(rowStatus)+'</span></td></tr>';
+    var displayName=target.isHub?"Laiban Proper / ALS Hub":target.name.replace(/^Sitio /,"");
+    return '<tr data-site="'+target.id+'" data-learners="'+target.learners+'" data-last-visit="'+target.days+'" data-order="'+(target.order||"")+'" data-deferred="'+(target.deferred?"true":"false")+'" tabindex="0" aria-label="'+laibanGridEscape(target.letter+" · "+target.name+" · "+rowStatus+(target.reason?" · "+target.reason:""))+'"><td><span class="comparison-grid-table-letter">'+target.letter+'</span>&nbsp;'+laibanGridEscape(displayName)+'</td><td>'+target.learners+'</td><td>'+target.days+' d</td><td title="'+laibanGridEscape(tooltip)+'" aria-label="'+laibanGridEscape(rowStatus+(target.reason?" · "+target.reason:""))+'"><span class="comparison-grid-row-status">'+laibanGridEscape(rowStatus)+'</span></td></tr>';
   }).join("");
   var hub=COMPARISON_GRID_POSITIONS.hub,vanX=hub[0]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2-14,vanY=hub[1]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2+14;
   return '<section class="comparison-grid-panel" id="comparison-modql-grid">'+
     '<h3 class="comparison-panel-title">Proposed System — MODQL</h3>'+
-    '<p class="comparison-grid-description">The grid uses the existing MODQL route plan and real node data. Tile placement is schematic, not geographic.</p>'+
+    '<div class="comparison-grid-header"><div class="comparison-grid-heading"><h4 class="comparison-grid-subtitle">Laiban Route Demonstration - MODQL Agent</h4><span class="pill open">MODQL ROUTE PLAN</span></div><p class="comparison-grid-description">The grid uses the existing MODQL route plan and real node data. Tile placement is schematic, not geographic.</p></div>'+
     '<div class="comparison-grid-layout">'+
-      '<div class="comparison-grid-info"><section class="comparison-grid-status" aria-label="MODQL route status"><h4 class="comparison-grid-status-heading">MODQL Maze Status</h4><div class="comparison-grid-status-grid"><div><span>Animation step</span><b id="comparison-modql-grid-step-count">0 / '+model.steps.length+'</b></div><div><span>Current stop</span><b id="comparison-modql-grid-location">Laiban Proper / ALS Hub</b></div><div><span>Next destination</span><b id="comparison-modql-grid-destination">'+(plan.stops.length?laibanGridEscape(N[plan.stops[0].id].name):"No planned stop")+'</b></div><div><span>Stops completed</span><b id="comparison-modql-grid-completed">0 / '+plan.stops.length+'</b></div><div><span>Latest movement</span><b id="comparison-modql-grid-movement">At start</b></div><div><span>Total travel time</span><b id="comparison-modql-grid-time">'+model.travelMin.toFixed(1)+' min</b></div></div><div class="comparison-grid-decision" id="comparison-modql-grid-decision"></div><h4 class="comparison-grid-sites-heading">Sitios</h4><div class="comparison-grid-table-scroll"><table class="comparison-grid-table"><thead><tr><th>Sitio</th><th>Learners</th><th>Last visit</th><th>Status</th></tr></thead><tbody>'+tableRows+'</tbody></table></div><p class="comparison-grid-footnote">Learner counts and visit history are simulated allocations, not verified sitio-level records.</p></section></div>'+
+      '<div class="comparison-grid-info"><section class="comparison-grid-status" aria-label="MODQL route status"><h4 class="comparison-grid-status-heading">MODQL Maze Status</h4><div class="comparison-grid-status-grid"><div><span>Animation step</span><b id="comparison-modql-grid-step-count">0 / '+model.steps.length+'</b></div><div><span>Current stop</span><b id="comparison-modql-grid-location">Laiban Proper / ALS Hub</b></div><div><span>Next destination</span><b id="comparison-modql-grid-destination">'+(plan.stops.length?laibanGridEscape(N[plan.stops[0].id].name):"No planned stop")+'</b></div><div><span>Stops completed</span><b id="comparison-modql-grid-completed">0 / '+plan.stops.length+'</b></div><div><span>Latest movement</span><b id="comparison-modql-grid-movement">At start</b></div><div><span>Total travel time</span><b id="comparison-modql-grid-time">'+model.travelMin.toFixed(1)+' min</b></div></div><div class="comparison-grid-decision" id="comparison-modql-grid-decision"></div></section><div class="comparison-grid-legend"><div class="comparison-grid-keys"><span><i class="floor"></i>Traversable road</span><span><i class="blocked"></i>Road hazard</span><span class="comparison-grid-hazard-outlines"><i class="rest"></i>Restricted <i class="cls"></i>Closed</span><span><i class="open"></i>Open</span><span><i class="caut"></i>Caution</span><span><i class="trail"></i>Route trail</span></div></div></div>'+
       '<div class="comparison-grid-visual"><div class="comparison-grid-scroll"><svg class="comparison-grid-svg" viewBox="0 0 500 500" role="img" aria-label="Ten by ten MODQL grid with the Laiban hub and nine sitios"><rect class="comparison-grid-board" x="0" y="0" width="500" height="500" rx="10"/>'+cells.join("")+'<g id="comparison-modql-grid-trail"></g>'+targets+'<g id="comparison-modql-grid-van" transform="translate('+vanX+' '+vanY+')"><circle class="comparison-grid-agent" r="9"/></g></svg></div>'+
       '<div class="comparison-grid-controls"><button class="btn p" id="comparison-modql-grid-play" type="button">Start Animation</button><button class="btn g" id="comparison-modql-grid-next" type="button">Advance One Step</button><button class="btn g" id="comparison-modql-grid-reset" type="button">Reset</button></div>'+
       '</div>'+
     '</div>'+
-    '<div class="comparison-grid-legend"><div class="comparison-grid-keys"><span><i class="floor"></i>Traversable road</span><span><i class="blocked"></i>Road hazard</span><span class="comparison-grid-hazard-outlines"><i class="rest"></i>Restricted <i class="cls"></i>Closed</span><span><i class="open"></i>Open</span><span><i class="caut"></i>Caution</span><span><i class="trail"></i>Route trail</span></div></div></section>';
+    '<div class="comparison-grid-table-section"><h4 class="comparison-grid-sites-heading">Sitios</h4><div class="comparison-grid-table-scroll"><table class="comparison-grid-table"><thead><tr><th>Letter + Sitio</th><th>Learners</th><th>Last visit</th><th>Status</th></tr></thead><tbody>'+tableRows+'</tbody></table></div><p class="comparison-grid-footnote">Learner counts and visit history are simulated allocations, not verified sitio-level records.</p></div></section>';
 }
 var COMPARISON_GRID_TIMERS={};
 function wireComparisonGrid(plan,model){
@@ -866,13 +867,18 @@ function renderAnalysis(){
   },0);
 }
 function alignComparisonGridBody(){
-  var leftLayout=document.querySelector("#comparison-standard-maze-host .maze-layout");
+  var leftHeader=document.querySelector("#comparison-standard-maze-host .maze-demo-header");
   var rightPanel=document.getElementById("comparison-modql-grid");
+  var rightHeader=rightPanel&&rightPanel.querySelector(".comparison-grid-header");
+  var leftLayout=document.querySelector("#comparison-standard-maze-host .maze-layout");
   var rightLayout=rightPanel&&rightPanel.querySelector(".comparison-grid-layout");
-  if(!leftLayout||!rightLayout||!leftLayout.getBoundingClientRect().height)return;
-  var offset=leftLayout.getBoundingClientRect().top-rightLayout.getBoundingClientRect().top;
-  var current=parseFloat(rightLayout.style.marginTop)||0;
-  rightLayout.style.marginTop=Math.max(0,current+offset)+"px";
+  if(!leftHeader||!rightHeader||!leftLayout||!rightLayout)return;
+  leftHeader.style.minHeight="";
+  rightHeader.style.minHeight="";
+  var headerHeight=Math.max(leftHeader.getBoundingClientRect().height,rightHeader.getBoundingClientRect().height);
+  leftHeader.style.minHeight=headerHeight+"px";
+  rightHeader.style.minHeight=headerHeight+"px";
+  rightLayout.style.marginTop=getComputedStyle(leftLayout).marginTop;
 }
 window.addEventListener("resize",alignComparisonGridBody);
 var ORIGINAL_STANDARD_MAZE=null;
@@ -890,9 +896,6 @@ function mountOriginalStandardMaze(){
     mazeLayout.insertBefore(visualColumn,status?status.nextSibling:null);
     visualColumn.appendChild(canvasColumn);
     visualColumn.appendChild(controls);
-    var statusLegend=status&&status.querySelector(".maze-status-legend"),statusNote=status&&status.querySelector(".maze-status-note");
-    if(statusLegend)visualColumn.appendChild(statusLegend);
-    if(statusNote)visualColumn.appendChild(statusNote);
     window.dispatchEvent(new Event("resize"));
   }
   if(!host.querySelector(".standard-maze-context-note")){
