@@ -4440,7 +4440,7 @@ body[data-theme] .original-algorithm-split > .splitcol.std .note{
   box-shadow:inset 2px 0 var(--accent);
 }
 .comparison-grid-panel .comparison-grid-table tbody tr[data-order]:not([data-order=""]) .comparison-grid-row-status::before{
-  content:"✓";
+  content:"\2713";
   margin-right:4px;
   color:var(--road-open);
   font-weight:700;
