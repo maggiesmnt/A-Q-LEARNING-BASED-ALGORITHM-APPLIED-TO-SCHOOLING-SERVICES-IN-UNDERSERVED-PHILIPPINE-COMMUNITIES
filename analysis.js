@@ -535,10 +535,10 @@ function comparisonGridPanelHTML(plan,model){
       '<div class="comparison-grid-info"><section class="comparison-grid-status" aria-label="MODQL route status"><h4 class="comparison-grid-status-heading">MODQL Maze Status</h4><div class="comparison-grid-status-grid"><div><span>Animation step</span><b id="comparison-modql-grid-step-count">0 / '+model.steps.length+'</b></div><div><span>Current stop</span><b id="comparison-modql-grid-location">Laiban Proper / ALS Hub</b></div><div><span>Next destination</span><b id="comparison-modql-grid-destination">'+(plan.stops.length?laibanGridEscape(N[plan.stops[0].id].name):"No planned stop")+'</b></div><div><span>Stops completed</span><b id="comparison-modql-grid-completed">0 / '+plan.stops.length+'</b></div><div><span>Latest movement</span><b id="comparison-modql-grid-movement">At start</b></div><div><span>Total travel time</span><b id="comparison-modql-grid-time">'+model.travelMin.toFixed(1)+' min</b></div></div><div class="comparison-grid-decision" id="comparison-modql-grid-decision"></div></section><div class="comparison-grid-legend"><div class="comparison-grid-keys"><span><i class="floor"></i>Traversable road</span><span><i class="blocked"></i>Road hazard</span><span class="comparison-grid-hazard-outlines"><i class="rest"></i>Restricted <i class="cls"></i>Closed</span><span><i class="open"></i>Open</span><span><i class="caut"></i>Caution</span><span><i class="trail"></i>Route trail</span></div></div></div>'+
       '<div class="comparison-grid-visual"><div class="comparison-grid-scroll"><svg class="comparison-grid-svg" viewBox="0 0 500 500" role="img" aria-label="Ten by ten MODQL grid with the Laiban hub and nine sitios"><rect class="comparison-grid-board" x="0" y="0" width="500" height="500" rx="10"/>'+cells.join("")+'<g id="comparison-modql-grid-trail"></g>'+targets+'<g id="comparison-modql-grid-van" transform="translate('+vanX+' '+vanY+')"><circle class="comparison-grid-agent" r="9"/></g></svg></div>'+
       '<div class="comparison-grid-controls"><button class="btn p" id="comparison-modql-grid-play" type="button">Start Animation</button><button class="btn g" id="comparison-modql-grid-next" type="button">Advance One Step</button><button class="btn g" id="comparison-modql-grid-reset" type="button">Reset</button></div>'+
-      '<section class="algorithm-summary-card"><h4>Proposed MODQL</h4><p>Two Q-tables (Q1/Q2) are used. One is chosen at random per update to select the action while the other evaluates it. The state includes location, demand, remaining service time, visit history, and accessibility. The reward multiplies learner coverage, service fairness (Jain\'s Fairness Index), and travel efficiency.</p><button class="algorithm-details-link" type="button" data-research-view="proposed">View algorithm details</button></section>'+
       '</div>'+
     '</div>'+
-    '<div class="comparison-grid-table-section"><h4 class="comparison-grid-sites-heading">Sitios</h4><div class="comparison-grid-table-scroll"><table class="comparison-grid-table"><thead><tr><th>Letter + Sitio</th><th>Learners</th><th>Last visit</th><th>Status</th></tr></thead><tbody>'+tableRows+'</tbody></table></div><p class="comparison-grid-footnote">Learner counts and visit history are simulated allocations, not verified sitio-level records.</p></div></section>';
+    '<div class="comparison-grid-table-section"><h4 class="comparison-grid-sites-heading">Sitios</h4><div class="comparison-grid-table-scroll"><table class="comparison-grid-table"><thead><tr><th>Letter + Sitio</th><th>Learners</th><th>Last visit</th><th>Status</th></tr></thead><tbody>'+tableRows+'</tbody></table></div><p class="comparison-grid-footnote">Learner counts and visit history are simulated allocations, not verified sitio-level records.</p></div>'+
+    '<section class="algorithm-summary-card"><h4>Proposed MODQL</h4><p>Two Q-tables (Q1/Q2) are used. One is chosen at random per update to select the action while the other evaluates it. The state includes location, demand, remaining service time, visit history, and accessibility. The reward multiplies learner coverage, service fairness (Jain\'s Fairness Index), and travel efficiency.</p><button class="algorithm-details-link" type="button" data-research-view="proposed">View algorithm details</button></section></section>';
 }
 var COMPARISON_GRID_TIMERS={};
 function wireComparisonGrid(plan,model){
@@ -889,6 +889,8 @@ function mountOriginalStandardMaze(){
   var maze=ORIGINAL_STANDARD_MAZE||document.getElementById("sub-maze"),host=document.getElementById("comparison-standard-maze-host");
   if(!maze||!host||!maze.children.length)return false;
   ORIGINAL_STANDARD_MAZE=maze;
+  var panel=host.closest(".splitcol.std");
+  if(!panel)return false;
   maze.classList.remove("subview","active");
   maze.classList.add("evaluation-maze");
   if(maze.parentNode!==host)host.appendChild(maze);
@@ -902,20 +904,43 @@ function mountOriginalStandardMaze(){
     window.dispatchEvent(new Event("resize"));
   }
   var mazeVisualColumn=mazeLayout&&mazeLayout.querySelector(".maze-visual-column");
-  if(mazeVisualColumn&&!mazeVisualColumn.querySelector(".algorithm-summary-card")){
+  var summaryCard=panel.querySelector(".algorithm-summary-card");
+  if(!summaryCard){
     var summary=document.createElement("section");
     summary.className="algorithm-summary-card";
     summary.innerHTML='<h4>Standard Q-Learning (baseline)</h4><p>One Q-table; state is location only; reward is based on inverse travel time. The same table selects and evaluates the next action.</p><button class="algorithm-details-link" type="button" data-research-view="existing">View algorithm details</button>';
-    mazeVisualColumn.appendChild(summary);
+    summaryCard=summary;
   }
-  if(!host.querySelector(".standard-maze-context-note")){
-    var note=document.createElement("div");note.className="note standard-maze-context-note";note.textContent="This original maze uses its own randomly generated single-goal environment. It does not depict Laiban roads or the MODQL service route.";host.appendChild(note);
+  var contextNote=panel.querySelector(".standard-maze-context-note");
+  if(!contextNote){
+    contextNote=document.createElement("div");
+    contextNote.className="note standard-maze-context-note";
+    contextNote.textContent="This original maze uses its own randomly generated single-goal environment. It does not depict Laiban roads or the MODQL service route.";
+  }
+  panel.appendChild(summaryCard);
+  var implementationNote=maze.querySelector(".note");
+  var noteBlock=panel.querySelector(".standard-implementation-note");
+  if(implementationNote&&contextNote){
+    if(!noteBlock){
+      noteBlock=document.createElement("div");
+      noteBlock.className="standard-implementation-note";
+      noteBlock.setAttribute("role","note");
+    }
+    noteBlock.appendChild(implementationNote);
+    noteBlock.appendChild(contextNote);
+    panel.insertBefore(noteBlock,summaryCard);
   }
   return true;
 }
 // The maze demo builds on DOMContentLoaded. Defer this callback so its own
 // listener can finish first, even if the initial comparison render ran earlier.
 document.addEventListener("DOMContentLoaded",function(){setTimeout(mountOriginalStandardMaze,0)});
+var researchNavigation=document.getElementById("researchNav");
+var appHeader=document.getElementById("top");
+if(researchNavigation&&appHeader&&researchNavigation.parentNode!==appHeader){
+  var headerSpacer=appHeader.querySelector(".spacer");
+  appHeader.insertBefore(researchNavigation,headerSpacer||null);
+}
 var researchTabs=Array.prototype.slice.call(document.querySelectorAll('#researchNav [role="tab"][data-sub]'));
 function activateResearchTab(tab,moveFocus){
   researchTabs.forEach(function(item){
