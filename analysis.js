@@ -535,7 +535,7 @@ function comparisonGridPanelHTML(plan,model){
       '<div class="comparison-grid-info"><section class="comparison-grid-status" aria-label="MODQL route status"><h4 class="comparison-grid-status-heading">MODQL Maze Status</h4><div class="comparison-grid-status-grid"><div><span>Animation step</span><b id="comparison-modql-grid-step-count">0 / '+model.steps.length+'</b></div><div><span>Current stop</span><b id="comparison-modql-grid-location">Laiban Proper / ALS Hub</b></div><div><span>Next destination</span><b id="comparison-modql-grid-destination">'+(plan.stops.length?laibanGridEscape(N[plan.stops[0].id].name):"No planned stop")+'</b></div><div><span>Stops completed</span><b id="comparison-modql-grid-completed">0 / '+plan.stops.length+'</b></div><div><span>Latest movement</span><b id="comparison-modql-grid-movement">At start</b></div><div><span>Total travel time</span><b id="comparison-modql-grid-time">'+model.travelMin.toFixed(1)+' min</b></div></div><div class="comparison-grid-decision" id="comparison-modql-grid-decision"></div></section><div class="comparison-grid-legend"><div class="comparison-grid-keys"><span><i class="floor"></i>Traversable road</span><span><i class="blocked"></i>Road hazard</span><span class="comparison-grid-hazard-outlines"><i class="rest"></i>Restricted <i class="cls"></i>Closed</span><span><i class="open"></i>Open</span><span><i class="caut"></i>Caution</span><span><i class="trail"></i>Route trail</span></div></div></div>'+
       '<div class="comparison-grid-visual"><div class="comparison-grid-scroll"><svg class="comparison-grid-svg" viewBox="0 0 500 500" role="img" aria-label="Ten by ten MODQL grid with the Laiban hub and nine sitios"><rect class="comparison-grid-board" x="0" y="0" width="500" height="500" rx="10"/>'+cells.join("")+'<g id="comparison-modql-grid-trail"></g>'+targets+'<g id="comparison-modql-grid-van" transform="translate('+vanX+' '+vanY+')"><circle class="comparison-grid-agent" r="9"/></g></svg></div>'+
       '<div class="comparison-grid-controls"><button class="btn p" id="comparison-modql-grid-play" type="button">Start Animation</button><button class="btn g" id="comparison-modql-grid-next" type="button">Advance One Step</button><button class="btn g" id="comparison-modql-grid-reset" type="button">Reset</button></div>'+
-      '<section class="algorithm-summary-card"><h4>Proposed MODQL</h4><p>Two Q-tables (Q1/Q2) are used. One is chosen at random per update to select the action while the other evaluates it. The state includes location, demand, remaining service time, visit history, and accessibility. The reward multiplies learner coverage, service fairness (Jain\'s Fairness Index), and travel efficiency.</p></section>'+
+      '<section class="algorithm-summary-card"><h4>Proposed MODQL</h4><p>Two Q-tables (Q1/Q2) are used. One is chosen at random per update to select the action while the other evaluates it. The state includes location, demand, remaining service time, visit history, and accessibility. The reward multiplies learner coverage, service fairness (Jain\'s Fairness Index), and travel efficiency.</p><button class="algorithm-details-link" type="button" data-research-view="proposed">Full MODQL details</button></section>'+
       '</div>'+
     '</div>'+
     '<div class="comparison-grid-table-section"><h4 class="comparison-grid-sites-heading">Sitios</h4><div class="comparison-grid-table-scroll"><table class="comparison-grid-table"><thead><tr><th>Letter + Sitio</th><th>Learners</th><th>Last visit</th><th>Status</th></tr></thead><tbody>'+tableRows+'</tbody></table></div><p class="comparison-grid-footnote">Learner counts and visit history are simulated allocations, not verified sitio-level records.</p></div></section>';
@@ -816,6 +816,7 @@ function renderExisting(){
     ? svgLine([{d:SIM.sq,c:"#97A87A"}],{xs:SIM.ep,dp:2,h:150})+'<div class="lg"><span><i style="background:#97A87A"></i> Standard Q-Learning reward</span></div>'
     : '';
   document.getElementById('sub-existing').innerHTML=
+    '<button class="algorithm-details-back" type="button" data-research-view="evaluation">Back to Compare Algorithms</button>'+
     '<div class="algo-head std"><div class="ic">Q</div><div><h2>Standard Q-Learning</h2><p>Baseline algorithm used for comparison</p></div></div>'+
     '<div class="split2">'+
       '<div class="card"><h3>Baseline Overview</h3><div class="k">Standard Q-Learning learns the next location from one Q-table. It is the control used to measure the effect of the proposed enhancements.</div><div class="existing-mini-grid" style="margin-top:12px"><div class="kpi"><div class="lab">Algorithm</div><div class="v" style="font-size:19px">Standard Q-Learning</div><div class="d">baseline/control</div></div><div class="kpi"><div class="lab">Q-tables</div><div class="v">1</div><div class="d">single estimator</div></div><div class="kpi"><div class="lab">Training action choice</div><div class="v" style="font-size:19px">&epsilon;-greedy</div><div class="d">balances exploration and exploitation</div></div></div></div>'+
@@ -839,6 +840,7 @@ function renderProposed(){
     ? svgLine([{d:SIM.mq,c:"#DB9558"}],{xs:SIM.ep,dp:2,h:150})+'<div class="lg"><span><i style="background:#DB9558"></i> MODQL reward</span></div>'
     : '';
   document.getElementById('sub-proposed').innerHTML=
+    '<button class="algorithm-details-back" type="button" data-research-view="evaluation">Back to Compare Algorithms</button>'+
     '<div class="algo-head mod"><div class="ic">Q2</div><div><h2>Enhanced MODQL</h2><p>Multi-Objective Double Q-Learning proposed by the study</p></div></div>'+
     '<div class="split2">'+
       '<div class="card"><h3>Enhanced Algorithm Overview</h3><div class="k">MODQL adds a richer state, a multi-objective reward, and two Q-tables to Standard Q-Learning.</div><div class="existing-mini-grid" style="margin-top:12px"><div class="kpi"><div class="lab">Algorithm</div><div class="v" style="font-size:19px">MODQL</div><div class="d">proposed method</div></div><div class="kpi"><div class="lab">Q-tables</div><div class="v">2</div><div class="d">Q1 and Q2</div></div><div class="kpi"><div class="lab">Training action choice</div><div class="v" style="font-size:19px">&epsilon;-greedy</div><div class="d">balances exploration and exploitation</div></div></div></div>'+
@@ -899,11 +901,12 @@ function mountOriginalStandardMaze(){
     visualColumn.appendChild(controls);
     window.dispatchEvent(new Event("resize"));
   }
-  if(!maze.querySelector(".algorithm-summary-card")){
+  var mazeVisualColumn=mazeLayout&&mazeLayout.querySelector(".maze-visual-column");
+  if(mazeVisualColumn&&!mazeVisualColumn.querySelector(".algorithm-summary-card")){
     var summary=document.createElement("section");
     summary.className="algorithm-summary-card";
-    summary.innerHTML="<h4>Standard Q-Learning (baseline)</h4><p>One Q-table; state is location only; reward is based on inverse travel time. The same table selects and evaluates the next action.</p>";
-    maze.appendChild(summary);
+    summary.innerHTML='<h4>Standard Q-Learning (baseline)</h4><p>One Q-table; state is location only; reward is based on inverse travel time. The same table selects and evaluates the next action.</p><button class="algorithm-details-link" type="button" data-research-view="existing">Full Standard Q-Learning details</button>';
+    mazeVisualColumn.appendChild(summary);
   }
   if(!host.querySelector(".standard-maze-context-note")){
     var note=document.createElement("div");note.className="note standard-maze-context-note";note.textContent="This original maze uses its own randomly generated single-goal environment. It does not depict Laiban roads or the MODQL service route.";host.appendChild(note);
@@ -930,16 +933,30 @@ function activateResearchTab(tab,moveFocus){
   }
   if(moveFocus)tab.focus();
 }
+function activateResearchSubview(subview,moveFocus){
+  var tab=researchTabs.filter(function(item){return item.getAttribute("data-sub")===subview})[0];
+  if(!tab)return;
+  activateResearchTab(tab,false);
+  if(moveFocus){
+    var panel=document.getElementById("sub-"+subview);
+    if(panel)panel.focus();
+  }
+}
+document.addEventListener("click",function(event){
+  var button=event.target.closest("[data-research-view]");
+  if(button)activateResearchSubview(button.getAttribute("data-research-view"),true);
+});
 researchTabs.forEach(function(tab,index){
   tab.addEventListener('click',function(){activateResearchTab(tab,false)});
   tab.addEventListener('keydown',function(event){
-    var next=index;
-    if(event.key==="ArrowRight")next=(index+1)%researchTabs.length;
-    else if(event.key==="ArrowLeft")next=(index+researchTabs.length-1)%researchTabs.length;
+    var visibleTabs=researchTabs.filter(function(item){return getComputedStyle(item).display!=="none"});
+    var currentIndex=visibleTabs.indexOf(tab),next=currentIndex;
+    if(event.key==="ArrowRight")next=(currentIndex+1)%visibleTabs.length;
+    else if(event.key==="ArrowLeft")next=(currentIndex+visibleTabs.length-1)%visibleTabs.length;
     else if(event.key==="Home")next=0;
-    else if(event.key==="End")next=researchTabs.length-1;
+    else if(event.key==="End")next=visibleTabs.length-1;
     else return;
     event.preventDefault();
-    activateResearchTab(researchTabs[next],true);
+    activateResearchTab(visibleTabs[next],true);
   });
 });

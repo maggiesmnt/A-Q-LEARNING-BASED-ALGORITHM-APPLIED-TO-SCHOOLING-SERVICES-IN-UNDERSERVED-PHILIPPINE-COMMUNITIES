@@ -4522,7 +4522,7 @@ body[data-theme] .original-algorithm-split > .splitcol.std .note{
   font-size:12px;
 }
 .algorithm-summary-card{
-  width:var(--compare-grid-size);
+  width:100%;
   max-width:100%;
   margin:12px auto 0;
   padding:12px;
@@ -4541,6 +4541,34 @@ body[data-theme] .original-algorithm-split > .splitcol.std .note{
   color:var(--text-muted);
   font-size:13px;
   line-height:1.5;
+}
+.algorithm-summary-card .algorithm-details-link,
+.algorithm-details-back{
+  display:inline-flex;
+  min-height:36px;
+  align-items:center;
+  justify-content:center;
+  margin-top:10px;
+  padding:7px 12px;
+  border:1px solid var(--border);
+  border-radius:8px;
+  background:transparent;
+  color:var(--text);
+  font:inherit;
+  font-size:13px;
+  cursor:pointer;
+}
+.algorithm-summary-card .algorithm-details-link:hover,
+.algorithm-details-back:hover{
+  border-color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 10%,transparent);
+}
+.algorithm-details-back{
+  margin:0 0 16px;
+}
+#researchNav #tab-existing,
+#researchNav #tab-proposed{
+  display:none!important;
 }
 .comparison-grid-panel .comparison-grid-header{
   display:flex;

@@ -166,9 +166,9 @@ Confidence halves every 6 hours, so a segment re-opens on its own once no extern
 <span>Research &amp; Analysis</span>
 </div>
 <div class="rn-group" role="tablist" aria-label="Algorithm views" aria-orientation="horizontal">
-<button id="tab-existing" role="tab" aria-selected="true" aria-controls="sub-existing" tabindex="0" data-sub="existing" class="on">Standard Q-Learning</button>
+<button id="tab-existing" role="tab" aria-selected="false" aria-controls="sub-existing" tabindex="-1" data-sub="existing">Standard Q-Learning</button>
 <button id="tab-proposed" role="tab" aria-selected="false" aria-controls="sub-proposed" tabindex="-1" data-sub="proposed">Enhanced MODQL</button>
-<button id="tab-evaluation" role="tab" aria-selected="false" aria-controls="sub-evaluation" tabindex="-1" data-sub="evaluation">Compare Algorithms</button>
+<button id="tab-evaluation" role="tab" aria-selected="true" aria-controls="sub-evaluation" tabindex="0" data-sub="evaluation" class="on">Compare Algorithms</button>
 </div>
 <div class="theme-dock" aria-label="Appearance">
 <button class="theme-icon-btn" id="themeSwitch" type="button" aria-label="Switch theme" title="Switch theme">
@@ -192,10 +192,10 @@ Because the provided record has no sitio-level breakdown, the 284 learners are d
 The same demand values are provided to both Standard Q-Learning and MODQL.
 </div>
 -->
-<div class="subview active" id="sub-existing" role="tabpanel" aria-labelledby="tab-existing" tabindex="0"></div>
+<div class="subview" id="sub-existing" role="tabpanel" aria-labelledby="tab-existing" tabindex="0"></div>
 <div class="subview" id="sub-proposed" role="tabpanel" aria-labelledby="tab-proposed" tabindex="0"></div>
 <div class="subview" id="sub-maze"></div>
-<div class="subview" id="sub-evaluation" role="tabpanel" aria-labelledby="tab-evaluation" tabindex="0"></div>
+<div class="subview active" id="sub-evaluation" role="tabpanel" aria-labelledby="tab-evaluation" tabindex="0"></div>
 <div class="foot">
 Interface prototype for <i>Enhancing a Q-Learning Based Algorithm Applied to Schooling Services in Underserved Philippine Communities</i><br>
 Mahusay, L. G. &amp; Samonte, M. A. G. A. &middot; Adviser: Prof. Erwin D. Marcelo &middot; PLM College of Information Systems and Technology Management<br>
