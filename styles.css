@@ -3254,10 +3254,13 @@ main,
   aspect-ratio:1 / 1;
   margin-inline:auto;
 }
-#mzCanvas{
-  width:100%!important;
-  max-width:420px!important;
-  height:auto!important;
+.maze-demo-card .maze-layout{
+  grid-template-columns:minmax(210px,300px) minmax(300px,500px);
+}
+.maze-demo-card #mzCanvas{
+  width:100%;
+  max-width:500px;
+  height:auto;
   aspect-ratio:1 / 1;
 }
 @media(max-width:1300px){
@@ -3835,8 +3838,7 @@ body[data-theme] .original-algorithm-split > .splitcol.std .note{
   overflow-wrap:anywhere;
 }
 .comparison-grid-scroll{
-  width:100%;
-  overflow-x:auto;
+  overflow:hidden;
   overscroll-behavior-inline:contain;
   border:1px solid var(--border);
   border-radius:12px;
@@ -3844,9 +3846,6 @@ body[data-theme] .original-algorithm-split > .splitcol.std .note{
 }
 .comparison-grid-svg{
   display:block;
-  width:100%;
-  min-width:0;
-  height:auto;
 }
 .comparison-grid-board{
   fill:var(--maze-cell);
@@ -4018,5 +4017,191 @@ body[data-theme] .original-algorithm-split > .splitcol.std .note{
   .comparison-grid-keys,
   .comparison-grid-sites{
     gap:8px 10px;
+  }
+}
+:root{
+  --compare-grid-size:min(460px,100%,calc(100vh - 220px));
+}
+.original-algorithm-split{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-auto-rows:1fr;
+  align-items:stretch;
+}
+.original-algorithm-split>.splitcol.std,
+.original-algorithm-split>.comparison-grid-panel{
+  min-width:0;
+  min-height:0;
+  height:100%;
+  box-sizing:border-box;
+  padding:16px;
+}
+.original-algorithm-split .maze-demo-card{
+  display:flex;
+  min-width:0;
+  flex-direction:column;
+}
+.original-algorithm-split .maze-demo-card>.maze-demo-header{
+  margin:12px 0 0!important;
+  padding-bottom:20px;
+  align-items:flex-start;
+  text-align:left;
+}
+.original-algorithm-split .maze-demo-heading{
+  justify-content:flex-start;
+  align-items:flex-start;
+  width:100%;
+  text-align:left;
+}
+.original-algorithm-split .maze-demo-description{
+  align-self:flex-start!important;
+  width:100%;
+  margin:0;
+  padding:0!important;
+  text-align:left;
+}
+.original-algorithm-split .maze-demo-card .maze-layout,
+.comparison-grid-layout{
+  display:grid;
+  grid-template-columns:minmax(0,.62fr) minmax(0,1fr)!important;
+  gap:16px!important;
+  align-items:start;
+}
+.original-algorithm-split .maze-demo-card .maze-layout{
+  flex:1 0 auto;
+  margin-top:12px;
+  padding-bottom:12px;
+}
+.original-algorithm-split .maze-status-panel,
+.comparison-grid-layout .comparison-grid-status{
+  min-width:0;
+  margin:0;
+}
+.original-algorithm-split #mzCanvas,
+.comparison-grid-scroll,
+.comparison-grid-svg{
+  display:block;
+  box-sizing:border-box;
+  width:var(--compare-grid-size)!important;
+  height:var(--compare-grid-size)!important;
+  max-width:100%!important;
+  min-width:0;
+  aspect-ratio:1 / 1;
+  flex:none;
+  margin:0 auto;
+}
+.original-algorithm-split .maze-visual-column,
+.comparison-grid-visual{
+  display:flex;
+  min-width:0;
+  flex-direction:column;
+  align-items:center;
+}
+.original-algorithm-split .maze-visual-column>div:first-child{
+  width:var(--compare-grid-size);
+  max-width:100%;
+  min-width:0;
+  flex:none;
+}
+.original-algorithm-split .maze-demo-controls,
+.comparison-grid-controls{
+  display:flex;
+  width:var(--compare-grid-size);
+  max-width:100%;
+  flex:none;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:center;
+  margin:12px auto 0!important;
+}
+.original-algorithm-split .maze-demo-controls>button,
+.comparison-grid-controls>.btn{
+  box-sizing:border-box;
+  flex:1 1 calc(50% - 8px)!important;
+  min-width:0;
+  min-height:40px;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+.original-algorithm-split .maze-status-legend,
+.original-algorithm-split .maze-status-note{
+  width:var(--compare-grid-size);
+  max-width:100%;
+  text-align:left;
+}
+.comparison-grid-panel{
+  display:flex;
+  min-width:0;
+  flex-direction:column;
+  padding:16px;
+}
+.comparison-grid-panel .comparison-grid-description{
+  min-height:125px;
+  margin:9px 0 12px;
+  padding:0 0 8px;
+}
+.comparison-grid-layout{
+  flex:1 0 auto;
+}
+.comparison-grid-scroll{
+  overflow:hidden;
+  border:0;
+  background:transparent;
+}
+.comparison-grid-svg{
+  border:1px solid var(--border);
+  border-radius:10px;
+}
+.comparison-grid-legend{
+  margin-top:12px;
+  padding-top:12px;
+}
+.original-algorithm-split .maze-demo-controls+.maze-status-legend,
+.original-algorithm-split .maze-status-note{
+  margin-top:8px;
+  font-size:11px;
+}
+.original-algorithm-split>.splitcol.std .standard-maze-context-note,
+.original-algorithm-split>.splitcol.std .evaluation-maze>.note{
+  max-width:100%;
+  margin:12px 0 0;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  font-size:11px;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+}
+@media(max-width:1000px){
+  .original-algorithm-split{
+    grid-template-columns:minmax(0,1fr);
+    grid-auto-rows:auto;
+  }
+  .original-algorithm-split>.splitcol.std,
+  .original-algorithm-split>.comparison-grid-panel{
+    height:auto;
+  }
+  .original-algorithm-split .maze-demo-card .maze-layout,
+  .comparison-grid-layout{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  .original-algorithm-split .maze-status-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .comparison-grid-panel .comparison-grid-description{
+    min-height:0;
+    margin:8px 0 12px;
+  }
+  .original-algorithm-split .maze-visual-column{
+    grid-row:2;
+  }
+  .original-algorithm-split .maze-status-legend,
+  .original-algorithm-split .maze-status-note{
+    grid-column:1;
+  }
+}
+@media(min-width:1001px) and (max-width:1170px){
+  .comparison-grid-panel .comparison-grid-description{
+    min-height:152.3px;
   }
 }

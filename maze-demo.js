@@ -225,7 +225,7 @@
     }
   }
 
-  let env = null, agent = null, episode = 1, stepsTaken = 0, lastAction = 'None', goalStatus = 'In Progress...', statusText = 'Ready for Episode 1', history = [], timer = null, running = false, finished = false;
+  let env = null, agent = null, episode = 1, stepsTaken = 0, lastAction = 'None', goalStatus = 'In Progress...', statusText = 'Ready for Episode 1', history = [], timer = null, running = false, finished = false, canvasResizeObserver = null;
 
   function el(id){ return document.getElementById(id); }
   function themeColor(name,fallback){ const v=getComputedStyle(document.body).getPropertyValue(name).trim(); return v||fallback; }
@@ -269,6 +269,12 @@
 
   function draw(){
     const canvas=el('mzCanvas'); if(!canvas||!env) return;
+    const bounds=canvas.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+    if(bounds.width>0&&bounds.height>0){
+      const backingWidth=Math.round(bounds.width*dpr),backingHeight=Math.round(bounds.height*dpr);
+      if(canvas.width!==backingWidth)canvas.width=backingWidth;
+      if(canvas.height!==backingHeight)canvas.height=backingHeight;
+    }
     const ctx=canvas.getContext('2d'), cell=canvas.width/SIZE;
     ctx.clearRect(0,0,canvas.width,canvas.height);
     for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
@@ -297,7 +303,7 @@
           </div>
           <div class="k maze-demo-description">Browser adaptation of the <span class="mono">iboasay/sys</span> maze demo, using its dynamic environment and baseline Q-learning agent behavior while preserving this system's existing Maze Demo interface.</div>
         </div>
-        <div style="display:grid;grid-template-columns:minmax(210px,300px) minmax(300px,500px);gap:18px;align-items:start" class="maze-layout">
+        <div style="display:grid;gap:18px;align-items:start" class="maze-layout">
           <div class="maze-status-panel">
             <div class="maze-status-heading">Q-Learning Maze Status</div>
             <div class="maze-status-grid">
@@ -315,7 +321,7 @@
             </div>
             <div class="maze-status-note">Maze changes every 20 environment steps.</div>
           </div>
-          <div><canvas id="mzCanvas" width="500" height="500" style="display:block;width:100%;max-width:500px;aspect-ratio:1/1;background:var(--maze-cell);border:1px solid var(--line);border-radius:10px;margin:0 auto"></canvas></div>
+          <div><canvas id="mzCanvas" width="500" height="500" style="display:block;background:var(--maze-cell);border:1px solid var(--line);border-radius:10px;margin:0 auto"></canvas></div>
         </div>
         <div class="maze-demo-controls" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
           <button class="btn p" id="mzPlay" style="flex:0 0 150px">Start Animation</button>
@@ -330,6 +336,11 @@
     el('mzStep').addEventListener('click',()=>{stopTimer();stepOnce();});
     el('mzReset').addEventListener('click',()=>{stopTimer();startEpisode(false);});
     el('mzNext').addEventListener('click',nextEpisode);
+    if ('ResizeObserver' in window) {
+      canvasResizeObserver = new ResizeObserver(draw);
+      canvasResizeObserver.observe(el('mzCanvas'));
+    }
+    window.addEventListener('resize',draw,{passive:true});
     episode=1; env=new DynamicMazeEnvBrowser(); agent=new BaselineConfidenceAgentBrowser(); startEpisode(false);
   }
 

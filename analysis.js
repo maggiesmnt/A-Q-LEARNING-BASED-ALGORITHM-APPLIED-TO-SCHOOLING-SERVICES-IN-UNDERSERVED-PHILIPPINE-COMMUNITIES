@@ -481,7 +481,16 @@ function comparisonGridPanelHTML(plan,model){
     return '<span class="'+(target.deferred?"is-deferred":"")+'"><b>'+target.letter+'</b> '+laibanGridEscape(target.name)+(target.order?" · stop "+target.order:target.deferred?" · deferred":"")+'</span>';
   }).join("");
   var hub=COMPARISON_GRID_POSITIONS.hub,vanX=hub[0]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2-14,vanY=hub[1]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2+14;
-  return '<section class="comparison-grid-panel" id="comparison-modql-grid"><h3 class="comparison-panel-title">Proposed System — MODQL</h3><p class="comparison-grid-description">The grid uses the existing MODQL route plan and real node data. Tile placement is schematic, not geographic.</p><div class="comparison-grid-status" aria-label="MODQL route status"><div><span>Animation step</span><b id="comparison-modql-grid-step-count">0 / '+model.steps.length+'</b></div><div><span>Current stop</span><b id="comparison-modql-grid-location">Laiban Proper / ALS Hub</b></div><div><span>Next destination</span><b id="comparison-modql-grid-destination">'+(plan.stops.length?laibanGridEscape(N[plan.stops[0].id].name):"No planned stop")+'</b></div><div><span>Stops completed</span><b id="comparison-modql-grid-completed">0 / '+plan.stops.length+'</b></div><div><span>Latest movement</span><b id="comparison-modql-grid-movement">At start</b></div><div><span>Total travel time</span><b id="comparison-modql-grid-time">'+model.travelMin.toFixed(1)+' min</b></div></div><div class="comparison-grid-scroll"><svg class="comparison-grid-svg" viewBox="0 0 500 500" role="img" aria-label="Ten by ten MODQL grid with the Laiban hub and nine sitios"><rect class="comparison-grid-board" x="0" y="0" width="500" height="500" rx="10"/>'+cells.join("")+'<g id="comparison-modql-grid-trail"></g>'+targets+'<g id="comparison-modql-grid-van" transform="translate('+vanX+' '+vanY+')"><circle class="comparison-grid-agent" r="9"/></g></svg></div><div class="comparison-grid-controls"><button class="btn p" id="comparison-modql-grid-play" type="button">Start Animation</button><button class="btn g" id="comparison-modql-grid-next" type="button">Advance One Step</button><button class="btn g" id="comparison-modql-grid-reset" type="button">Reset</button></div><div class="comparison-grid-legend"><div class="comparison-grid-keys"><span><i class="floor"></i>Traversable road</span><span><i class="blocked"></i>Blocked cell = road hazard (closed / restricted)</span><span><i class="trail"></i>Route trail</span><span><i class="open"></i>Open</span><span><i class="caut"></i>Caution</span><span><i class="rest"></i>Restricted</span><span><i class="cls"></i>Closed</span></div><div class="comparison-grid-sites">'+siteLegend+'</div></div><div class="comparison-grid-deferred" id="comparison-modql-grid-deferred">Deferred: '+(model.deferredIds.length?model.deferredIds.map(function(id){return laibanGridEscape(N[id].name)}).join(", "):"none")+'</div></section>';
+  return '<section class="comparison-grid-panel" id="comparison-modql-grid">'+
+    '<h3 class="comparison-panel-title">Proposed System — MODQL</h3>'+
+    '<p class="comparison-grid-description">The grid uses the existing MODQL route plan and real node data. Tile placement is schematic, not geographic.</p>'+
+    '<div class="comparison-grid-layout">'+
+      '<div class="comparison-grid-status" aria-label="MODQL route status"><div><span>Animation step</span><b id="comparison-modql-grid-step-count">0 / '+model.steps.length+'</b></div><div><span>Current stop</span><b id="comparison-modql-grid-location">Laiban Proper / ALS Hub</b></div><div><span>Next destination</span><b id="comparison-modql-grid-destination">'+(plan.stops.length?laibanGridEscape(N[plan.stops[0].id].name):"No planned stop")+'</b></div><div><span>Stops completed</span><b id="comparison-modql-grid-completed">0 / '+plan.stops.length+'</b></div><div><span>Latest movement</span><b id="comparison-modql-grid-movement">At start</b></div><div><span>Total travel time</span><b id="comparison-modql-grid-time">'+model.travelMin.toFixed(1)+' min</b></div></div>'+
+      '<div class="comparison-grid-visual"><div class="comparison-grid-scroll"><svg class="comparison-grid-svg" viewBox="0 0 500 500" role="img" aria-label="Ten by ten MODQL grid with the Laiban hub and nine sitios"><rect class="comparison-grid-board" x="0" y="0" width="500" height="500" rx="10"/>'+cells.join("")+'<g id="comparison-modql-grid-trail"></g>'+targets+'<g id="comparison-modql-grid-van" transform="translate('+vanX+' '+vanY+')"><circle class="comparison-grid-agent" r="9"/></g></svg></div>'+
+      '<div class="comparison-grid-controls"><button class="btn p" id="comparison-modql-grid-play" type="button">Start Animation</button><button class="btn g" id="comparison-modql-grid-next" type="button">Advance One Step</button><button class="btn g" id="comparison-modql-grid-reset" type="button">Reset</button></div></div>'+
+    '</div>'+
+    '<div class="comparison-grid-legend"><div class="comparison-grid-keys"><span><i class="floor"></i>Traversable road</span><span><i class="blocked"></i>Blocked cell = road hazard (closed / restricted)</span><span><i class="trail"></i>Route trail</span><span><i class="open"></i>Open</span><span><i class="caut"></i>Caution</span><span><i class="rest"></i>Restricted</span><span><i class="cls"></i>Closed</span></div><div class="comparison-grid-sites">'+siteLegend+'</div></div>'+
+    '<div class="comparison-grid-deferred" id="comparison-modql-grid-deferred">Deferred: '+(model.deferredIds.length?model.deferredIds.map(function(id){return laibanGridEscape(N[id].name)}).join(", "):"none")+'</div></section>';
 }
 var COMPARISON_GRID_TIMERS={};
 function wireComparisonGrid(plan,model){
@@ -739,6 +748,18 @@ function mountOriginalStandardMaze(){
   maze.classList.remove("subview","active");
   maze.classList.add("evaluation-maze");
   if(maze.parentNode!==host)host.appendChild(maze);
+  var mazeLayout=maze.querySelector(".maze-layout"),canvas=maze.querySelector("#mzCanvas"),controls=maze.querySelector(".maze-demo-controls");
+  if(mazeLayout&&canvas&&controls&&!mazeLayout.querySelector(".maze-visual-column")){
+    var canvasColumn=canvas.parentNode,visualColumn=document.createElement("div"),status=mazeLayout.querySelector(".maze-status-panel");
+    visualColumn.className="maze-visual-column";
+    mazeLayout.insertBefore(visualColumn,status?status.nextSibling:null);
+    visualColumn.appendChild(canvasColumn);
+    visualColumn.appendChild(controls);
+    var statusLegend=status&&status.querySelector(".maze-status-legend"),statusNote=status&&status.querySelector(".maze-status-note");
+    if(statusLegend)visualColumn.appendChild(statusLegend);
+    if(statusNote)visualColumn.appendChild(statusNote);
+    window.dispatchEvent(new Event("resize"));
+  }
   if(!host.querySelector(".standard-maze-context-note")){
     var note=document.createElement("div");note.className="note standard-maze-context-note";note.textContent="This original maze uses its own randomly generated single-goal environment. It does not depict Laiban roads or the MODQL service route.";host.appendChild(note);
   }
