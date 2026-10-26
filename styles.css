@@ -4521,6 +4521,27 @@ body[data-theme] .original-algorithm-split > .splitcol.std .note{
 .original-algorithm-split .maze-status-note{
   font-size:12px;
 }
+.algorithm-summary-card{
+  width:var(--compare-grid-size);
+  max-width:100%;
+  margin:12px auto 0;
+  padding:12px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:var(--bg-inset);
+  color:var(--text);
+}
+.algorithm-summary-card h4{
+  margin:0 0 6px;
+  font-size:14px;
+  font-weight:600;
+}
+.algorithm-summary-card p{
+  margin:0;
+  color:var(--text-muted);
+  font-size:13px;
+  line-height:1.5;
+}
 .comparison-grid-panel .comparison-grid-header{
   display:flex;
   min-width:0;
