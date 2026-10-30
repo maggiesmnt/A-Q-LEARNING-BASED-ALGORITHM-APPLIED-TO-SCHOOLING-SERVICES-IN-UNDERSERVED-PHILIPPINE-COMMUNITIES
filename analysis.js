@@ -7,7 +7,7 @@
    - The Maze Demo is a controlled visualization, not Chapter 4 evidence.
    ============================================================================ */
 
-var analysisStd=null, analysisMod=null;
+var analysisStd=null, analysisMod=null, ANALYSIS_PLAN_RAIN_MM=WX.mm, ANALYSIS_PLAN_SHIFT_MIN=SHIFT_MIN;
 var EVALUATION_DEMO_RAIN_MM=12;
 var TRAINING_RESULT=(
   typeof TRAINED_POLICY!=="undefined" &&
@@ -52,7 +52,7 @@ var TRAINING_LOG_STATS={
   mean_q1_q2_spread_last:0.009224951715146978
 };
 
-function computeAnalysisPlans(){analysisStd=planRouteStandard();analysisMod=planRoute()}
+function computeAnalysisPlans(){analysisStd=planRouteStandard();analysisMod=planRoute();ANALYSIS_PLAN_RAIN_MM=WX.mm;ANALYSIS_PLAN_SHIFT_MIN=SHIFT_MIN}
 function stopRowsHTML(plan){
   if(!plan.stops.length)return '<div class="k" style="padding:8px 0">No reachable communities under current conditions.</div>';
   return plan.stops.map(function(s,i){var n=N[s.id];return '<div class="stop"><div class="n">'+(i+1)+'</div><div style="flex:1;min-width:0"><div class="nm">'+n.name+'</div><div class="mt"><span class="tag">'+n.learners+' learners</span><span class="tag'+(n.days>=20?' hot':'')+'">last served '+n.days+'d ago</span></div></div><div class="rt"><b>'+s.arrive+'</b>'+s.p.km.toFixed(1)+' km &middot; '+Math.round(s.p.min)+' min</div></div>'}).join('')
@@ -274,6 +274,11 @@ var COMPARISON_GRID_HAZARD_POINTS={
   "banatas|old_laiban":[[2,6]]
 };
 var COMPARISON_GRID_COLUMNS=10,COMPARISON_GRID_ROWS=10,COMPARISON_GRID_CELL=50;
+var COMPARISON_GRID_DEMOS=[
+  {label:"Current conditions",rainMm:null,shiftMin:null,description:"Current simulated rainfall and service window; the route uses the saved Laiban roads and node data."},
+  {label:"Severe rain",rainMm:78,shiftMin:null,description:"Illustrative severe-rain scenario (78 mm/24h); the same MODQL planner recalculates route accessibility and feasibility."},
+  {label:"Short service window",rainMm:null,shiftMin:240,description:"Illustrative 240-minute service-window scenario; the same MODQL planner recalculates which stops fit the available time."}
+];
 function comparisonGridKey(point){return point[0]+","+point[1]}
 function comparisonGridPath(points){
   var cells=[points[0].slice()];
@@ -329,6 +334,8 @@ function comparisonGridTargetData(plan){
 function comparisonGridModel(plan){
   var edgePaths={},roadCells={},hazardCells={},hazardRoadKeys=[],steps=[],stopEvents=[],activeEdgeKeys={},stopOrder=(plan.stops||[]).map(function(stop){return stop.id});
   var deferredIds=(plan.deferred||[]).map(function(item){return item.id});
+  var stopAccessBands={},returnAccessBand=plan.ret?band(routeAccessibility(plan.ret)).lab:"";
+  plan.stops.forEach(function(stop){stopAccessBands[stop.id]=band(routeAccessibility(stop.p)).lab});
   plan.stops.forEach(function(stop){stop.p.legs.forEach(function(edge){activeEdgeKeys[edge.key]=true})});
   if(plan.ret)plan.ret.legs.forEach(function(edge){activeEdgeKeys[edge.key]=true});
   EDGES.forEach(function(edge){
@@ -336,15 +343,20 @@ function comparisonGridModel(plan){
     if(!roadWaypoints)throw new Error("Missing MODQL comparison grid corridor for "+key);
     var status=band(accA(edge)).k,isHazard=status==="rest"||status==="cls";
     var roadPath=comparisonGridPathForEdge(edge,roadWaypoints);
+    var alternateWaypoints=COMPARISON_GRID_ROUTE_WAYPOINTS[key];
     var routePath=activeEdgeKeys[key]&&COMPARISON_GRID_ROUTE_WAYPOINTS[key]
       ?comparisonGridPathForEdge(edge,COMPARISON_GRID_ROUTE_WAYPOINTS[key])
       :roadPath;
     edgePaths[key]=routePath;
-    roadPath.forEach(function(cell){
-      var cellKey=comparisonGridKey(cell),existing=roadCells[cellKey],active=!!activeEdgeKeys[key];
-      if(!existing||(active&&!existing.active)){
-        roadCells[cellKey]={status:status,edge:key,active:active,route:active&&routePath.some(function(routeCell){return comparisonGridKey(routeCell)===cellKey})};
-      }
+    var displayPaths=[roadPath];
+    if(alternateWaypoints)displayPaths.push(comparisonGridPathForEdge(edge,alternateWaypoints));
+    displayPaths.forEach(function(displayPath){
+      displayPath.forEach(function(cell){
+        var cellKey=comparisonGridKey(cell),existing=roadCells[cellKey],active=!!activeEdgeKeys[key];
+        if(!existing||(active&&!existing.active)){
+          roadCells[cellKey]={status:status,edge:key,active:active,route:active&&routePath.some(function(routeCell){return comparisonGridKey(routeCell)===cellKey})};
+        }
+      });
     });
     routePath.forEach(function(cell){
       var cellKey=comparisonGridKey(cell),existing=roadCells[cellKey];
@@ -425,6 +437,8 @@ function comparisonGridModel(plan){
     stopOrder:stopOrder,
     deferredIds:deferredIds,
     travelMin:travelMin,
+    stopAccessBands:stopAccessBands,
+    returnAccessBand:returnAccessBand,
     targets:comparisonGridTargetData(plan)
   };
 }
@@ -503,7 +517,29 @@ function comparisonGridAssertTableData(model){
   window.__MODQL_GRID_TABLE_CONSISTENCY__=result;
   return result;
 }
-function comparisonGridPanelHTML(plan,model){
+function comparisonGridAssertCorridorRendering(model){
+  var isDevelopment=location.protocol==="file:"||location.hostname==="localhost"||location.hostname==="127.0.0.1";
+  if(!isDevelopment)return true;
+  var svg=document.querySelector("#comparison-modql-grid .comparison-grid-svg"),missing=[];
+  EDGES.forEach(function(edge){
+    var key=ek(edge.a,edge.b),paths=[COMPARISON_GRID_ROAD_WAYPOINTS[key]];
+    if(COMPARISON_GRID_ROUTE_WAYPOINTS[key])paths.push(COMPARISON_GRID_ROUTE_WAYPOINTS[key]);
+    paths.forEach(function(waypoints){
+      comparisonGridPathForEdge(edge,waypoints).forEach(function(cell){
+        var rect=svg&&svg.querySelector('[data-cell="'+comparisonGridKey(cell)+'"]');
+        if(!rect||!["road-open","road-caut","road-rest","road-cls"].some(function(name){return rect.classList.contains(name)})){
+          missing.push(key+"@"+comparisonGridKey(cell));
+        }
+      });
+    });
+  });
+  var result={allRoadEdgesMapped:Object.keys(model.edgePaths).length===EDGES.length,allCorridorCellsVisible:missing.length===0};
+  result.passed=result.allRoadEdgesMapped&&result.allCorridorCellsVisible;
+  if(!result.passed)throw new Error("MODQL corridor rendering check failed: "+JSON.stringify(result));
+  window.__MODQL_GRID_CORRIDOR_RENDERING__=result;
+  return result;
+}
+function comparisonGridPanelHTML(plan,model,demo){
   var targets=model.targets.map(function(target){
     var x=target.position[0]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2;
     var y=target.position[1]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2;
@@ -514,7 +550,8 @@ function comparisonGridPanelHTML(plan,model){
   var cells=[];
   for(var row=0;row<COMPARISON_GRID_ROWS;row++)for(var col=0;col<COMPARISON_GRID_COLUMNS;col++){
     var key=col+","+row,road=model.roadCells[key],hazards=model.hazardCells[key]||[],status=road?road.status:"floor";
-    var classes="comparison-grid-cell "+(hazards.length?"hazard "+(hazards.some(function(roadKey){return band(accA(EK[roadKey])).k==="cls"})?"closed":"restricted"):road?"road-"+status+(road.route?" planned-route":""):"floor");
+    var classes="comparison-grid-cell "+(road?"road-"+status+(road.route?" planned-route":""):"floor");
+    if(hazards.length)classes+=" hazard "+(hazards.some(function(roadKey){return band(accA(EK[roadKey])).k==="cls"})?"closed":"restricted");
     var title=hazards.length?'<title>Road hazard: '+hazards.map(function(roadKey){return laibanGridEscape(N[EK[roadKey].a].name+" ↔ "+N[EK[roadKey].b].name+" · "+band(accA(EK[roadKey])).lab)}).join("; ")+'</title>':road?'<title>'+laibanGridEscape(N[EK[road.edge].a].name+" ↔ "+N[EK[road.edge].b].name+" · "+band(accA(EK[road.edge])).lab)+'</title>':'';
     cells.push('<rect class="'+classes+'" data-cell="'+key+'" x="'+(col*COMPARISON_GRID_CELL+1)+'" y="'+(row*COMPARISON_GRID_CELL+1)+'" width="'+(COMPARISON_GRID_CELL-2)+'" height="'+(COMPARISON_GRID_CELL-2)+'" rx="3">'+title+'</rect>');
   }
@@ -530,21 +567,22 @@ function comparisonGridPanelHTML(plan,model){
   var hub=COMPARISON_GRID_POSITIONS.hub,vanX=hub[0]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2-14,vanY=hub[1]*COMPARISON_GRID_CELL+COMPARISON_GRID_CELL/2+14;
   return '<section class="comparison-grid-panel" id="comparison-modql-grid">'+
     '<h3 class="comparison-panel-title">Proposed System — MODQL</h3>'+
-    '<div class="comparison-grid-header"><div class="comparison-grid-heading"><h4 class="comparison-grid-subtitle">Laiban Route Demonstration - MODQL Agent</h4><span class="pill open">MODQL ROUTE PLAN</span></div><p class="comparison-grid-description">The grid uses the existing MODQL route plan and real node data. Tile placement is schematic, not geographic.</p></div>'+
+    '<div class="comparison-grid-header"><div class="comparison-grid-heading"><h4 class="comparison-grid-subtitle">Laiban Route Demonstration - MODQL Agent</h4><span class="pill open">MODQL ROUTE PLAN</span></div><p class="comparison-grid-description">The grid uses the existing MODQL route plan and real node data. Tile placement is schematic, not geographic.<br><span class="comparison-grid-scenario-note" id="comparison-modql-grid-scenario">Demo '+(demo.index+1)+' of '+COMPARISON_GRID_DEMOS.length+' — '+laibanGridEscape(demo.label)+' ('+demo.rainMm+' mm/24h simulated rainfall; '+demo.shiftMin+'-minute service window). '+laibanGridEscape(demo.description)+' Illustrative simulation, not an actual field route or forecast.</span></p></div>'+
     '<div class="comparison-grid-layout">'+
       '<div class="comparison-grid-info"><section class="comparison-grid-status" aria-label="MODQL route status"><h4 class="comparison-grid-status-heading">MODQL Maze Status</h4><div class="comparison-grid-status-grid"><div><span>Animation step</span><b id="comparison-modql-grid-step-count">0 / '+model.steps.length+'</b></div><div><span>Current stop</span><b id="comparison-modql-grid-location">Laiban Proper / ALS Hub</b></div><div><span>Next destination</span><b id="comparison-modql-grid-destination">'+(plan.stops.length?laibanGridEscape(N[plan.stops[0].id].name):"No planned stop")+'</b></div><div><span>Stops completed</span><b id="comparison-modql-grid-completed">0 / '+plan.stops.length+'</b></div><div><span>Latest movement</span><b id="comparison-modql-grid-movement">At start</b></div><div><span>Total travel time</span><b id="comparison-modql-grid-time">'+model.travelMin.toFixed(1)+' min</b></div></div><div class="comparison-grid-decision" id="comparison-modql-grid-decision"></div></section><div class="comparison-grid-legend"><div class="comparison-grid-keys"><span><i class="floor"></i>Traversable road</span><span><i class="blocked"></i>Road hazard</span><span class="comparison-grid-hazard-outlines"><i class="rest"></i>Restricted <i class="cls"></i>Closed</span><span><i class="open"></i>Open</span><span><i class="caut"></i>Caution</span><span><i class="trail"></i>Route trail</span></div></div></div>'+
       '<div class="comparison-grid-visual"><div class="comparison-grid-scroll"><svg class="comparison-grid-svg" viewBox="0 0 500 500" role="img" aria-label="Ten by ten MODQL grid with the Laiban hub and nine sitios"><rect class="comparison-grid-board" x="0" y="0" width="500" height="500" rx="10"/>'+cells.join("")+'<g id="comparison-modql-grid-trail"></g>'+targets+'<g id="comparison-modql-grid-van" transform="translate('+vanX+' '+vanY+')"><circle class="comparison-grid-agent" r="9"/></g></svg></div>'+
-      '<div class="comparison-grid-controls"><button class="btn p" id="comparison-modql-grid-play" type="button">Start Animation</button><button class="btn g" id="comparison-modql-grid-next" type="button">Advance One Step</button><button class="btn g" id="comparison-modql-grid-reset" type="button">Reset</button></div>'+
+      '<div class="comparison-grid-controls"><button class="btn p" id="comparison-modql-grid-play" type="button">Start Animation</button><button class="btn g" id="comparison-modql-grid-next" type="button">Advance One Step</button><button class="btn g" id="comparison-modql-grid-reset" type="button">Reset</button><button class="btn g" id="comparison-modql-grid-next-demo" type="button" aria-label="Next MODQL demo">Next Demo</button></div>'+
       '</div>'+
     '</div>'+
     '<div class="comparison-grid-table-section"><h4 class="comparison-grid-sites-heading">Sitios</h4><div class="comparison-grid-table-scroll"><table class="comparison-grid-table"><thead><tr><th>Letter + Sitio</th><th>Learners</th><th>Last visit</th><th>Status</th></tr></thead><tbody>'+tableRows+'</tbody></table></div><p class="comparison-grid-footnote">Learner counts and visit history are simulated allocations, not verified sitio-level records.</p></div>'+
     '<section class="algorithm-summary-card"><h4>Proposed MODQL</h4><p>Two Q-tables (Q1/Q2) are used. One is chosen at random per update to select the action while the other evaluates it. The state includes location, demand, remaining service time, visit history, and accessibility. The reward multiplies learner coverage, service fairness (Jain\'s Fairness Index), and travel efficiency.</p><button class="algorithm-details-link" type="button" data-research-view="proposed">View algorithm details</button></section></section>';
 }
 var COMPARISON_GRID_TIMERS={};
-function wireComparisonGrid(plan,model){
-  var id="comparison-modql-grid",svg=document.querySelector("#"+id+" .comparison-grid-svg"),van=document.getElementById(id+"-van"),trail=document.getElementById(id+"-trail"),play=document.getElementById(id+"-play"),next=document.getElementById(id+"-next"),reset=document.getElementById(id+"-reset");
-  if(!svg||!van||!trail||!play||!next||!reset)return;
+function wireComparisonGrid(plan,model,demoIndex){
+  var id="comparison-modql-grid",svg=document.querySelector("#"+id+" .comparison-grid-svg"),van=document.getElementById(id+"-van"),trail=document.getElementById(id+"-trail"),play=document.getElementById(id+"-play"),next=document.getElementById(id+"-next"),reset=document.getElementById(id+"-reset"),nextDemo=document.getElementById(id+"-next-demo");
+  if(!svg||!van||!trail||!play||!next||!reset||!nextDemo)return;
   comparisonGridAssertTableData(model);
+  comparisonGridAssertCorridorRendering(model);
   if(COMPARISON_GRID_TIMERS[id])clearInterval(COMPARISON_GRID_TIMERS[id]);
   COMPARISON_GRID_TIMERS[id]=null;
   var current=0,completed={};
@@ -583,10 +621,10 @@ function wireComparisonGrid(plan,model){
   function updateDecision(nextStop){
     if(!decisionReadout)return;
     if(nextStop){
-      var access=band(routeAccessibility(nextStop.p)).lab;
+      var access=model.stopAccessBands[nextStop.id]||band(routeAccessibility(nextStop.p)).lab;
       decisionReadout.textContent="Next: "+N[nextStop.id].name+" - "+nextStop.p.min.toFixed(1)+" min, "+N[nextStop.id].learners+" learners, access "+access;
     }else if(plan.ret){
-      decisionReadout.textContent="Next: Laiban Proper / ALS Hub - "+plan.ret.min.toFixed(1)+" min, 0 learners, access "+band(routeAccessibility(plan.ret)).lab;
+      decisionReadout.textContent="Next: Laiban Proper / ALS Hub - "+plan.ret.min.toFixed(1)+" min, 0 learners, access "+model.returnAccessBand;
     }else{
       decisionReadout.textContent="Next: No planned stop";
     }
@@ -660,6 +698,9 @@ function wireComparisonGrid(plan,model){
     if(COMPARISON_GRID_TIMERS[id])clearInterval(COMPARISON_GRID_TIMERS[id]);
     COMPARISON_GRID_TIMERS[id]=null;current=0;completed={};play.textContent="Start Animation";draw();
   };
+  nextDemo.onclick=function(){
+    renderComparisonGridDemo((demoIndex+1)%COMPARISON_GRID_DEMOS.length);
+  };
   svg.querySelectorAll(".comparison-grid-target").forEach(function(target){
     var nodeId=target.getAttribute("data-target");
     target.addEventListener("mouseenter",function(){hoverLinkedTarget(nodeId)});
@@ -692,15 +733,40 @@ function wireComparisonGrid(plan,model){
   });
   draw();
 }
+function comparisonGridDemoAt(index){
+  var scenario=COMPARISON_GRID_DEMOS[index];
+  if(!scenario)throw new Error("Unknown MODQL comparison demo: "+index);
+  var snapshot=evaluationSnapshot(),previousShift=SHIFT_MIN,rainMm=scenario.rainMm===null?ANALYSIS_PLAN_RAIN_MM:scenario.rainMm,shiftMin=scenario.shiftMin===null?ANALYSIS_PLAN_SHIFT_MIN:scenario.shiftMin,plan,model;
+  try{
+    WX.mm=rainMm;
+    SHIFT_MIN=shiftMin;
+    plan=index===0?analysisMod:planRoute();
+    model=comparisonGridModel(plan);
+    comparisonGridAssertConsistency(plan,model);
+  }finally{
+    try{
+      restoreEvaluationSnapshot(snapshot);
+    }finally{
+      SHIFT_MIN=previousShift;
+    }
+  }
+  return {plan:plan,model:model,demo:{index:index,label:scenario.label,rainMm:rainMm,shiftMin:shiftMin,description:scenario.description}};
+}
+function renderComparisonGridDemo(index){
+  var panel=document.getElementById("comparison-modql-grid");
+  if(!panel)return;
+  var state=comparisonGridDemoAt(index);
+  panel.outerHTML=comparisonGridPanelHTML(state.plan,state.model,state.demo);
+  wireComparisonGrid(state.plan,state.model,index);
+}
 function renderEvaluation(){
-  var comparisonGrid=comparisonGridModel(analysisMod);
-  comparisonGridAssertConsistency(analysisMod,comparisonGrid);
+  var demoState=comparisonGridDemoAt(0);
   document.getElementById("sub-evaluation").innerHTML=
     '<header class="route-comparison-intro"><h2>Route Behavior Comparison</h2><p class="route-maze-note">The Standard panel is the original random-maze demonstration. The MODQL panel visualizes its actual Laiban service route. These are different environments and their displayed paths are not a controlled performance comparison; controlled results use the separate shared-Laiban evaluation.</p></header><div class="split2 original-algorithm-split">'+
       '<section class="splitcol std"><h3 class="comparison-panel-title">Standard Q-Learning</h3><div id="comparison-standard-maze-host"></div></section>'+
-      comparisonGridPanelHTML(analysisMod,comparisonGrid)+
+      comparisonGridPanelHTML(demoState.plan,demoState.model,demoState.demo)+
     '</div>';
-  wireComparisonGrid(analysisMod,comparisonGrid);
+  wireComparisonGrid(demoState.plan,demoState.model,0);
 }
 
 // Coordinates are deterministic schematic cells, not geographic locations.

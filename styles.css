@@ -3861,18 +3861,26 @@ body[data-theme] .original-algorithm-split > .splitcol.std .note{
 .comparison-grid-cell.road-caut{
   fill:color-mix(in srgb,var(--road-caution) 20%,var(--maze-cell));
 }
+.comparison-grid-cell.road-rest{
+  fill:color-mix(in srgb,var(--road-restricted) 16%,var(--maze-cell));
+}
+.comparison-grid-cell.road-cls{
+  fill:color-mix(in srgb,var(--road-closed) 14%,var(--maze-cell));
+}
 .comparison-grid-cell.planned-route{
-  fill:color-mix(in srgb,var(--road-open) 18%,var(--maze-cell));
+  stroke:var(--accent);
+  stroke-width:2;
 }
 .comparison-grid-cell.hazard{
-  fill:var(--maze-wall);
   stroke-width:3;
 }
 .comparison-grid-cell.hazard.restricted{
+  fill:color-mix(in srgb,var(--road-restricted) 22%,var(--maze-cell));
   stroke:var(--road-restricted);
   stroke-dasharray:4 3;
 }
 .comparison-grid-cell.hazard.closed{
+  fill:color-mix(in srgb,var(--road-closed) 22%,var(--maze-cell));
   stroke:var(--road-closed);
 }
 .comparison-grid-marker{
@@ -4722,6 +4730,13 @@ header#top .theme-dock{
   margin:0;
   padding:0;
   border:0;
+}
+.comparison-grid-panel .comparison-grid-scenario-note{
+  display:block;
+  margin-top:6px;
+  color:var(--text-muted);
+  font-size:12px;
+  line-height:1.5;
 }
 .comparison-grid-panel .comparison-grid-layout{
   margin-top:12px;
