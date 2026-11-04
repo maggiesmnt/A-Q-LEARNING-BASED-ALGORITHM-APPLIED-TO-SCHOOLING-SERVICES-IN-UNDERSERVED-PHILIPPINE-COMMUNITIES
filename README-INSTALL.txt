@@ -1,93 +1,80 @@
-SHARED MAZE COMPARISON
+SHARED MAZE POLICY COMPARISON
 
-Open index.html in a modern browser. No dependencies or build step are needed.
-Research & Analysis now has a Maze Demo tab, registered by maze-demo.js without
-changing index.html or its script order. Both canvases render ONE shared maze;
-each agent keeps its own position, trail, metrics, and learning tables.
+Open index.html in a modern browser. No build step or packages are required.
 
-Controls (one row for both agents):
-- Start Comparison / Pause Comparison: one timer, 200 ms per shared tick.
-- Reset Comparison: new displayed seed, new maze, both learning agents cleared.
-- Advance One Step: pause, then advance both unfinished agents once.
-- Next Episode: new shared maze from the continuing seeded stream; retain Q
-  tables and decayed exploration. Episode numbering has no artificial limit.
-Finished agents wait while the other agent continues, up to 100 steps each.
+1. Open index.html. Maze Comparison is the main page; no tab selection is needed.
+2. Choose a scenario seed and Load Scenario, or keep the displayed seed.
+3. Choose an equal episode budget and click Train Both Policies.
+4. After training completes, Start Comparison runs frozen greedy policies.
+5. Pause / Resume, Advance One Step, and Simulation Speed control both agents.
+6. Reset Comparison replays the SAME scenario and PRESERVES trained tables.
+   Reset during training cancels pending work and retains any previous model.
+7. To change the environment, load a different seed and train new maze policies.
 
-Reproducibility:
-Open index.html?mazeSeed=123 to replay a seed from episode one. For an identical
-run, use the same Next Episode / step sequence. Playback timing does not affect
-RNG draws. One makeRng factory derives separate environment, Standard, and MODQL
-streams from the displayed seed. Exploration, ties, and Double-Q estimator
-selection are seeded. No Math.random calls are used in the maze comparison.
+Use index.html?mazeSeed=123 to reproduce a scenario. Match the training episode
+budget as well as the seed to reproduce the policies and evaluation. Playback
+speed, pauses, and resets do not consume policy RNG or change frozen weights.
+Models live in memory for this page session and are not persisted on reload.
 
-Environment:
-SIZE=10, OBSTACLE_RATIO=0.25 (before safety repairs), CHANGE_FREQUENCY=20,
-MAX_STEPS=100, STEP_MS=200. Preserve STEP_PENALTY=-0.1,
-COLLISION_PENALTY=-1.0, GOAL_REWARD=10.0 as environment shaping diagnostics;
-the learning agents use the exact SOP objective rewards instead of shaping.
-Each shared tick updates obstacles if due and repairs paths once, then reads
-both actions before resolving Standard followed by MODQL. Neither agent can
-mutate maze walls. Updates protect both current positions and the shared goal.
-Collisions count toward the step limit and the shared obstacle-update schedule.
+The retained original baseline source restores the pre-comparison random maze
+and BaselineConfidenceAgentBrowser from commit 7d63c82, including its original
+replay-buffer learning, reward shaping, episode controls, and five-episode cycle.
+Only DOM host/tab selectors were changed in the restored source.
+The top navigation and original-baseline menu button are removed; the main
+interface shows only the maze comparison and retains the theme toggle.
 
-Algorithms and live metrics:
-- Standard: one Q table, S=L, reward=1/(step travel time in hours).
-- Full MODQL: Double Q-Learning, S=<L,D,T,H,A>, reward=
-  normalized new demand * jain(service counts) * 1/(1+step travel hours).
-- The existing engine.js jain() is reused. No second fairness implementation.
-- Both panels show episode, steps, status, goal, latest move, epsilon, episode
-  travel minutes, cumulative reward, and distinct cells visited.
-- MODQL also shows each reward factor, the combined reward, and live mean
-  absolute Q1/Q2 spread over the union of stored state/action pairs (zeros for
-  missing entries). Spread is a stability diagnostic; this alone does not prove
-  overestimation bias was eliminated. The UI identifies the paper's reported
-  average 0.016 across 5,000 episodes separately from the live measurement.
+The shared comparison uses the actual destination-action structure of the
+research algorithms through maze-routing.js:
+- Standard: single Q table, S=L, R=1/route travel hours.
+- Enhanced MODQL: Q1/Q2 with decoupled selection/evaluation; S=<L,D,T,H,A>;
+  R=(destination demand/max demand)*JainFairness/(1+route travel hours).
+- Policies choose a service destination. A common shortest-time grid executor
+  realizes that choice along legal cardinal edges. It never ranks destinations.
+- Two-bucket D/T/H/A definitions mirror training/train_q_learning.py, with
+  binary grid accessibility and a maze-specific operational time budget.
+- The bundled Laiban policy is NEVER relabeled or replayed as a grid policy.
 
-Simulation definitions (also visible in the demo):
-Cell demand is seeded 1-30 units, cell traversal time is seeded 1-5 minutes,
-and initial service history is seeded 0-4 visits per quadrant. Both agents
-receive the same fields/history. An attempted move consumes destination-cell
-time; a collision consumes current-cell time. D is newly served demand divided
-by total demand across all 100 cells, including currently blocked cells. Each
-agent serves a cell once per episode; collisions/revisits yield zero new demand.
-J is computed across the four quadrant service counts, including that agent's
-new service visits. Coverage counts distinct visited cells including the start;
-the starting cell receives no service until a successful return to it.
-MODQL encodes L=current cell, D=remaining demand field (served cells set to 0),
-T=elapsed minutes, H=quadrant service counts, and
-A=four-direction accessibility mask. These are simulated maze analogues.
-Reward totals have different scales and are not a performance ranking.
+Scenario: one 10x10 maze, initial obstacle ratio 0.25 before safety repairs,
+same start/exit, six seeded service destinations, seeded demand 1-30 learners,
+traversal time 1-5 minutes, initial visits 0-4, and recency 1-30 days.
+Both agents have 120 minutes, 10-minute service stops, and 100 movement steps.
+Obstacles update once every 20 shared ticks; path/trap repairs run once per
+tick and protect both occupants. Both panels render the same live maze object.
+The environment can block a service site; that produces a real deferral.
+Arrival charges service time; exit transit has no reward.
+Training uses alpha=0.1, gamma=0.9, epsilon=1 decaying by 0.995 to 0.05.
+Evaluation uses epsilon zero and performs no Q-table writes or RNG draws.
 
-Evidence and integration:
-This is a behavioural demonstration of SOP 1 and SOP 3 plus the SOP 2 update;
-it does not reproduce Chapter 4 results. Compare Algorithms keeps the Laiban
-route visualization and shows the stored shared-Laiban quantitative results
-from TRAINED_POLICY via TRAINING_RESULT. Its former maze-mounting entry point
-is retained as a no-op so rerenders cannot move the new demo into one column.
-analysis.js therefore has a small required integration change in addition to
-maze-demo.js, minimal scoped styles.css additions, and this README.
-simple_maze_demo.py remains an independent legacy pygame reference; it is not
-the implementation of the new two-agent comparison.
+Metric definitions, sources, test details, file responsibilities, and scientific
+limitations are documented in docs/MAZE-COMPARISON.md and in the UI.
 
-Deferred scope:
-The four-configuration component ablation (Reward-Only, Double-Q-Only,
-State-Only) is a separate phase. This revision implements only Standard
-Q-Learning versus Full MODQL.
+Research preservation:
+- Compare Algorithms retains the existing Laiban route and stored results.
+- engine.js, analysis.js, trained_policy.js, and all training scripts/outputs
+  are unchanged by this revision.
+- Standard, Reward Only, Double Q Only, State Only, Full MODQL, and existing
+  additional component experiments retain their original definitions.
+- Grid outcomes are behavioural demonstrations, not Chapter 4 evidence.
+- Scenario-specific training followed by replay is not held-out evaluation.
+- A completed-run assessment reports five-metric dominance or trade-offs for
+  the current scenario only. It does not establish aggregate/statistical
+  superiority, fabricate bias reduction, or assign an overall score.
 
-Implementation summary:
-- Added makeRng, SharedDynamicMazeEnv (generateMaze, bfs, reset,
-  ensureAgentNotTrapped, ensurePathExists, updateEnvironment, beginStep, step).
-- Added StandardQLearningAgent and MODQLAgent (encodeState, selectAction,
-  learn, and the MODQL spread diagnostic).
-- Added resetComparison, stepBoth, shared startTimer/stopTimer/nextEpisode,
-  panel/row builders, and aligned live render/draw functions.
-- Replaced DynamicMazeEnvBrowser, BaselineConfidenceAgentBrowser, stepOnce,
-  startEpisode/endEpisode UI lifecycle, and private mzPlay/mzStep/mzReset/mzNext
-  buttons. Preserved the environment constants; removed MAX_EPISODES=5.
-- analysis.js renderEvaluation now separates stored Laiban evidence from the
-  independent maze tab; mountOriginalStandardMaze retains its global name.
-- index.html, training code, and other global API names are unchanged.
+Files:
+maze-demo.js        Shared environment, centralized controller, canvases/status.
+maze-routing.js     Grid adapter, destination policies, training/evaluation.
+maze-legacy.js      Original baseline source with isolated DOM selectors.
+styles.css         Scoped comparison/status/results layout.
+index.html         One legacy host and two extra scripts; existing order retained.
+README-INSTALL.txt  Usage and verification.
+docs/MAZE-COMPARISON.md  Architecture, metric sources, limitations.
+tests/maze-demo.test.js  Dependency-free model/controller regression tests.
+tests/maze-demo.browser.js  Chrome integration and visual-layout checks.
 
-Verification: node --test tests/maze-demo.test.js
-Optional browser verification: node tests/maze-demo.browser.js (Node 22+ and
-installed Chrome; set CHROME_PATH if Chrome is in a different location).
+Verification:
+node --test tests/maze-demo.test.js
+node tests/maze-demo.browser.js
+
+Browser checks require Node 22+ and installed Chrome. Set CHROME_PATH if needed.
+The browser integration loads the normal page, including existing external
+Leaflet/font assets. No dependencies were installed for this revision.

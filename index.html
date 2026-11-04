@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ALS Mobile Hub &mdash; Laiban Operations</title>
+<title>Maze Comparison &mdash; Philippine Mobile Hub</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -160,16 +160,7 @@ Confidence halves every 6 hours, so a segment re-opens on its own once no extern
 <!-- ============ ANALYSIS (separate from field operations) ============ -->
 <section class="view active" id="view-analysis">
 <div class="research-shell">
-<nav class="research-nav" id="researchNav">
-<div class="rn-brand">
-<b>GIDA Route Planner</b>
-<span>Research &amp; Analysis</span>
-</div>
-<div class="rn-group" role="tablist" aria-label="Algorithm views" aria-orientation="horizontal">
-<button id="tab-existing" role="tab" aria-selected="false" aria-controls="sub-existing" tabindex="-1" data-sub="existing">Standard Q-Learning</button>
-<button id="tab-proposed" role="tab" aria-selected="false" aria-controls="sub-proposed" tabindex="-1" data-sub="proposed">Enhanced MODQL</button>
-<button id="tab-evaluation" role="tab" aria-selected="true" aria-controls="sub-evaluation" tabindex="0" data-sub="evaluation" class="on">Compare Algorithms</button>
-</div>
+<div class="research-nav" id="researchNav">
 <div class="theme-dock" aria-label="Appearance">
 <button class="theme-icon-btn" id="themeSwitch" type="button" aria-label="Switch theme" title="Switch theme">
 <span class="theme-current theme-sun" aria-hidden="true">
@@ -180,7 +171,7 @@ Confidence halves every 6 hours, so a segment re-opens on its own once no extern
 </span>
 </button>
 </div>
-</nav>
+</div>
 <div class="research-content">
 <!-- 
 <div class="badge-sim">SIMULATED DATA &mdash; FOR SYSTEM DEMONSTRATION</div>
@@ -194,8 +185,9 @@ The same demand values are provided to both Standard Q-Learning and MODQL.
 -->
 <div class="subview" id="sub-existing" role="tabpanel" aria-labelledby="tab-existing" tabindex="0"></div>
 <div class="subview" id="sub-proposed" role="tabpanel" aria-labelledby="tab-proposed" tabindex="0"></div>
-<div class="subview" id="sub-maze"></div>
-<div class="subview active" id="sub-evaluation" role="tabpanel" aria-labelledby="tab-evaluation" tabindex="0"></div>
+<div class="subview active" id="sub-maze" role="region" aria-label="Maze Comparison"></div>
+<div class="subview" id="sub-maze-legacy"></div>
+<div class="subview" id="sub-evaluation" role="region" aria-label="Stored research evaluation" tabindex="0"></div>
 <div class="foot">
 Interface prototype for <i>Enhancing a Q-Learning Based Algorithm Applied to Schooling Services in Underserved Philippine Communities</i><br>
 Mahusay, L. G. &amp; Samonte, M. A. G. A. &middot; Adviser: Prof. Erwin D. Marcelo &middot; PLM College of Information Systems and Technology Management<br>
@@ -216,6 +208,8 @@ Base map &copy; OpenStreetMap contributors. Sitio identities come from Barangay 
 <script src="hazards.js"></script>
 <script src="analysis.js"></script>
 <script src="app.js"></script>
+<script src="maze-routing.js"></script>
+<script src="maze-legacy.js"></script>
 <script src="maze-demo.js"></script>
 </body>
 </html>
