@@ -4868,3 +4868,22 @@ header#top .theme-dock{
   padding-top:8px;
   border-top:0;
 }
+
+/* Shared simulated maze comparison, isolated from the Laiban route layouts. */
+.shared-maze-demo{padding:16px;color:var(--txt)}
+.shared-maze-controls{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 20px}
+.shared-maze-panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 20px;align-items:start}
+.shared-maze-panel{display:grid;grid-template-rows:subgrid;grid-row:span 9;gap:12px;min-width:0}
+.shared-maze-panel h3,.shared-maze-status h4{margin:0}
+.shared-maze-status{padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--maze-panel);display:grid;grid-template-rows:subgrid;grid-row:span 5;gap:12px;min-width:0}
+.shared-maze-status .maze-status-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(5.5em,auto);align-content:start}
+.shared-maze-state{font-weight:700;overflow-wrap:anywhere}
+.shared-maze-objective{margin:0;line-height:1.4}
+.shared-maze-panel canvas{display:block;width:100%;height:auto;aspect-ratio:1;max-width:500px;margin:0 auto;border:1px solid var(--line);border-radius:10px;background:var(--maze-cell)}
+.shared-maze-demo .maze-status-note{color:var(--dim);line-height:1.6;margin:0;overflow-wrap:anywhere}
+@media(max-width:760px){
+  .shared-maze-panels{grid-template-columns:minmax(0,1fr)}
+  .shared-maze-panel,.shared-maze-status{display:block;grid-row:auto}
+  .shared-maze-panel>*{margin-bottom:12px}
+  .shared-maze-status>*+*{margin-top:12px}
+}

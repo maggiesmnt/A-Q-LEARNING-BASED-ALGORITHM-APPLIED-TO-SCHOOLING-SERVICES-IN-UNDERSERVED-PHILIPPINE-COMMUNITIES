@@ -761,9 +761,16 @@ function renderComparisonGridDemo(index){
 }
 function renderEvaluation(){
   var demoState=comparisonGridDemoAt(0);
+  var standard=TRAINING_RESULT.standard,modql=TRAINING_RESULT.modql;
+  var hasStoredResults=typeof TRAINED_POLICY!=="undefined"&&!!TRAINED_POLICY.evaluation_summary;
+  function measured(v){return hasStoredResults?Number(v).toFixed(3):'Unavailable'}
   document.getElementById("sub-evaluation").innerHTML=
-    '<header class="route-comparison-intro"><h2>Route Behavior Comparison</h2><p class="route-maze-note">The Standard panel is the original random-maze demonstration. The MODQL panel visualizes its actual Laiban service route. These are different environments and their displayed paths are not a controlled performance comparison; controlled results use the separate shared-Laiban evaluation.</p></header><div class="split2 original-algorithm-split">'+
-      '<section class="splitcol std"><h3 class="comparison-panel-title">Standard Q-Learning</h3><div id="comparison-standard-maze-host"></div></section>'+
+    '<header class="route-comparison-intro"><h2>Compare Algorithms — controlled Laiban evaluation</h2><p class="route-maze-note">Stored quantitative results use the shared Laiban evaluation scenarios. The separate Maze Demo tab provides a simulated, shared-maze behavioural demonstration.</p></header>'+
+    (hasStoredResults?evidenceNote():'<div class="note">Stored evaluation results are unavailable. Run training/train_q_learning.py to generate them.</div>')+'<div class="card"><h3>Stored evaluation results</h3><table><thead><tr><th>Metric</th><th>Standard Q-Learning</th><th>Full MODQL</th></tr></thead><tbody>'+
+      evaluationMetric('Average learner coverage',standard.coverage,modql.coverage,measured)+
+      evaluationMetric('Average Jain fairness',standard.fairness,modql.fairness,measured)+
+      evaluationMetric('Average travel time (min)',standard.travel_min,modql.travel_min,measured)+
+    '</tbody></table><button class="algorithm-details-link" type="button" data-research-view="existing">View Standard Q-Learning details</button></div><div class="original-algorithm-split">'+
       comparisonGridPanelHTML(demoState.plan,demoState.model,demoState.demo)+
     '</div>';
   wireComparisonGrid(demoState.plan,demoState.model,0);
@@ -950,54 +957,11 @@ function alignComparisonGridBody(){
 window.addEventListener("resize",alignComparisonGridBody);
 var ORIGINAL_STANDARD_MAZE=null;
 function mountOriginalStandardMaze(){
-  var maze=ORIGINAL_STANDARD_MAZE||document.getElementById("sub-maze"),host=document.getElementById("comparison-standard-maze-host");
-  if(!maze||!host||!maze.children.length)return false;
-  ORIGINAL_STANDARD_MAZE=maze;
-  var panel=host.closest(".splitcol.std");
-  if(!panel)return false;
-  maze.classList.remove("subview","active");
-  maze.classList.add("evaluation-maze");
-  if(maze.parentNode!==host)host.appendChild(maze);
-  var mazeLayout=maze.querySelector(".maze-layout"),canvas=maze.querySelector("#mzCanvas"),controls=maze.querySelector(".maze-demo-controls");
-  if(mazeLayout&&canvas&&controls&&!mazeLayout.querySelector(".maze-visual-column")){
-    var canvasColumn=canvas.parentNode,visualColumn=document.createElement("div"),status=mazeLayout.querySelector(".maze-status-panel");
-    visualColumn.className="maze-visual-column";
-    mazeLayout.insertBefore(visualColumn,status?status.nextSibling:null);
-    visualColumn.appendChild(canvasColumn);
-    visualColumn.appendChild(controls);
-    window.dispatchEvent(new Event("resize"));
-  }
-  var mazeVisualColumn=mazeLayout&&mazeLayout.querySelector(".maze-visual-column");
-  var summaryCard=panel.querySelector(".algorithm-summary-card");
-  if(!summaryCard){
-    var summary=document.createElement("section");
-    summary.className="algorithm-summary-card";
-    summary.innerHTML='<h4>Standard Q-Learning (baseline)</h4><p>One Q-table; state is location only; reward is based on inverse travel time. The same table selects and evaluates the next action.</p><button class="algorithm-details-link" type="button" data-research-view="existing">View algorithm details</button>';
-    summaryCard=summary;
-  }
-  var contextNote=panel.querySelector(".standard-maze-context-note");
-  if(!contextNote){
-    contextNote=document.createElement("div");
-    contextNote.className="note standard-maze-context-note";
-    contextNote.textContent="This original maze uses its own randomly generated single-goal environment. It does not depict Laiban roads or the MODQL service route.";
-  }
-  panel.appendChild(summaryCard);
-  var implementationNote=maze.querySelector(".note");
-  var noteBlock=panel.querySelector(".standard-implementation-note");
-  if(implementationNote&&contextNote){
-    if(!noteBlock){
-      noteBlock=document.createElement("div");
-      noteBlock.className="standard-implementation-note";
-      noteBlock.setAttribute("role","note");
-    }
-    noteBlock.appendChild(implementationNote);
-    noteBlock.appendChild(contextNote);
-    panel.insertBefore(noteBlock,summaryCard);
-  }
-  return true;
+  // Compatibility entry point: the shared demo now owns a separate tab. Never
+  // move its two panels into a single Standard-Q column during analysis rerenders.
+  return false;
 }
-// The maze demo builds on DOMContentLoaded. Defer this callback so its own
-// listener can finish first, even if the initial comparison render ran earlier.
+// Retain the old lifecycle hook for callers; mounting is intentionally a no-op.
 document.addEventListener("DOMContentLoaded",function(){setTimeout(mountOriginalStandardMaze,0)});
 var researchNavigation=document.getElementById("researchNav");
 var appHeader=document.getElementById("top");
