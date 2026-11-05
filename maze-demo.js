@@ -531,7 +531,7 @@
       ? '<p>Tab 2 batch evaluates 200 starts on a fixed obstacle map. Training uses seeded random starts from the same 67 open non-target cells.</p>'
       : '';
     if (config.id === 'tab-4') {
-      batchProtocolNote = '<p>Laiban completion is reported as sitios served out of 9 and out of the 4 sitios reachable under the saved closures. Toyang (B), Ibucao (C), Kilabuwan (D), Manggahan (H), and Magata (I) are closed/unreachable; neither policy is expected to serve them. The 38 mm/24h closure map is fixed. The simulated temporary obstacle moves only among open road cells.</p>';
+      batchProtocolNote = '<p>Laiban completion is reported as sitios served out of 9 and out of the 4 sitios reachable under the saved closures. Toyang (B), Ibucao (C), Kilabuwan (D), Manggahan (H), and Magata (I) are closed/unreachable; neither policy is expected to serve them. The 38 mm/24h closure map is fixed. The simulated temporary obstacle is selected only from non-node traversable corridor cells; at this rainfall that set includes Restricted and Open road bands.</p>';
     }
     var closed = config.closedRoads && config.closedRoads.length
       ? '<details class="maze-closed-roads"><summary>Saved closed roads (' + config.closedRoads.length + ')</summary><ul>' +
@@ -543,10 +543,13 @@
         (sop.id === state.sop ? 'true' : 'false') + '">SOP ' + sop.id + '</button>';
     }).join('');
     var legend = config.id === 'tab-4'
-      ? '<div class="shared-maze-legend maze-laiban-legend"><span><i class="legend-road"></i>Traversable road</span>' +
-        '<span><i class="legend-hazard"></i>Road hazard / temporary obstacle</span><span><i class="legend-restricted"></i>Restricted</span>' +
-        '<span><i class="legend-closed"></i>Closed</span><span><i class="legend-open"></i>Open</span>' +
-        '<span><i class="legend-caution"></i>Caution</span><span><i class="legend-route standard"></i>Standard route</span>' +
+      ? '<div class="shared-maze-legend maze-laiban-legend"><span title="Cream is the requested traversable-road appearance; blank schematic cells are not necessarily passable in the simulator."><i class="legend-road"></i>Traversable road</span>' +
+        '<span title="Saved hazard markers and the active temporary overlay are shown as blocked tiles; static markers do not independently block movement in the simulator."><i class="legend-hazard"></i>Road hazard / temporary obstacle</span>' +
+        '<span title="Shown with a dashed border as requested; Restricted cells remain passable in the unchanged simulator."><i class="legend-restricted"></i>Restricted</span>' +
+        '<span title="Not passable under the saved accessibility rules."><i class="legend-closed"></i>Closed</span>' +
+        '<span title="Soft-green Open cells remain passable under the saved accessibility rules."><i class="legend-open"></i>Open</span>' +
+        '<span title="Shown as requested; Caution roads remain passable in the unchanged simulator."><i class="legend-caution"></i>Caution</span>' +
+        '<span><i class="legend-route standard"></i>Standard route</span>' +
         '<span><i class="legend-route modql"></i>MODQL route</span></div>'
       : '<div class="shared-maze-legend"><span><i class="legend-route standard"></i>Standard route</span>' +
         '<span><i class="legend-route modql"></i>MODQL route</span><span><i class="legend-wall"></i>Obstacle / closed road</span>' +
@@ -816,6 +819,7 @@
     var ctx = canvas.getContext('2d');
     if (!ctx) return;
     var world = state.env, run = state.pair && state.pair.runs[id];
+    var isLaiban = state.config.id === 'tab-4';
     var size = world.size, cell = canvas.width / size;
     var obstacles = new Set(world.obstacleCells().map(MazeRouting.key));
     var theme = window.getComputedStyle(document.body);
@@ -825,28 +829,61 @@
       rest: theme.getPropertyValue('--road-restricted').trim() || '#e0732f',
       cls: theme.getPropertyValue('--road-closed').trim() || '#d64545'
     };
+    var laibanRoadColors = {
+      open: '#d8ead8',
+      caut: '#f4e3ad',
+      rest: '#f6d2b2',
+      cls: '#f2c8c4'
+    };
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (isLaiban) {
+      ctx.fillStyle = '#dad5c8';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
     for (var rowIndex = 0; rowIndex < size; rowIndex++) {
       for (var colIndex = 0; colIndex < size; colIndex++) {
         var point = [rowIndex, colIndex], key = MazeRouting.key(point);
         var road = state.config.roadTiles && state.config.roadTiles[key];
         var overlay = world.isOverlayObstacle(point);
-        ctx.fillStyle = overlay ? '#273129' : road ? roadColors[road.status] :
-          obstacles.has(key) ? '#273129' : '#f5f2e8';
-        ctx.fillRect(colIndex * cell, rowIndex * cell, cell, cell);
-        ctx.strokeStyle = '#c9c4b4';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(colIndex * cell, rowIndex * cell, cell, cell);
-        if (state.config.id === 'tab-4' && state.config.hazardTiles &&
-            state.config.hazardTiles[key] && !overlay) {
+        if (isLaiban) {
+          var isHazard = overlay || !!(state.config.hazardTiles && state.config.hazardTiles[key]);
+          var tileX = colIndex * cell, tileY = rowIndex * cell;
           ctx.save();
-          ctx.strokeStyle = state.config.hazardTiles[key] === 'cls' ? roadColors.cls : roadColors.caut;
-          ctx.lineWidth = 2;
-          ctx.setLineDash([4, 3]);
-          ctx.strokeRect(colIndex * cell + 3, rowIndex * cell + 3, cell - 6, cell - 6);
+          ctx.beginPath();
+          ctx.roundRect(tileX + 0.5, tileY + 0.5, cell - 1, cell - 1, Math.max(1.5, cell * 0.045));
+          ctx.fillStyle = isHazard ? '#efb27b' : road ? laibanRoadColors[road.status] : '#f5f2e8';
+          ctx.fill();
+          if (!isHazard) {
+            ctx.strokeStyle = road && road.status === 'rest' ? '#b56c25' :
+              road && road.status === 'cls' ? '#b54b43' :
+                road && road.status === 'open' ? '#91ad92' :
+                  road && road.status === 'caut' ? '#b38326' : '#dad5c8';
+            ctx.lineWidth = road && road.status === 'rest' ? 1.5 : 1;
+            ctx.setLineDash(road && road.status === 'rest' ? [4, 3] : []);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            if (road && road.status === 'cls') {
+              ctx.strokeStyle = '#b54b43';
+              ctx.lineWidth = Math.max(2, cell * 0.045);
+              ctx.lineCap = 'round';
+              ctx.beginPath();
+              ctx.moveTo(tileX + cell * 0.3, tileY + cell * 0.3);
+              ctx.lineTo(tileX + cell * 0.7, tileY + cell * 0.7);
+              ctx.moveTo(tileX + cell * 0.7, tileY + cell * 0.3);
+              ctx.lineTo(tileX + cell * 0.3, tileY + cell * 0.7);
+              ctx.stroke();
+            }
+          }
           ctx.restore();
+        } else {
+          ctx.fillStyle = overlay ? '#273129' : road ? roadColors[road.status] :
+            obstacles.has(key) ? '#273129' : '#f5f2e8';
+          ctx.fillRect(colIndex * cell, rowIndex * cell, cell, cell);
+          ctx.strokeStyle = '#c9c4b4';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(colIndex * cell, rowIndex * cell, cell, cell);
         }
-        if (overlay) {
+        if (overlay && !isLaiban) {
           ctx.strokeStyle = roadColors.caut;
           ctx.lineWidth = 3;
           ctx.beginPath();
@@ -858,14 +895,14 @@
         }
       }
     }
-    if (state.config.id === 'tab-4') {
+    if (isLaiban) {
       var hubX = (world.start[1] + 0.5) * cell, hubY = (world.start[0] + 0.5) * cell;
       ctx.beginPath();
       ctx.fillStyle = '#5e6828';
-      ctx.arc(hubX, hubY, cell * 0.34, 0, Math.PI * 2);
+      ctx.arc(hubX, hubY, cell * 0.38, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#fffaf0';
-      ctx.font = 'bold ' + Math.max(10, cell * 0.32) + 'px sans-serif';
+      ctx.font = 'bold ' + Math.max(14, cell * 0.32) + 'px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('H', hubX, hubY);
@@ -874,20 +911,22 @@
       var x = (target.position[1] + 0.5) * cell, y = (target.position[0] + 0.5) * cell;
       ctx.beginPath();
       ctx.fillStyle = run && run.served[target.id] ? '#8a8b76' : '#db9558';
-      ctx.arc(x, y, cell * 0.34, 0, Math.PI * 2);
+      ctx.arc(x, y, cell * (isLaiban ? 0.4 : 0.34), 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#fffaf0';
-      ctx.font = 'bold ' + Math.max(10, cell * 0.32) + 'px sans-serif';
+      ctx.font = 'bold ' + (isLaiban ? Math.max(16, cell * 0.36) : Math.max(10, cell * 0.32)) + 'px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(target.letter, x, y - cell * 0.09);
-      ctx.font = 'bold ' + Math.max(7, cell * 0.15) + 'px sans-serif';
+      ctx.font = 'bold ' + (isLaiban ? Math.max(14, cell * 0.28) : Math.max(7, cell * 0.15)) + 'px sans-serif';
       ctx.fillText(String(target.demand), x, y + cell * 0.16);
     });
     if (run && run.trail.length) {
       ctx.beginPath();
-      ctx.strokeStyle = id === 'standard' ? '#d88140' : '#408b5d';
-      ctx.lineWidth = Math.max(3, cell * 0.11);
+      var routeColor = id === 'standard' ? '#d88140' : '#408b5d';
+      var routeWidth = Math.max(3, cell * 0.11);
+      ctx.strokeStyle = routeColor;
+      ctx.lineWidth = routeWidth;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       run.trail.forEach(function (point, index) {
@@ -895,6 +934,13 @@
         if (index) ctx.lineTo(x, y);
         else ctx.moveTo(x, y);
       });
+      if (isLaiban) {
+        ctx.strokeStyle = '#24352d';
+        ctx.lineWidth = Math.max(7, cell * 0.2);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = routeColor;
+      ctx.lineWidth = routeWidth;
       ctx.stroke();
     }
     drawTrainingCurve(state, id);

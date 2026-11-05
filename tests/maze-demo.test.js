@@ -515,6 +515,80 @@ test('four fixed scenarios use the saved Laiban values and requested shared budg
   assert.equal(context.MazeRouting.parameters.heldOutScenarios, 200);
 });
 
+test('Laiban tile presentation reflects the saved passability rules without changing them', function () {
+  var context = harness();
+  var config = context.MazeComparisonData.scenarios()[3];
+  var world = makeWorld(context.MazeRouting, config);
+  var toPoint = function (key) { return key.split(',').map(Number); };
+  var hazardCells = Object.keys(config.hazardTiles);
+  assert.ok(hazardCells.length > 0);
+  hazardCells.forEach(function (cell) {
+    assert.equal(world.isOpen(toPoint(cell)), config.hazardTiles[cell] === 'rest',
+      'a static hazard marker inherits passability from its saved road status');
+  });
+  ['open', 'rest'].forEach(function (status) {
+    var cell = Object.keys(config.roadTiles).filter(function (key) {
+      return config.roadTiles[key].status === status;
+    })[0];
+    assert.ok(cell, 'saved Laiban map includes ' + status + ' road cells');
+    assert.equal(world.isOpen(toPoint(cell)), true, status + ' road cells are traversable');
+  });
+  var closedCell = Object.keys(config.roadTiles).filter(function (key) {
+    return config.roadTiles[key].status === 'cls';
+  })[0];
+  assert.ok(closedCell);
+  assert.equal(world.isOpen(toPoint(closedCell)), false, 'closed road cells cannot be entered');
+  assert.equal(context.band(0.6).k, 'caut');
+  assert.equal(context.band(0.6).lab, 'CAUTION');
+  assert.ok(config.overlayCandidates.length > 0);
+  var allowed = new Set(config.openCells.map(function (point) { return point.join(','); }));
+  config.overlayCandidates.forEach(function (point) {
+    assert.ok(allowed.has(point.join(',')), 'temporary overlay candidates stay on traversable mapped corridors');
+    assert.ok(!world.protected.has(point.join(',')), 'temporary overlay candidates exclude hub and sitios');
+  });
+  assert.deepEqual(Array.from(new Set(config.overlayCandidates.map(function (point) {
+    return config.roadTiles[point.join(',')].status;
+  })).values()).sort(), ['open', 'rest'],
+  'at saved rainfall, seed-based overlays can select traversable Restricted or Open road cells');
+  assert.equal(config.dynamicFrequency, 20);
+
+  var reachableIfOnlyOpenBandsRemain = new Set(['hub']);
+  var queue = ['hub'];
+  for (var index = 0; index < queue.length; index++) {
+    context.EDGES.forEach(function (edge) {
+      if (context.band(context.accA(edge)).k !== 'open') return;
+      var next = edge.a === queue[index] ? edge.b : edge.b === queue[index] ? edge.a : null;
+      if (next && !reachableIfOnlyOpenBandsRemain.has(next)) {
+        reachableIfOnlyOpenBandsRemain.add(next);
+        queue.push(next);
+      }
+    });
+  }
+  assert.deepEqual(Array.from(config.sites.filter(function (site) {
+    return reachableIfOnlyOpenBandsRemain.has(site.id);
+  }).map(function (site) { return site.letter; })), ['G'],
+  'if Hazard, Restricted and Caution tiles are blocked, only Old Laiban remains reachable');
+  assert.match(demoSource, /var isLaiban = state\.config\.id === 'tab-4'/);
+  assert.match(demoSource, /open: '#d8ead8',\s*caut: '#f4e3ad',\s*rest: '#f6d2b2',\s*cls: '#f2c8c4'/);
+  assert.match(demoSource, /ctx\.fillStyle = isHazard \? '#efb27b'/);
+  assert.match(demoSource, /ctx\.roundRect\(tileX \+ 0\.5, tileY \+ 0\.5, cell - 1, cell - 1/);
+  assert.match(demoSource, /if \(isLaiban\) \{\s*ctx\.fillStyle = '#dad5c8';\s*ctx\.fillRect\(0, 0, canvas\.width, canvas\.height\);/);
+  assert.match(demoSource, /ctx\.setLineDash\(road && road\.status === 'rest' \? \[4, 3\] : \[\]\)/);
+  assert.match(demoSource, /ctx\.strokeStyle = '#b54b43'/);
+  assert.match(demoSource, /if \(isLaiban\) \{\s*ctx\.strokeStyle = '#24352d'/);
+  assert.match(demoSource, /Restricted cells remain passable in the unchanged simulator/);
+  assert.match(demoSource, /Caution roads remain passable in the unchanged simulator/);
+  var styleSource = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assert.match(styleSource, /\.maze-laiban-legend \.legend-road\{background:#f5f2e8;border-color:#dad5c8\}/);
+  assert.match(styleSource, /\.maze-laiban-legend \.legend-hazard\{background:#efb27b;border:0\}/);
+  assert.match(styleSource, /\.maze-laiban-legend \.legend-restricted\{background:#f6d2b2;border:1px dashed #b56c25\}/);
+  assert.match(styleSource, /\.maze-laiban-legend \.legend-closed::after/);
+  assert.match(styleSource, /linear-gradient\(45deg,transparent 44%,#b54b43 46%,#b54b43 54%,transparent 56%\)/);
+  assert.match(styleSource, /\.maze-laiban-legend \.legend-closed\{[\s\S]*?background:#f2c8c4/);
+  assert.match(styleSource, /\.maze-laiban-legend \.legend-open\{background:#d8ead8/);
+  assert.match(styleSource, /\.maze-laiban-legend \.legend-caution\{background:#f4e3ad/);
+});
+
 test('Standard policy state is location only and cannot read run or environment details', function () {
   var api = harness().MazeRouting;
   var guardedRun = new Proxy({}, {get: function () { throw new Error('Standard read run information'); }});
@@ -924,7 +998,7 @@ test('UI exposes four fixed tabs, per-tab SOP selection, live results and separa
   assert.match(demoSource, /'Served ' \+ metric\.destinationsServed \+ ' of ' \+ metric\.destinationTotal \+\s*' sitios; served '/);
   assert.match(demoSource, /closed road/);
   assert.match(demoSource, /maze-laiban-sites/);
-  assert.match(demoSource, /temporary obstacle moves only among open road cells/);
+  assert.match(demoSource, /simulated temporary obstacle is selected only from non-node traversable corridor cells; at this rainfall that set includes Restricted and Open road bands/);
   var styleSource = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   assert.match(styleSource, /\.maze-loop-status\[hidden\]\s*\{\s*display:none;/);
   assert.match(demoSource, /<div class="maze-agent-body">'\s*\+\s*buildCardResultsTable\(id, title, state\)\s*\+\s*'<div class="maze-agent-side">/);

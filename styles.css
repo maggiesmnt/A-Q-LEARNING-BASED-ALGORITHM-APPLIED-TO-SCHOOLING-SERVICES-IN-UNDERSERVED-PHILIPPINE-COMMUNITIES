@@ -5073,12 +5073,24 @@ body[data-theme="dark"] .shared-maze-summary :is(thead th,h2,h3){color:#fff}
 .maze-closed-roads>summary{cursor:pointer}
 .maze-closed-roads ul{margin:7px 0;padding-left:22px;line-height:1.6}
 .maze-scenario-panel .shared-maze-legend{margin:12px 0}
-.maze-laiban-legend .legend-road{background:#285d41;border-color:#285d41}
-.maze-laiban-legend .legend-hazard{background:#273129;border-color:#d58a22}
-.maze-laiban-legend .legend-restricted{background:#8d4a27;border-color:#e0732f}
-.maze-laiban-legend .legend-closed{background:#7c3434;border-color:#d64545}
-.maze-laiban-legend .legend-open{background:#285d41;border-color:#3fae7a}
-.maze-laiban-legend .legend-caution{background:#80621f;border-color:#d9a441}
+.maze-laiban-legend .legend-road{background:#f5f2e8;border-color:#dad5c8}
+.maze-laiban-legend .legend-hazard{background:#efb27b;border:0}
+.maze-laiban-legend .legend-restricted{background:#f6d2b2;border:1px dashed #b56c25}
+.maze-laiban-legend .legend-closed{
+  position:relative;
+  background:#f2c8c4;
+  border-color:#b54b43;
+}
+.maze-laiban-legend .legend-closed::after{
+  position:absolute;
+  inset:1px;
+  content:"";
+  background:
+    linear-gradient(45deg,transparent 44%,#b54b43 46%,#b54b43 54%,transparent 56%),
+    linear-gradient(-45deg,transparent 44%,#b54b43 46%,#b54b43 54%,transparent 56%);
+}
+.maze-laiban-legend .legend-open{background:#d8ead8;border-color:#528360}
+.maze-laiban-legend .legend-caution{background:#f4e3ad;border-color:#b38326}
 .maze-laiban-sites{margin:16px 0;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--bg-panel)}
 .maze-laiban-sites h3{margin:0 0 5px;font-size:14px}
 .maze-laiban-sites>p{margin:0 0 10px;color:var(--dim);font-size:11px;line-height:1.55}
