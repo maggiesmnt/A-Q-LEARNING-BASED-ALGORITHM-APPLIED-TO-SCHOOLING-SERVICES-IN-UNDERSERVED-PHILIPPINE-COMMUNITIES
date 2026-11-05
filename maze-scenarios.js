@@ -62,12 +62,28 @@ var MazeComparisonData = (function () {
       description: obstacles ? 'Static obstacles; one service target.' : 'Plain grid; one service target.'
     };
   }
-  function fixedTabTwoObstacles() {
+  function fixedTabTwoLayout() {
     return [
-      [0, 8], [1, 0], [1, 1], [1, 3], [1, 9], [2, 0], [2, 3], [2, 7],
-      [2, 8], [3, 0], [3, 6], [3, 7], [3, 8], [4, 7], [4, 9], [5, 0],
-      [5, 2], [5, 3], [6, 4], [6, 9], [7, 1], [7, 9], [9, 3], [9, 5]
+      '..........',
+      '#########.',
+      '..........',
+      '.#########',
+      '..........',
+      '#########.',
+      '..........',
+      '.#########',
+      '..........',
+      '##.##.###.'
     ];
+  }
+  function fixedTabTwoObstacles() {
+    var obstacles = [];
+    fixedTabTwoLayout().forEach(function (row, rowIndex) {
+      Array.from(row).forEach(function (cell, columnIndex) {
+        if (cell === '#') obstacles.push([rowIndex, columnIndex]);
+      });
+    });
+    return obstacles;
   }
   function tabTwoStartCells(config) {
     var blocked = new Set((config.obstacles || []).map(function (point) { return point.join(','); }));
@@ -175,7 +191,7 @@ var MazeComparisonData = (function () {
         site('goal', 'Target', 'T', [9, 9], 40, 0, 30)
       ]), {
         obstacles: fixedTabTwoObstacles(),
-        description: 'One fixed 24-obstacle layout shared by training and evaluation.'
+        description: 'Fixed maze-like corridors, alternating single-cell bottlenecks, and two dead-end pockets.'
       }),
       Object.assign(basic('tab-3', 303, 'Multi-Target', true, [
         site('a', 'Community A', 'A', [1, 8], 18, 0, 30),

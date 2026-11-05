@@ -320,10 +320,10 @@
       ? '<span class="maze-dynamic-counters">Shared tick <b data-dynamic="tick">0</b> · obstacle updates <b data-dynamic="updates">0</b></span>'
       : '';
     var roadDisclaimer = config.simulated
-      ? '<p class="maze-disclaimer">Simulated, not verified field data. Rainfall, allocated sitio demand and visit history are scenario inputs; the temporary-obstacle overlay is simulated and does not change saved road closures.</p>'
+      ? '<details class="maze-disclaimer"><summary>Simulated, not verified field data.</summary><p>Rainfall, allocated sitio demand and visit history are scenario inputs; the temporary-obstacle overlay is simulated and does not change saved road closures.</p></details>'
       : '';
     var batchProtocolNote = config.id === 'tab-2'
-      ? '<p>Tab 2 training starts are seeded random choices from the 75 open non-target cells; the batch evaluates 200 starts cycling through those 75 cells on the fixed obstacle map.</p>'
+      ? '<p>Tab 2 batch evaluates 200 starts on a fixed obstacle map. Training uses seeded random starts from the same 56 open non-target cells.</p>'
       : '';
     var closed = config.closedRoads && config.closedRoads.length
       ? '<details class="maze-closed-roads"><summary>Saved closed roads (' + config.closedRoads.length + ')</summary><ul>' +
@@ -350,12 +350,11 @@
       '<button type="button" class="btn g" data-action="train">Retrain from scratch</button>' +
       '<label>Simulation speed <select data-action="speed"><option value="800">0.25×</option><option value="400">0.5×</option><option value="200" selected>1×</option><option value="100">2×</option><option value="50">4×</option></select></label>' +
       '<label>Travel time units <select data-action="unit"><option value="minutes" selected>Minutes</option><option value="hours">Hours</option></select></label>' +
-      dynamicCounters + '</div>' +
+      '</div>' +
       '<progress class="maze-training-progress" data-training-progress max="' + EPISODES + '" value="0" hidden></progress>' +
-      '<p class="maze-status-message" role="status">Results are not available until a run starts.</p>' +
-      (config.rainfallMm !== undefined ? '<p class="maze-laiban-inputs">Rainfall: ' + config.rainfallMm +
-        ' mm/24h · Service window: ' + config.budgetMinutes + ' minutes · Service stop: ' + config.serviceMinutes +
-        ' minutes · Start: ALS Hub</p>' : '') + roadDisclaimer + closed +
+      '<div class="maze-run-status"><p class="maze-status-message" role="status">Results are not available until a run starts.</p>' +
+      dynamicCounters + '</div>' +
+      roadDisclaimer +
       '<div class="shared-maze-legend"><span><i class="legend-route standard"></i>Standard route</span>' +
       '<span><i class="legend-route modql"></i>MODQL route</span><span><i class="legend-wall"></i>Obstacle / closed road</span>' +
       '<span><i class="legend-goal"></i>Service target</span></div>' +
@@ -365,22 +364,25 @@
         return '<section class="shared-maze-panel" data-agent="' + id + '"><header class="shared-maze-panel-header">' +
           '<div><span class="shared-maze-eyebrow">' + (id === 'standard' ? 'Existing algorithm' : 'Proposed algorithm') +
           '</span><h3>' + title + '</h3></div><span class="shared-maze-panel-badge" data-training="' + id + '">' +
-          'Not trained</span></header><div class="maze-training-indicator" data-training-detail="' + id + '">' +
-          trainingLabel(state, id) + '</div>' +
-          (id === 'standard' ? '<p class="maze-agent-description">Standard Q-Learning explores randomly during training; evaluation follows the learned policy (epsilon = 0).</p>' : '') +
-          '<div class="maze-agent-status" data-status="' + id + '">Not run yet</div>' +
-          '<span class="maze-loop-status" data-loop-status="' + id + '" hidden>Loop detected: learned policy repeats the same moves.</span>' +
-          '<div class="shared-maze-board"><canvas width="500" height="500" data-canvas="' + id +
+          'Not trained</span></header><div class="maze-agent-body"><div class="maze-agent-info">' +
+          '<div class="maze-training-indicator" data-training-detail="' + id + '">' + trainingLabel(state, id) + '</div>' +
+          '<p class="maze-agent-description">' + (id === 'standard'
+            ? 'Standard Q-Learning explores randomly during training; evaluation follows the learned policy (epsilon = 0).'
+            : 'Enhanced MODQL uses Double Q-Learning with demand, fairness, and travel-time reward.') + '</p>' +
+          '<div class="maze-agent-status-line"><div class="maze-agent-status" data-status="' + id + '">Not run yet</div>' +
+          '<span class="maze-loop-status" data-loop-status="' + id + '" hidden>Loop detected: learned policy repeats the same moves.</span></div>' +
+          '<div class="maze-training-curve"><span>Training log · steps per episode</span>' +
+          '<canvas width="320" height="72" data-curve="' + id + '" role="img" aria-label="' + title +
+          ' training log, steps per episode"></canvas></div>' +
+          '<p class="maze-agent-live" data-live="' + id + '">Results: Not run yet</p></div>' +
+          '<div class="maze-agent-grid"><div class="shared-maze-board"><canvas width="500" height="500" data-canvas="' + id +
           '" role="img" aria-label="' + title + ' route in the ' + escapeHtml(config.name) + ' scenario"></canvas></div>' +
-          '<details class="maze-policy-inputs"><summary>Policy inputs</summary><div data-environment="' + id +
+          '</div></div><details class="maze-policy-inputs"><summary>Policy inputs</summary><div data-environment="' + id +
           '"></div><p class="maze-state-encoding">' + (id === 'standard'
             ? 'State encoding: current grid location only (L).'
             : 'Research state encoding: location (L), two-level demand buckets (D), remaining-time bucket (T), visit-history buckets (H), and two-level road accessibility (A: reachable or unreachable).') +
-          '</p></details><div class="maze-training-curve"><span>Training log · steps per episode</span>' +
-          '<canvas width="320" height="72" data-curve="' + id + '" role="img" aria-label="' + title +
-          ' training log, steps per episode"></canvas></div>' +
-          '<p class="maze-agent-live" data-live="' + id + '">Results: Not run yet</p></section>';
-      }).join('') + '</div>' +
+          '</p></details></section>';
+      }).join('') + '</div>' + closed +
       '<section class="shared-maze-summary"><header><div><span class="shared-maze-eyebrow">Computed from this run</span>' +
       '<h2>Comparative Performance Results</h2></div><span class="shared-maze-summary-note">No pre-filled results</span></header>' +
       '<div class="shared-maze-table-scroll"><table><thead><tr><th>Metric</th><th>Standard Q-Learning</th>' +
@@ -481,6 +483,11 @@
     var label = id === 'standard'
       ? 'Environment-only values; not part of Standard state or Q updates.'
       : 'Shared inputs represented in MODQL state with the configured buckets.';
+    var scenarioDetails = state.config.rainfallMm !== undefined
+      ? '<span>Rainfall: ' + state.config.rainfallMm + ' mm/24h · Service window: ' +
+        state.config.budgetMinutes + ' minutes · Service stop: ' + state.config.serviceMinutes +
+        ' minutes · Start: ALS Hub</span>'
+      : '';
     var entries = state.env.sites.map(function (site) {
       var availability = run && run.served[site.id]
         ? 'served'
@@ -488,7 +495,7 @@
       return '<span><b>' + escapeHtml(site.letter) + '</b> ' + site.demand + ' learners · last visit ' +
         site.lastVisitDays + ' days · prior visits ' + site.initialVisits + ' · ' + availability + '</span>';
     }).join('');
-    node.innerHTML = '<b>' + label + '</b><span>Remaining service time: ' +
+    node.innerHTML = '<b>' + label + '</b>' + scenarioDetails + '<span>Remaining service time: ' +
       number(remaining, 1) + ' minutes</span><div>' + entries + '</div>';
   }
 

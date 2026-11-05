@@ -51,12 +51,43 @@ test('four fixed scenarios use the saved Laiban values and requested shared budg
   assert.equal(scenarios[0].dynamicFrequency, 0);
   assert.equal(scenarios[1].sites.length, 1);
   assert.equal(scenarios[1].obstacleRatio, 0);
-  assert.equal(scenarios[1].obstacles.length, 24);
+  assert.equal(scenarios[1].obstacles.length, 43);
   var obstacleMaps = [202, 1202, 100202].map(function (seed) {
     return Array.from(makeWorld(context.MazeRouting, scenarios[1], seed).obstacles).sort().join(';');
   });
   assert.equal(new Set(obstacleMaps).size, 1, 'Tab 2 keeps its same fixed map for training and evaluation');
-  assert.ok(makeWorld(context.MazeRouting, scenarios[1]).pathExists(scenarios[1].start, scenarios[1].sites[0].position));
+  var tabTwoStarts = context.MazeComparisonData.tabTwoStartCells(scenarios[1]);
+  assert.equal(tabTwoStarts.length, 56);
+  var tabTwoWorld = makeWorld(context.MazeRouting, scenarios[1]);
+  tabTwoStarts.forEach(function (start) {
+    assert.ok(tabTwoWorld.pathExists(start, scenarios[1].sites[0].position),
+      'every batch/training start must reach the target: ' + start.join(','));
+  });
+  var distanceQueue = [[scenarios[1].start, 0]], distanceSeen = new Set([context.MazeRouting.key(scenarios[1].start)]);
+  var shortestPathLength = null, directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  for (var queueIndex = 0; queueIndex < distanceQueue.length; queueIndex++) {
+    var entry = distanceQueue[queueIndex], point = entry[0], distance = entry[1];
+    if (context.MazeRouting.key(point) === context.MazeRouting.key(scenarios[1].sites[0].position)) {
+      shortestPathLength = distance;
+      break;
+    }
+    directions.forEach(function (direction) {
+      var next = [point[0] + direction[0], point[1] + direction[1]], nextKey = context.MazeRouting.key(next);
+      if (tabTwoWorld.isOpen(next) && !distanceSeen.has(nextKey)) {
+        distanceSeen.add(nextKey);
+        distanceQueue.push([next, distance + 1]);
+      }
+    });
+  }
+  assert.equal(shortestPathLength, 54);
+  assert.ok(shortestPathLength >= 1.5 * 18, 'maze detour should exceed the 1.5x Manhattan threshold');
+  [2, 5].forEach(function (column) {
+    var pocket = [9, column];
+    var degree = directions.filter(function (direction) {
+      return tabTwoWorld.isOpen([pocket[0] + direction[0], pocket[1] + direction[1]]);
+    }).length;
+    assert.equal(degree, 1, 'dead-end pocket is a one-exit cell');
+  });
   assert.equal(scenarios[1].dynamicFrequency, 0);
   assert.ok(scenarios[2].sites.length > 1);
   assert.equal(scenarios[2].dynamicFrequency, 20);
@@ -128,19 +159,19 @@ test('pretrained policy files load Q tables and training logs without retraining
   });
 });
 
-test('Tab 2 training starts vary reproducibly across the 75 open cells without changing the demo start', function () {
+test('Tab 2 training starts vary reproducibly across the 56 open cells without changing the demo start', function () {
   var context = harness(), data = context.MazeComparisonData;
   var config = data.scenarios()[1], firstModels = context.MazeRouting.modelsFor(config.seed);
   var secondModels = context.MazeRouting.modelsFor(config.seed);
   var starts = data.tabTwoStartCells(config);
-  assert.equal(starts.length, 75);
+  assert.equal(starts.length, 56);
   var firstSequence = [], secondSequence = [];
   for (var episode = 0; episode < 5000; episode++) {
     firstSequence.push(data.trainingStart(config, firstModels.scenarioRandom).join(','));
     secondSequence.push(data.trainingStart(config, secondModels.scenarioRandom).join(','));
   }
   assert.deepEqual(firstSequence, secondSequence, 'training start sequence is seeded and reproducible');
-  assert.equal(new Set(firstSequence).size, 75, 'all open non-target cells are represented');
+  assert.equal(new Set(firstSequence).size, 56, 'all open non-target cells are represented');
   assert.ok(firstSequence.every(function (start) {
     return starts.some(function (cell) { return cell.join(',') === start; });
   }));
@@ -155,11 +186,12 @@ test('random-start Tab 2 policy training succeeds and frozen evaluation does not
   var policy = JSON.parse(fs.readFileSync(path.join(root, 'policies', 'tab-2.json'), 'utf8'));
   ['standard', 'modql'].forEach(function (id) {
     var successes = policy.trainingLog[id + 'Reward'].slice(-500).filter(function (reward) { return reward > 0; }).length;
-    assert.equal(successes, 478, id + ' training success rate matches its recorded random-start training log');
+    assert.equal(successes, id === 'standard' ? 497 : 500,
+      id + ' training success rate matches its recorded maze-layout training log');
   });
-  assert.equal(policy.qTables.standard.length, 74);
-  assert.equal(policy.qTables.modqlQ1.length, 148);
-  assert.equal(policy.qTables.modqlQ2.length, 148);
+  assert.equal(policy.qTables.standard.length, 56);
+  assert.equal(policy.qTables.modqlQ1.length, 112);
+  assert.equal(policy.qTables.modqlQ2.length, 112);
   var models = api.modelsFromPolicy(policy, config.id, config.seed);
   var before = snapshot(models);
   var world = makeWorld(api, config), pair = new api.Pair(world, models, false);
@@ -176,7 +208,7 @@ test('Tab 2 held-out batch varies only paired starts on its fixed map and counts
   var policy = JSON.parse(fs.readFileSync(path.join(root, 'policies', 'tab-2.json'), 'utf8'));
   var models = api.modelsFromPolicy(policy, config.id, config.seed);
   var starts = context.MazeComparisonData.tabTwoStartCells(config);
-  assert.equal(starts.length, 75);
+  assert.equal(starts.length, 56);
   var outcomes = {standard: [], modql: []}, distinctStarts = new Set();
   for (var index = 0; index < 200; index++) {
     var batchConfig = JSON.parse(JSON.stringify(config));
@@ -190,13 +222,20 @@ test('Tab 2 held-out batch varies only paired starts on its fixed map and counts
       outcomes[id].push(api.metrics(pair.runs[id], world));
     });
   }
-  assert.equal(distinctStarts.size, 75);
-  assert.equal(outcomes.standard.filter(function (result) { return result.completed; }).length, 191);
-  assert.equal(outcomes.modql.filter(function (result) { return result.completed; }).length, 191);
-  assert.equal(outcomes.standard.filter(function (result) { return result.loopDetected; }).length, 6);
-  assert.equal(outcomes.modql.filter(function (result) { return result.loopDetected; }).length, 6);
-  assert.equal(outcomes.standard.filter(function (result) { return !result.completed && !result.loopDetected; }).length, 3);
-  assert.equal(outcomes.modql.filter(function (result) { return !result.completed && !result.loopDetected; }).length, 3);
+  assert.equal(distinctStarts.size, 56);
+  assert.equal(outcomes.standard.filter(function (result) { return result.completed; }).length, 200);
+  assert.equal(outcomes.modql.filter(function (result) { return result.completed; }).length, 200);
+  assert.equal(outcomes.standard.filter(function (result) { return result.loopDetected; }).length, 0);
+  assert.equal(outcomes.modql.filter(function (result) { return result.loopDetected; }).length, 0);
+  assert.equal(outcomes.standard.filter(function (result) { return !result.completed && !result.loopDetected; }).length, 0);
+  assert.equal(outcomes.modql.filter(function (result) { return !result.completed && !result.loopDetected; }).length, 0);
+  ['standard', 'modql'].forEach(function (id) {
+    var steps = outcomes[id].map(function (result) { return result.movementSteps; });
+    var mean = steps.reduce(function (sum, value) { return sum + value; }, 0) / steps.length;
+    var variance = steps.reduce(function (sum, value) { return sum + Math.pow(value - mean, 2); }, 0) / steps.length;
+    assert.ok(Math.abs(mean - 28.66) < 1e-9, id + ' batch mean steps');
+    assert.ok(Math.abs(Math.sqrt(variance) - 15.51) < 0.005, id + ' batch population SD');
+  });
 });
 
 test('Q rows use typed arrays and background training does not render grids', function () {
@@ -320,6 +359,18 @@ test('Standard policy uses epsilon-greedy exploration rather than a random-only 
   assert.equal(model.choose('state', [0, 1], true), 1, 'epsilon exploration can select another legal action');
 });
 
+test('MODQL chooses epsilon-greedily from the summed Q1 and Q2 values', function () {
+  var api = harness().MazeRouting, draws = [0.9, 0.8, 0.1, 0.4];
+  var model = new api.Model('modql', function () { return draws.shift(); });
+  model.q1.set('state', [4, 0, 0, 0]);
+  model.q2.set('state', [0, 5, 0, 0]);
+  model.epsilon = 0.5;
+  assert.equal(model.choose('state', [0, 1], true), 1,
+    'greedy action is selected from Q1 + Q2, not either table alone');
+  assert.equal(model.choose('state', [0, 1], true), 0,
+    'epsilon exploration can choose another legal action');
+});
+
 test('frozen evaluation uses greedy selection and performs no Q updates', function () {
   var context = harness(), api = context.MazeRouting;
   var config = {
@@ -375,8 +426,14 @@ test('UI exposes four fixed tabs, per-tab SOP selection, live results and separa
   assert.match(demoSource, /two-level road accessibility/);
   assert.match(demoSource, /Loop rate \(%\)/);
   assert.match(demoSource, /Loop detected: learned policy repeats the same moves/);
-  assert.match(demoSource, /Tab 2 training starts are seeded random choices from the 75 open non-target cells; the batch evaluates 200 starts cycling through those 75 cells on the fixed obstacle map\./);
-  assert.match(fs.readFileSync(path.join(root, 'styles.css'), 'utf8'), /\.maze-loop-status\[hidden\]\s*\{\s*display:none;/);
+  assert.match(demoSource, /Tab 2 batch evaluates 200 starts on a fixed obstacle map\. Training uses seeded random starts from the same 56 open non-target cells\./);
+  var styleSource = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assert.match(styleSource, /\.maze-loop-status\[hidden\]\s*\{\s*display:none;/);
+  assert.match(demoSource, /<div class="maze-agent-body"><div class="maze-agent-info">/);
+  assert.match(demoSource, /<div class="maze-agent-grid">/);
+  assert.match(demoSource, /maze-agent-status-line"><div class="maze-agent-status"[\s\S]*?maze-loop-status/);
+  assert.match(styleSource, /grid-template-columns:minmax\(0,2fr\) minmax\(0,3fr\)/);
+  assert.match(styleSource, /@media\(max-width:1099px\)/);
   assert.match(demoSource, /batchConfig\.start = starts\[index % starts\.length\]/);
   assert.match(routingSource, /serviceSteps/);
   assert.match(demoSource, /5,000 training episodes each, equal budget/);
