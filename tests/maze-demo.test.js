@@ -59,6 +59,8 @@ test('four fixed scenarios use the saved Laiban values and requested shared budg
   assert.equal(scenarios[3].budgetMinutes, 480);
   assert.equal(scenarios[3].serviceMinutes, 60);
   assert.equal(scenarios[3].start.join(','), '5,5');
+  assert.deepEqual(Array.from(scenarios, function (scenario) { return scenario.name; }),
+    ['Basic Grid', 'Obstacles', 'Multi-Target', 'Laiban Case']);
   assert.ok(scenarios[3].closedRoads.length > 0);
   assert.deepEqual(Array.from(scenarios[3].sites, function (site) { return site.letter; }),
     ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']);
@@ -87,6 +89,49 @@ test('both policies share each paired environment, start and scenario seed', fun
     assert.equal(api.metrics(pair.runs.standard, world), null);
     assert.equal(api.metrics(pair.runs.modql, world), null);
   });
+});
+
+test('pretrained policy files load Q tables and training logs without retraining or results', function () {
+  var context = harness(), api = context.MazeRouting, scenarios = context.MazeComparisonData.scenarios();
+  scenarios.forEach(function (scenario) {
+    var file = path.join(root, 'policies', scenario.id + '.json');
+    assert.ok(fs.existsSync(file), 'generated policy exists for ' + scenario.name);
+    var policy = JSON.parse(fs.readFileSync(file, 'utf8'));
+    assert.equal(policy.scenarioId, scenario.id);
+    assert.equal(policy.seed, scenario.seed);
+    assert.equal(policy.episodes, 5000);
+    assert.ok(policy.trainedAt);
+    assert.equal(policy.trainingLog.standardSteps.length, 5000);
+    assert.equal(policy.trainingLog.modqlSteps.length, 5000);
+    assert.equal(policy.trainingLog.standardReward.length, 5000);
+    assert.equal(policy.trainingLog.modqlReward.length, 5000);
+    assert.deepEqual(Object.keys(policy).sort(),
+      ['alpha', 'episodes', 'epsilonDecay', 'epsilonMin', 'epsilonStart', 'gamma', 'qTables', 'scenarioId', 'seed', 'trainedAt', 'trainingLog', 'version'].sort());
+    assert.ok(policy.qTables.standard.length > 0);
+    assert.ok(policy.qTables.modqlQ1.length > 0);
+    assert.ok(policy.qTables.modqlQ2.length > 0);
+    var originalTrain = api.trainEpisode;
+    api.trainEpisode = function () { throw new Error('loading a saved policy must not retrain'); };
+    var models = api.modelsFromPolicy(policy, scenario.id, scenario.seed);
+    api.trainEpisode = originalTrain;
+    var pair = new api.Pair(makeWorld(api, scenario), models, false);
+    assert.equal(pair.runs.standard.didRun, false);
+    assert.equal(pair.runs.modql.didRun, false);
+    assert.equal(api.metrics(pair.runs.standard, pair.world), null);
+    assert.equal(api.metrics(pair.runs.modql, pair.world), null);
+  });
+});
+
+test('Q rows use typed arrays and background training does not render grids', function () {
+  var api = harness().MazeRouting;
+  var table = new api.QTable();
+  assert.equal(Object.prototype.toString.call(table.data), '[object Float64Array]');
+  table.set('state', [1, 2, 3, 4]);
+  assert.equal(Object.prototype.toString.call(table.get('state')), '[object Float64Array]');
+  var worker = fs.readFileSync(path.join(root, 'maze-training-worker.js'), 'utf8');
+  assert.match(worker, /importScripts\('maze-routing\.js'\)/);
+  assert.match(worker, /postMessage\(\{type: 'progress'/);
+  assert.doesNotMatch(worker, /canvas|renderState|draw\(/);
 });
 
 test('movement constraints are shared and both agents use four-direction actions', function () {
@@ -219,9 +264,18 @@ test('every configured training run uses the fixed equal budget and prescribed p
 test('UI exposes four fixed tabs, per-tab SOP selection, live results and separate 200-scenario batch', function () {
   var html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   assert.match(html, /maze-scenarios\.js/);
+  assert.match(html, /id="mazeScenarioSelector"/);
+  assert.match(demoSource, /scenarioSelector\.innerHTML = states\.map/);
+  assert.doesNotMatch(demoSource, /class="maze-scenario-tabs"/);
+  assert.match(demoSource, /Retrain from scratch/);
+  assert.match(demoSource, /new Worker\('maze-training-worker\.js'\)/);
+  assert.match(demoSource, /Standard Q-Learning explores randomly during training; evaluation follows the learned policy \(epsilon = 0\)\./);
+  assert.match(demoSource, /Basic Grid fairness is trivial because there is only one destination/);
+  assert.match(demoSource, /not comparable to Chapter 4 results/);
+  assert.match(demoSource, /two-level road accessibility/);
   assert.match(demoSource, /5,000 training episodes each, equal budget/);
   assert.match(demoSource, /Not run yet/);
-  assert.match(demoSource, /Run 200 Held-Out Scenarios/);
+  assert.match(demoSource, /200 Held-Out/);
   assert.match(demoSource, /data-action="step"/);
   assert.match(demoSource, /data-action="reset"/);
   assert.match(demoSource, /data-dynamic="tick"/);

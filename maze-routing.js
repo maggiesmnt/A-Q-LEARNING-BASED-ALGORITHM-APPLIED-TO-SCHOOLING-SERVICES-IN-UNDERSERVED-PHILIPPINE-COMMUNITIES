@@ -16,6 +16,51 @@ var MazeRouting = (function () {
 
   function key(point) { return point[0] + ',' + point[1]; }
   function copy(point) { return point.slice(); }
+  function QTable() {
+    this.indexByKey = new Map();
+    this.keys = [];
+    this.data = new Float64Array(64);
+  }
+  QTable.prototype.index = function (stateKey, create) {
+    var index = this.indexByKey.get(stateKey);
+    if (index !== undefined || !create) return index;
+    index = this.keys.length;
+    this.indexByKey.set(stateKey, index);
+    this.keys.push(stateKey);
+    if ((index + 1) * 4 > this.data.length) {
+      var expanded = new Float64Array(this.data.length * 2);
+      expanded.set(this.data);
+      this.data = expanded;
+    }
+    return index;
+  };
+  QTable.prototype.get = function (stateKey) {
+    var index = this.index(stateKey, false);
+    return index === undefined ? undefined : this.data.subarray(index * 4, index * 4 + 4);
+  };
+  QTable.prototype.set = function (stateKey, values) {
+    var index = this.index(stateKey, true);
+    this.data.set(values, index * 4);
+    return this;
+  };
+  QTable.prototype.has = function (stateKey) {
+    return this.indexByKey.has(stateKey);
+  };
+  QTable.prototype.entries = function () {
+    var entries = [];
+    for (var index = 0; index < this.keys.length; index++) {
+      entries.push([this.keys[index], Array.from(this.data.subarray(index * 4, index * 4 + 4))]);
+    }
+    return entries;
+  };
+  QTable.prototype.forEach = function (callback, thisArg) {
+    for (var index = 0; index < this.keys.length; index++) {
+      callback.call(thisArg, this.data.subarray(index * 4, index * 4 + 4), this.keys[index], this);
+    }
+  };
+  Object.defineProperty(QTable.prototype, 'size', {
+    get: function () { return this.keys.length; }
+  });
   function seededRandom(seed) {
     var state = seed >>> 0;
     return function () {
@@ -25,7 +70,7 @@ var MazeRouting = (function () {
       return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
     };
   }
-  function emptyRow() { return [0, 0, 0, 0]; }
+  function emptyRow() { return new Float64Array(4); }
   function row(table, state) { return table.get(state) || emptyRow(); }
   function fairness(values) {
     var sum = 0, squares = 0;
@@ -57,6 +102,10 @@ var MazeRouting = (function () {
     });
     this.totalDemand = this.sites.reduce(function (sum, site) { return sum + site.demand; }, 0);
     this.maximumDemand = Math.max.apply(null, this.sites.map(function (site) { return site.demand; }));
+    this.sites.forEach(function (site) {
+      site.stateDemandBucket = demandBucket(site.demand, this.maximumDemand);
+      site.stateHistoryBucket = historyBucket(site.lastVisitDays);
+    }, this);
     this.budgetMinutes = config.budgetMinutes;
     this.serviceMinutes = config.serviceMinutes;
     this.maxSteps = config.maxSteps || 1000;
@@ -78,6 +127,9 @@ var MazeRouting = (function () {
 
     if (config.obstacleRatio) this.generateObstacles(config.obstacleRatio);
     if (config.ensureConnected) this.ensureInitialPaths();
+    this.topologyVersion = 0;
+    this.reachabilityCache = new Map();
+    this.travelCache = new Map();
     if (this.dynamicKind === 'laiban') {
       this.overlayCandidates = this.overlayCandidates.filter(function (point) {
         return this.allowedCells && this.allowedCells.has(key(point)) && !this.protected.has(key(point));
@@ -112,17 +164,24 @@ var MazeRouting = (function () {
     return Number.isFinite(value) && value > 0 ? value : this.defaultCellMinutes;
   };
   World.prototype.legalActions = function (id) {
-    var point = this.positions[id], self = this;
-    return ACTIONS.map(function (delta, action) {
+    var point = this.positions[id], actions = [];
+    for (var action = 0; action < ACTIONS.length; action++) {
+      var delta = ACTIONS[action];
       var next = [point[0] + delta[0], point[1] + delta[1]];
-      return self.isOpen(next) ? action : -1;
-    }).filter(function (action) { return action >= 0; });
+      if (this.isOpen(next)) actions.push(action);
+    }
+    return actions;
   };
   World.prototype.reachableFrom = function (start) {
+    var startKey = key(start);
+    var cacheKey = this.topologyVersion + '|' + startKey;
+    if (this.reachabilityCache && this.reachabilityCache.has(cacheKey)) {
+      return this.reachabilityCache.get(cacheKey);
+    }
     var queue = [], seen = new Set();
     if (!this.isOpen(start)) return seen;
     queue.push(copy(start));
-    seen.add(key(start));
+    seen.add(startKey);
     for (var head = 0; head < queue.length; head++) {
       var point = queue[head];
       ACTIONS.forEach(function (delta) {
@@ -133,6 +192,7 @@ var MazeRouting = (function () {
         }
       }, this);
     }
+    if (this.reachabilityCache) this.reachabilityCache.set(cacheKey, seen);
     return seen;
   };
   World.prototype.pathExists = function (start, goal) {
@@ -156,32 +216,45 @@ var MazeRouting = (function () {
   World.prototype.accessible = function (start, goal) { return this.pathExists(start, goal); };
   World.prototype.estimatedTravelMinutes = function (start, goal) {
     if (!this.isOpen(start) || !this.isOpen(goal)) return null;
-    var distances = {}, visited = {}, startKey = key(start), goalKey = key(goal);
-    distances[startKey] = 0;
-    while (true) {
-      var currentKey = null, best = Infinity;
-      Object.keys(distances).forEach(function (candidate) {
-        if (!visited[candidate] && distances[candidate] < best) {
-          currentKey = candidate;
-          best = distances[candidate];
+    var startKey = key(start), cacheKey = this.topologyVersion + '|' + startKey;
+    var distances = this.travelCache && this.travelCache.get(cacheKey);
+    if (!distances) {
+      var count = this.size * this.size, visited = new Uint8Array(count);
+      distances = new Float64Array(count);
+      distances.fill(Infinity);
+      distances[start[0] * this.size + start[1]] = 0;
+      for (var step = 0; step < count; step++) {
+        var current = -1, best = Infinity;
+        for (var index = 0; index < count; index++) {
+          if (!visited[index] && distances[index] < best) {
+            current = index;
+            best = distances[index];
+          }
         }
-      });
-      if (currentKey === null) return null;
-      if (currentKey === goalKey) return best;
-      visited[currentKey] = true;
-      var point = currentKey.split(',').map(Number);
-      ACTIONS.forEach(function (delta) {
-        var next = [point[0] + delta[0], point[1] + delta[1]], nextKey = key(next);
-        if (!this.isOpen(next) || visited[nextKey]) return;
-        var distance = best + this.cellMinutes(next);
-        if (distances[nextKey] === undefined || distance < distances[nextKey]) distances[nextKey] = distance;
-      }, this);
+        if (current < 0) break;
+        visited[current] = 1;
+        var currentPoint = [Math.floor(current / this.size), current % this.size];
+        for (var action = 0; action < ACTIONS.length; action++) {
+          var delta = ACTIONS[action], next = [currentPoint[0] + delta[0], currentPoint[1] + delta[1]];
+          if (!this.isOpen(next)) continue;
+          var nextIndex = next[0] * this.size + next[1];
+          if (visited[nextIndex]) continue;
+          var distance = best + this.cellMinutes(next);
+          if (distance < distances[nextIndex]) distances[nextIndex] = distance;
+        }
+      }
+      if (this.travelCache) this.travelCache.set(cacheKey, distances);
     }
+    var goalDistance = distances[goal[0] * this.size + goal[1]];
+    return Number.isFinite(goalDistance) ? goalDistance : null;
   };
   World.prototype.beginTick = function () {
     this.tick++;
     if (!this.dynamicFrequency || this.tick % this.dynamicFrequency) return;
     this.obstacleUpdates++;
+    this.topologyVersion++;
+    this.reachabilityCache.clear();
+    this.travelCache.clear();
     if (this.dynamicKind === 'laiban') {
       this.overlay.clear();
       var candidates = this.overlayCandidates.filter(function (point) {
@@ -223,7 +296,11 @@ var MazeRouting = (function () {
     return {moved: true, point: copy(next), minutes: minutes, collision: false};
   };
   World.prototype.siteAt = function (point) {
-    return this.sites.filter(function (site) { return key(site.position) === key(point); })[0] || null;
+    var pointKey = key(point);
+    for (var index = 0; index < this.sites.length; index++) {
+      if (key(this.sites[index].position) === pointKey) return this.sites[index];
+    }
+    return null;
   };
   World.prototype.obstacleCells = function () {
     var cells = new Set(this.obstacles);
@@ -242,37 +319,48 @@ var MazeRouting = (function () {
 
   function state(world, run, point, kind) {
     if (kind === 'standard') return key(point);
-    var demand = [], history = [], access = [], reachable = world.reachableFrom(point);
-    world.sites.forEach(function (site, index) {
-      var served = !!run.served[site.id];
-      demand.push(served ? 0 : demandBucket(site.demand, world.maximumDemand));
-      history.push(historyBucket(served ? 0 : run.historyDays[index]));
-      access.push(!served && reachable.has(key(site.position)) ? 1 : 0);
-    });
-    return 'L=' + key(point) +
-      '|D=' + demand.join('') +
-      '|T=' + (run.remainingMinutes < world.budgetMinutes / 2 ? 0 : 1) +
-      '|H=' + history.join('') +
-      '|A=' + access.join('');
+    var timeBucket = run.remainingMinutes < world.budgetMinutes / 2 ? 0 : 1;
+    var stateCacheKey = world.topologyVersion + '|' + (point[0] * world.size + point[1]) +
+      '|' + run.servedMask + '|' + timeBucket;
+    var cachedState = run.stateCache.get(stateCacheKey);
+    if (cachedState) return cachedState;
+    var demand = '', history = '', access = '', reachable = world.reachableFrom(point);
+    for (var index = 0; index < world.sites.length; index++) {
+      var site = world.sites[index];
+      var served = !!(run.servedMask & (1 << index));
+      demand += served ? '0' : String(site.stateDemandBucket);
+      history += served ? '0' : String(site.stateHistoryBucket);
+      access += !served && reachable.has(key(site.position)) ? '1' : '0';
+    }
+    var encoded = 'L=' + key(point) +
+      '|D=' + demand +
+      '|T=' + timeBucket +
+      '|H=' + history +
+      '|A=' + access;
+    run.stateCache.set(stateCacheKey, encoded);
+    return encoded;
   }
   function Model(kind, rng) {
     this.kind = kind;
     this.rng = rng;
-    this.q = new Map();
-    this.q1 = new Map();
-    this.q2 = new Map();
-    this.samples = new Map();
+    this.q = new QTable();
+    this.q1 = new QTable();
+    this.q2 = new QTable();
+    this.samples = new QTable();
     this.alpha = PARAMETERS.alpha;
     this.gamma = PARAMETERS.gamma;
     this.epsilon = PARAMETERS.epsilonStart;
     this.episodes = 0;
     this.updates = 0;
     this.lastUpdate = null;
+    this.trackUpdates = true;
   }
   Model.prototype.values = function (stateKey) {
     if (this.kind === 'standard') return row(this.q, stateKey).slice();
     var first = row(this.q1, stateKey), second = row(this.q2, stateKey);
-    return first.map(function (value, index) { return value + second[index]; });
+    var values = new Float64Array(ACTIONS.length);
+    for (var index = 0; index < ACTIONS.length; index++) values[index] = first[index] + second[index];
+    return values;
   };
   Model.prototype.known = function (stateKey, action) {
     return row(this.samples, stateKey)[action] > 0;
@@ -295,10 +383,13 @@ var MazeRouting = (function () {
     var selecting = single ? this.q : first ? this.q1 : this.q2;
     var evaluating = single ? this.q : first ? this.q2 : this.q1;
     var bestAction = null, bestValue = -Infinity;
-    if (!done) nextActions.forEach(function (candidate) {
-      var value = row(selecting, nextState)[candidate];
-      if (value > bestValue) { bestValue = value; bestAction = candidate; }
-    });
+    if (!done) {
+      var nextValues = row(selecting, nextState);
+      for (var index = 0; index < nextActions.length; index++) {
+        var candidate = nextActions[index], value = nextValues[candidate];
+        if (value > bestValue) { bestValue = value; bestAction = candidate; }
+      }
+    }
     var bootstrap = bestAction === null ? 0 : row(evaluating, nextState)[bestAction];
     var values = row(selecting, stateKey).slice(), before = values[action];
     var target = reward + this.gamma * bootstrap;
@@ -308,12 +399,14 @@ var MazeRouting = (function () {
     samples[action]++;
     this.samples.set(stateKey, samples);
     this.updates++;
-    this.lastUpdate = {
-      table: single ? 'Q' : first ? 'Q1' : 'Q2',
-      before: before,
-      after: values[action],
-      target: target
-    };
+    if (this.trackUpdates) {
+      this.lastUpdate = {
+        table: single ? 'Q' : first ? 'Q1' : 'Q2',
+        before: before,
+        after: values[action],
+        target: target
+      };
+    }
   };
   Model.prototype.spread = function () {
     if (this.kind !== 'modql') return null;
@@ -332,11 +425,50 @@ var MazeRouting = (function () {
     var modql = new Model('modql', seededRandom((seed ^ 0xC8013EA4) >>> 0));
     return {standard: standard, modql: modql, scenarioRandom: random};
   }
+  function policyFor(models, metadata, trainingLog) {
+    return {
+      version: 1,
+      scenarioId: metadata.scenarioId,
+      seed: metadata.seed,
+      trainedAt: metadata.trainedAt,
+      episodes: metadata.episodes,
+      alpha: PARAMETERS.alpha,
+      gamma: PARAMETERS.gamma,
+      epsilonStart: PARAMETERS.epsilonStart,
+      epsilonMin: PARAMETERS.epsilonMin,
+      epsilonDecay: PARAMETERS.epsilonDecay,
+      qTables: {
+        standard: models.standard.q.entries(),
+        modqlQ1: models.modql.q1.entries(),
+        modqlQ2: models.modql.q2.entries()
+      },
+      trainingLog: trainingLog
+    };
+  }
+  function modelsFromPolicy(policy, expectedScenarioId, expectedSeed) {
+    if (!policy || policy.version !== 1 || policy.scenarioId !== expectedScenarioId ||
+        policy.seed !== expectedSeed || policy.episodes !== PARAMETERS.episodes ||
+        policy.alpha !== PARAMETERS.alpha || policy.gamma !== PARAMETERS.gamma ||
+        policy.epsilonStart !== PARAMETERS.epsilonStart || policy.epsilonMin !== PARAMETERS.epsilonMin ||
+        policy.epsilonDecay !== PARAMETERS.epsilonDecay || !policy.qTables ||
+        !Array.isArray(policy.qTables.standard) || !Array.isArray(policy.qTables.modqlQ1) ||
+        !Array.isArray(policy.qTables.modqlQ2)) {
+      throw new Error('The saved policy does not match this scenario and training configuration.');
+    }
+    var models = modelsFor(policy.seed);
+    policy.qTables.standard.forEach(function (entry) { models.standard.q.set(entry[0], entry[1]); });
+    policy.qTables.modqlQ1.forEach(function (entry) { models.modql.q1.set(entry[0], entry[1]); });
+    policy.qTables.modqlQ2.forEach(function (entry) { models.modql.q2.set(entry[0], entry[1]); });
+    models.standard.episodes = models.modql.episodes = policy.episodes;
+    models.standard.epsilon = models.modql.epsilon = PARAMETERS.epsilonMin;
+    return models;
+  }
   function makeRun(world) {
     return {
       didRun: false, done: false, success: false, status: 'Not run yet',
       steps: 0, attempts: 0, minutes: 0, remainingMinutes: world.budgetMinutes,
       serviceMinutes: 0, segmentMinutes: 0, learners: 0, served: {},
+      servedMask: 0, stateCache: new Map(),
       visits: world.sites.map(function (site) { return site.initialVisits; }),
       historyDays: world.sites.map(function (site) { return site.lastVisitDays; }),
       fairness: null, reward: 0, latestReward: null, currentState: null,
@@ -365,7 +497,7 @@ var MazeRouting = (function () {
     this.runs = {};
     IDS.forEach(function (id) {
       this.runs[id] = makeRun(world);
-      this.runs[id].trail = [copy(world.start)];
+      this.runs[id].trail = this.training ? [] : [copy(world.start)];
     }, this);
   }
   Pair.prototype.done = function () {
@@ -395,13 +527,16 @@ var MazeRouting = (function () {
       var action = model.choose(stateKey, legal, self.training);
       run.didRun = true;
       run.status = 'Running';
-      run.currentState = stateKey;
-      run.currentAction = ACTION_NAMES[action];
-      run.q = model.values(stateKey)[action];
-      run.q1 = id === 'modql' ? row(model.q1, stateKey)[action] : null;
-      run.q2 = id === 'modql' ? row(model.q2, stateKey)[action] : null;
-      run.known = model.known(stateKey, action);
-      decisions[id] = {state: stateKey, action: action, estimate: run.q, known: run.known};
+      if (!self.training) {
+        run.currentState = stateKey;
+        run.currentAction = ACTION_NAMES[action];
+        run.q = model.values(stateKey)[action];
+        run.q1 = id === 'modql' ? row(model.q1, stateKey)[action] : null;
+        run.q2 = id === 'modql' ? row(model.q2, stateKey)[action] : null;
+        run.known = model.known(stateKey, action);
+      }
+      decisions[id] = {state: stateKey, action: action,
+        estimate: self.training ? null : run.q, known: self.training ? false : run.known};
     });
     IDS.forEach(function (id) {
       var decision = decisions[id], run = self.runs[id], model = self.models[id];
@@ -412,7 +547,7 @@ var MazeRouting = (function () {
         finishRun(run, world, 'Travel-time budget exhausted', false, model);
       } else if (movement.moved) {
         run.steps++;
-        run.trail.push(copy(movement.point));
+        if (!self.training) run.trail.push(copy(movement.point));
         run.minutes += movement.minutes;
         run.remainingMinutes -= movement.minutes;
         run.segmentMinutes += movement.minutes;
@@ -425,6 +560,7 @@ var MazeRouting = (function () {
             run.remainingMinutes -= world.serviceMinutes;
             run.serviceMinutes += world.serviceMinutes;
             run.served[site.id] = true;
+            run.servedMask |= 1 << siteIndex;
             run.visits[siteIndex]++;
             run.historyDays[siteIndex] = 0;
             run.learners += site.demand;
@@ -454,7 +590,9 @@ var MazeRouting = (function () {
           finishRun(run, world, 'Service-time budget exhausted', false, model);
         }
       }
-      run.valueSamples.push({estimate: decision.estimate, known: decision.known, reward: reward});
+      if (!self.training) {
+        run.valueSamples.push({estimate: decision.estimate, known: decision.known, reward: reward});
+      }
       var updateAllowed = id !== 'standard' || !run.done ||
         run.status === 'All destinations served' ||
         run.status === 'No legal move available';
@@ -466,6 +604,8 @@ var MazeRouting = (function () {
     });
   };
   function trainEpisode(world, models) {
+    models.standard.trackUpdates = false;
+    models.modql.trackUpdates = false;
     var pair = new Pair(world, models, true), guard = 0;
     while (!pair.done() && guard++ < world.maxSteps + 2) pair.step();
     if (!pair.done()) {
@@ -508,12 +648,15 @@ var MazeRouting = (function () {
     actionNames: ACTION_NAMES,
     ids: IDS,
     parameters: PARAMETERS,
+    QTable: QTable,
     key: key,
     random: seededRandom,
     World: World,
     Model: Model,
     Pair: Pair,
     modelsFor: modelsFor,
+    policyFor: policyFor,
+    modelsFromPolicy: modelsFromPolicy,
     state: state,
     metrics: metrics,
     fairness: fairness,

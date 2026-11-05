@@ -26,7 +26,7 @@ var MazeComparisonData = (function () {
       question: 'What information is considered when choosing the next destination?',
       objective: 'Objective wording pending',
       standard: 'Standard Q-Learning encodes only the agent location. Demand, remaining time, visit history, and road accessibility remain environment-only values.',
-      modql: 'Enhanced MODQL encodes location, demand, remaining service time, visit history, and current road accessibility.',
+      modql: 'Enhanced MODQL encodes location, demand, remaining service time, visit history, and two-level road accessibility (reachable or unreachable).',
       metrics: ['learners', 'coveragePercent', 'fairness', 'deferredCommunities', 'state']
     }
   ];
@@ -122,7 +122,7 @@ var MazeComparisonData = (function () {
     return {
       id: 'tab-4',
       seed: 404,
-      name: 'Laiban real-data application',
+      name: 'Laiban Case',
       size: 10,
       start: FIXED_MAZE_NODES.hub.slice(),
       sites: sites,
@@ -143,13 +143,13 @@ var MazeComparisonData = (function () {
   }
   function getScenarios() {
     return [
-      basic('tab-1', 101, 'Single target · no obstacles', false, [
+      basic('tab-1', 101, 'Basic Grid', false, [
         site('goal', 'Target', 'T', [9, 9], 40, 0, 30)
       ]),
-      basic('tab-2', 202, 'Single target · static obstacles', true, [
+      basic('tab-2', 202, 'Obstacles', true, [
         site('goal', 'Target', 'T', [9, 9], 40, 0, 30)
       ]),
-      Object.assign(basic('tab-3', 303, 'Multiple targets · dynamic obstacles', true, [
+      Object.assign(basic('tab-3', 303, 'Multi-Target', true, [
         site('a', 'Community A', 'A', [1, 8], 18, 0, 30),
         site('b', 'Community B', 'B', [3, 2], 30, 1, 21),
         site('c', 'Community C', 'C', [5, 8], 22, 0, 25),

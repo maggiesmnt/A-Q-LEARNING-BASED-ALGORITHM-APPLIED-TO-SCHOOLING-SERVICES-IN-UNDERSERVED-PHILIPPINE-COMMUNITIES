@@ -29,7 +29,7 @@
     {key: 'deferredCommunities', label: 'Deferred communities', decimals: 2},
     {key: 'completed', label: 'Completion rate (%)', decimals: 2, percent: true}
   ];
-  var root, states = [], activeIndex = 0, selectedTravelUnit = 'minutes';
+  var root, scenarioSelector, states = [], activeIndex = 0, selectedTravelUnit = 'minutes';
   var timer = null, speed = 200, batchSequence = 0;
 
   function byId(id) { return document.getElementById(id); }
@@ -49,13 +49,14 @@
       index: index,
       config: cloneConfig(config),
       models: null,
-      previousModels: null,
+      policyMetadata: null,
+      trainingLog: null,
+      loading: false,
+      loadError: null,
       training: false,
       trainingProgress: 0,
       trainingToken: 0,
-      runAfterTraining: false,
-      stepAfterTraining: false,
-      batchAfterTraining: false,
+      worker: null,
       env: null,
       pair: null,
       sop: 1,
@@ -73,8 +74,30 @@
     state.pair = new MazeRouting.Pair(state.env, state.models, false);
     renderState(state);
   }
-  function makeModels(state) {
-    state.models = MazeRouting.modelsFor(state.config.seed);
+  function ensurePolicy(state) {
+    if (state.models || state.loading) return;
+    state.loading = true;
+    state.loadError = null;
+    renderState(state);
+    fetch('policies/' + encodeURIComponent(state.config.id) + '.json')
+      .then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status + ' loading the trained policy.');
+        return response.json();
+      })
+      .then(function (policy) {
+        state.models = MazeRouting.modelsFromPolicy(policy, state.config.id, state.config.seed);
+        state.policyMetadata = policy;
+        state.trainingLog = policy.trainingLog;
+        state.loading = false;
+        resetEvaluation(state);
+        renderState(state);
+      })
+      .catch(function (error) {
+        state.loading = false;
+        state.loadError = error.message;
+        renderState(state);
+        setStatus(state, 'Trained policy could not be loaded: ' + error.message, true);
+      });
   }
 
   function stopTimer() {
@@ -97,91 +120,100 @@
     renderState(activeState());
   }
   function startComparison(state) {
-    if (state.training) {
-      state.runAfterTraining = true;
-      return;
-    }
-    if (!state.models) {
-      state.runAfterTraining = true;
-      trainPolicies(state);
-      return;
-    }
+    if (state.training || !state.models) return;
     if (!state.pair || allDone(state)) beginEvaluation(state);
     if (state === activeState()) startTimer();
   }
   function advanceOneStep(state) {
-    if (state.training) return;
-    if (!state.models) {
-      state.stepAfterTraining = true;
-      trainPolicies(state);
-      return;
-    }
+    if (state.training || !state.models) return;
     if (!state.pair || allDone(state)) beginEvaluation(state);
     stepState(state);
   }
   function resetComparison(state) {
     if (state === activeState()) stopTimer();
-    if (state.training) state.models = state.previousModels;
     state.trainingToken++;
+    if (state.worker) state.worker.terminate();
+    state.worker = null;
     state.training = false;
-    state.previousModels = null;
     state.trainingProgress = 0;
-    state.runAfterTraining = false;
-    state.stepAfterTraining = false;
-    state.batchAfterTraining = false;
     resetEvaluation(state);
     renderState(state);
   }
 
   function trainPolicies(state) {
-    if (state.training) return;
+    if (state.training || state.loading) return;
     if (state === activeState()) stopTimer();
     state.training = true;
     state.trainingProgress = 0;
     state.trainingToken++;
     var token = state.trainingToken;
-    state.previousModels = state.models;
-    makeModels(state);
+    var previousModels = state.models;
+    var previousMetadata = state.policyMetadata;
+    var previousLog = state.trainingLog;
+    resetEvaluation(state);
     state.batch.result = null;
     renderState(state);
-    function chunk() {
-      if (token !== state.trainingToken || !state.training) return;
-      try {
-        var count = 0;
-        while (count++ < 5 && state.trainingProgress < EPISODES) {
-          var trainingSeed = seedFor(state.config, 1000 + state.trainingProgress * 7919);
-          var world = new MazeRouting.World(state.config, trainingSeed);
-          MazeRouting.trainEpisode(world, state.models);
-          state.trainingProgress++;
-        }
-        renderState(state);
-        if (state.trainingProgress < EPISODES) {
-          window.setTimeout(chunk, 0);
+    if (typeof Worker === 'undefined') {
+      state.training = false;
+      state.models = previousModels;
+      state.policyMetadata = previousMetadata;
+      state.trainingLog = previousLog;
+      renderState(state);
+      setStatus(state, 'Retraining failed: Web Workers are unavailable in this browser.', true);
+      return;
+    }
+    var worker;
+    try {
+      worker = new Worker('maze-training-worker.js');
+      state.worker = worker;
+      worker.onmessage = function (event) {
+        if (token !== state.trainingToken || !state.training) return;
+        var message = event.data;
+        if (message.type === 'progress') {
+          state.trainingProgress = message.episodes;
+          renderTrainingProgress(state);
           return;
         }
-        state.training = false;
-        state.previousModels = null;
-        resetEvaluation(state);
-        var run = state.runAfterTraining;
-        var step = state.stepAfterTraining;
-        var batch = state.batchAfterTraining;
-        state.runAfterTraining = state.stepAfterTraining = state.batchAfterTraining = false;
-        renderState(state);
-        if (run) startComparison(state);
-        else if (step) advanceOneStep(state);
-        else if (batch) beginBatch(state);
-      } catch (error) {
-        state.training = false;
-        state.models = state.previousModels;
-        state.previousModels = null;
-        state.runAfterTraining = false;
-        state.stepAfterTraining = false;
-        state.batchAfterTraining = false;
-        renderState(state);
-        setStatus(state, 'Training failed: ' + error.message, true);
-      }
+        if (message.type === 'error') {
+          failTraining(new Error(message.message));
+          return;
+        }
+        if (message.type === 'complete') {
+          try {
+            state.models = MazeRouting.modelsFromPolicy(message.policy, state.config.id, state.config.seed);
+            state.policyMetadata = message.policy;
+            state.trainingLog = message.policy.trainingLog;
+            state.training = false;
+            state.worker = null;
+            worker.terminate();
+            resetEvaluation(state);
+            renderState(state);
+            setStatus(state, 'Retraining complete. New policy loaded; evaluation results remain unavailable until a run starts.', false);
+          } catch (error) {
+            failTraining(error);
+          }
+        }
+      };
+      worker.onerror = function (event) {
+        event.preventDefault();
+        failTraining(new Error(event.message || 'The training worker failed.'));
+      };
+      worker.postMessage({config: state.config});
+    } catch (error) {
+      failTraining(error);
     }
-    window.setTimeout(chunk, 0);
+
+    function failTraining(error) {
+      if (state.worker) state.worker.terminate();
+      state.worker = null;
+      state.training = false;
+      state.models = previousModels;
+      state.policyMetadata = previousMetadata;
+      state.trainingLog = previousLog;
+      resetEvaluation(state);
+      renderState(state);
+      setStatus(state, 'Retraining failed: ' + error.message, true);
+    }
   }
 
   function readMetrics(state, id) {
@@ -246,8 +278,30 @@
 
   function trainingLabel(state, id) {
     if (state.training) return 'Training... ' + state.trainingProgress + ' / ' + EPISODES + ' episodes';
-    if (!state.models) return 'Not trained';
-    return 'Trained: ' + state.models[id].episodes + ' episodes; frozen evaluation';
+    if (state.loading) return 'Loading trained policy...';
+    if (!state.models) return state.loadError ? 'Policy unavailable' : 'Trained policy pending';
+    return 'Trained: ' + state.policyMetadata.episodes.toLocaleString('en-US') + ' episodes, seed ' + state.policyMetadata.seed +
+      ', ' + state.policyMetadata.trainedAt;
+  }
+  function renderTrainingProgress(state) {
+    var panel = panelFor(state);
+    if (!panel) return;
+    ['standard', 'modql'].forEach(function (id) {
+      var badge = panel.querySelector('[data-training="' + id + '"]');
+      var detail = panel.querySelector('[data-training-detail="' + id + '"]');
+      if (badge) badge.textContent = 'Training...';
+      if (detail) detail.textContent = trainingLabel(state, id);
+    });
+    var progress = panel.querySelector('[data-training-progress]');
+    if (progress) {
+      progress.hidden = false;
+      progress.value = state.trainingProgress;
+    }
+    var runButton = panel.querySelector('[data-action="run"]');
+    if (runButton) runButton.disabled = true;
+    panel.querySelector('[data-action="step"]').disabled = true;
+    panel.querySelector('[data-action="train"]').disabled = true;
+    setStatus(state, 'Retraining both policies in a background worker; no evaluation is running.', false);
   }
   function buildMetricRows() {
     return METRICS.map(function (metric) {
@@ -272,10 +326,6 @@
         config.closedRoads.map(function (road) { return '<li>' + escapeHtml(road.name) + ': ' + escapeHtml(road.reason) + '</li>'; }).join('') +
         '</ul></details>'
       : '';
-    var targets = config.sites.map(function (target) {
-      return '<span class="maze-target-chip"><b>' + escapeHtml(target.letter) + '</b> ' +
-        escapeHtml(target.name) + ' · ' + target.demand + ' learners</span>';
-    }).join('');
     var sopButtons = MazeComparisonData.sops.map(function (sop) {
       return '<button type="button" class="btn g" data-sop="' + sop.id + '" aria-pressed="' +
         (sop.id === state.sop ? 'true' : 'false') + '">SOP ' + sop.id + '</button>';
@@ -293,12 +343,12 @@
       '<button type="button" class="btn p" data-action="run">Start Comparison</button>' +
       '<button type="button" class="btn g" data-action="reset">Reset</button>' +
       '<button type="button" class="btn g" data-action="step">Advance One Step</button>' +
-      '<button type="button" class="btn g" data-action="train">Train Both Policies</button>' +
+      '<button type="button" class="btn g" data-action="train">Retrain from scratch</button>' +
       '<label>Simulation speed <select data-action="speed"><option value="800">0.25×</option><option value="400">0.5×</option><option value="200" selected>1×</option><option value="100">2×</option><option value="50">4×</option></select></label>' +
       '<label>Travel time units <select data-action="unit"><option value="minutes" selected>Minutes</option><option value="hours">Hours</option></select></label>' +
       dynamicCounters + '</div>' +
+      '<progress class="maze-training-progress" data-training-progress max="' + EPISODES + '" value="0" hidden></progress>' +
       '<p class="maze-status-message" role="status">Results are not available until a run starts.</p>' +
-      '<div class="maze-target-list" aria-label="Scenario destinations">' + targets + '</div>' +
       (config.rainfallMm !== undefined ? '<p class="maze-laiban-inputs">Rainfall: ' + config.rainfallMm +
         ' mm/24h · Service window: ' + config.budgetMinutes + ' minutes · Service stop: ' + config.serviceMinutes +
         ' minutes · Start: ALS Hub</p>' : '') + roadDisclaimer + closed +
@@ -312,10 +362,18 @@
           '<div><span class="shared-maze-eyebrow">' + (id === 'standard' ? 'Existing algorithm' : 'Proposed algorithm') +
           '</span><h3>' + title + '</h3></div><span class="shared-maze-panel-badge" data-training="' + id + '">' +
           'Not trained</span></header><div class="maze-training-indicator" data-training-detail="' + id + '">' +
-          trainingLabel(state, id) + '</div><div class="maze-agent-status" data-status="' + id + '">Not run yet</div>' +
-          '<div class="maze-agent-environment" data-environment="' + id + '"></div>' +
+          trainingLabel(state, id) + '</div>' +
+          (id === 'standard' ? '<p class="maze-agent-description">Standard Q-Learning explores randomly during training; evaluation follows the learned policy (epsilon = 0).</p>' : '') +
+          '<div class="maze-agent-status" data-status="' + id + '">Not run yet</div>' +
           '<div class="shared-maze-board"><canvas width="500" height="500" data-canvas="' + id +
           '" role="img" aria-label="' + title + ' route in the ' + escapeHtml(config.name) + ' scenario"></canvas></div>' +
+          '<details class="maze-policy-inputs"><summary>Policy inputs</summary><div data-environment="' + id +
+          '"></div><p class="maze-state-encoding">' + (id === 'standard'
+            ? 'State encoding: current grid location only (L).'
+            : 'Research state encoding: location (L), two-level demand buckets (D), remaining-time bucket (T), visit-history buckets (H), and two-level road accessibility (A: reachable or unreachable).') +
+          '</p></details><div class="maze-training-curve"><span>Training log · steps per episode</span>' +
+          '<canvas width="320" height="72" data-curve="' + id + '" role="img" aria-label="' + title +
+          ' training log, steps per episode"></canvas></div>' +
           '<p class="maze-agent-live" data-live="' + id + '">Results: Not run yet</p></section>';
       }).join('') + '</div>' +
       '<section class="shared-maze-summary"><header><div><span class="shared-maze-eyebrow">Computed from this run</span>' +
@@ -326,11 +384,13 @@
       '<section class="maze-sop-section"><div class="maze-sop-header"><div><span class="shared-maze-eyebrow">Research objective alignment</span>' +
       '<h2>Statement of the Problem</h2></div><div class="maze-sop-buttons" role="group" aria-label="Select SOP">' +
       sopButtons + '</div></div><div data-sop-content></div></section>' +
-      '<details class="maze-batch-panel"><summary>Batch evaluation · 200 held-out scenarios</summary>' +
-      '<p>Paired scenarios are separate from the single-run view. Policies stay frozen; mean and population standard deviation are computed live for each metric.</p>' +
-      '<button type="button" class="btn g" data-action="batch">Run 200 Held-Out Scenarios</button>' +
+      '<details class="maze-batch-panel"><summary>Batch evaluation · ' + escapeHtml(config.name) + ' · 200 held-out scenarios</summary>' +
+      '<p>Paired scenarios are separate from the single-run view. Policies stay frozen; mean and population standard deviation are computed live for each metric. Batch numbers use this prototype&rsquo;s held-out protocol and are not comparable to Chapter 4 results.</p>' +
+      '<p>Basic Grid fairness is trivial because there is only one destination.</p>' +
+      '<button type="button" class="btn g" data-action="batch">Run 200 Held-Out ' + escapeHtml(config.name) + ' Scenarios</button>' +
       '<p class="maze-batch-status" role="status" data-batch-status>Batch evaluation has not run.</p>' +
-      '<div data-batch-results><p>Not run yet</p></div></details></section>';
+      '<div data-batch-results><p>Not run yet</p></div></details>' +
+      '<details class="maze-limits"><summary>Simulation limits</summary><p>The 10×10 route grid is a schematic simplification of the road network. MODQL retains the thesis&rsquo;s two-level accessibility encoding (reachable or unreachable); it does not distinguish granular open, caution, or restricted road bands. Roads and temporary hazards are simulated, and Tab 4 includes unverified data disclaimers.</p></details></section>';
   }
 
   function renderSop(state, panel) {
@@ -422,6 +482,40 @@
       number(remaining, 1) + ' minutes</span><div>' + entries + '</div>';
   }
 
+  function drawTrainingCurve(state, id) {
+    var panel = panelFor(state);
+    var canvas = panel && panel.querySelector('[data-curve="' + id + '"]');
+    var log = state.trainingLog;
+    if (!canvas || !log || !state.policyMetadata) return;
+    var stamp = state.policyMetadata.trainedAt;
+    if (canvas.getAttribute('data-trained-at') === stamp) return;
+    canvas.setAttribute('data-trained-at', stamp);
+    var values = log[id + 'Steps'];
+    if (!Array.isArray(values) || !values.length) return;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    var width = canvas.width, height = canvas.height, pad = 5;
+    var minimum = Math.min.apply(null, values), maximum = Math.max.apply(null, values);
+    var span = Math.max(maximum - minimum, 1);
+    ctx.clearRect(0, 0, width, height);
+    ctx.strokeStyle = '#b7b3a5';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, height - pad);
+    ctx.lineTo(width - pad, height - pad);
+    ctx.stroke();
+    ctx.strokeStyle = id === 'standard' ? '#d88140' : '#408b5d';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    values.forEach(function (value, index) {
+      var x = pad + index * (width - pad * 2) / Math.max(values.length - 1, 1);
+      var y = height - pad - (value - minimum) * (height - pad * 2) / span;
+      if (index) ctx.lineTo(x, y);
+      else ctx.moveTo(x, y);
+    });
+    ctx.stroke();
+  }
+
   function draw(state, id) {
     var panel = panelFor(state);
     var canvas = panel && panel.querySelector('[data-canvas="' + id + '"]');
@@ -446,13 +540,15 @@
       var x = (target.position[1] + 0.5) * cell, y = (target.position[0] + 0.5) * cell;
       ctx.beginPath();
       ctx.fillStyle = run && run.served[target.id] ? '#8a8b76' : '#db9558';
-      ctx.arc(x, y, cell * 0.29, 0, Math.PI * 2);
+      ctx.arc(x, y, cell * 0.34, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#fffaf0';
       ctx.font = 'bold ' + Math.max(10, cell * 0.32) + 'px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(target.letter, x, y);
+      ctx.fillText(target.letter, x, y - cell * 0.09);
+      ctx.font = 'bold ' + Math.max(7, cell * 0.15) + 'px sans-serif';
+      ctx.fillText(String(target.demand), x, y + cell * 0.16);
     });
     if (run && run.trail.length) {
       ctx.beginPath();
@@ -467,6 +563,7 @@
       });
       ctx.stroke();
     }
+    drawTrainingCurve(state, id);
     var position = world.positions[id];
     ctx.beginPath();
     ctx.fillStyle = id === 'standard' ? '#c3652d' : '#21673d';
@@ -485,7 +582,7 @@
       return;
     }
     if (!state.batch.result) {
-      status.textContent = state.models ? 'Policies trained; batch evaluation has not run.' : 'Batch evaluation has not run.';
+      status.textContent = state.models ? 'Trained policies loaded; batch evaluation has not run.' : 'Batch evaluation has not run.';
       return;
     }
     status.textContent = 'Completed live evaluation on ' + BATCH_SIZE + ' held-out paired scenarios.';
@@ -519,7 +616,8 @@
       var badge = panel.querySelector('[data-training="' + id + '"]');
       var detail = panel.querySelector('[data-training-detail="' + id + '"]');
       var label = trainingLabel(state, id);
-      if (badge) badge.textContent = state.training ? 'Training...' : state.models ? 'Trained' : 'Not trained';
+      if (badge) badge.textContent = state.training ? 'Training...' : state.models ? 'Trained' :
+        state.loading ? 'Loading...' : 'Not loaded';
       if (detail) detail.textContent = label;
     });
     var tick = panel.querySelector('[data-dynamic="tick"]');
@@ -534,11 +632,16 @@
     if (runButton) {
       runButton.textContent = timer !== null && state === activeState() ? 'Pause Comparison' :
         allDone(state) && state.pair ? 'Run Again' : 'Start Comparison';
-      runButton.disabled = state.training;
+      runButton.disabled = state.training || !state.models;
     }
-    panel.querySelector('[data-action="step"]').disabled = state.training;
-    panel.querySelector('[data-action="train"]').disabled = state.training;
-    panel.querySelector('[data-action="batch"]').disabled = state.batch.running || state.training;
+    panel.querySelector('[data-action="step"]').disabled = state.training || !state.models;
+    panel.querySelector('[data-action="train"]').disabled = state.training || state.loading;
+    panel.querySelector('[data-action="batch"]').disabled = state.batch.running || state.training || !state.models;
+    var progress = panel.querySelector('[data-training-progress]');
+    if (progress) {
+      progress.hidden = !state.training;
+      progress.value = state.trainingProgress;
+    }
     renderResults(state, panel);
     renderSop(state, panel);
     renderBatch(state, panel);
@@ -552,16 +655,18 @@
     if (index === activeIndex) return;
     stopTimer();
     activeIndex = index;
-    root.querySelectorAll('[data-scenario-tab]').forEach(function (button, buttonIndex) {
+    scenarioSelector.querySelectorAll('[data-scenario-tab]').forEach(function (button, buttonIndex) {
       var selected = buttonIndex === activeIndex;
-      button.setAttribute('aria-selected', selected ? 'true' : 'false');
-      button.tabIndex = selected ? 0 : -1;
+      button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+      button.tabIndex = 0;
     });
     states.forEach(function (state) {
       var panel = panelFor(state);
       panel.hidden = state.index !== activeIndex;
       renderState(state);
     });
+    document.title = activeState().config.name + ' — Maze Comparison — Philippine Mobile Hub';
+    ensurePolicy(activeState());
   }
 
   function summarizeBatch(records) {
@@ -619,29 +724,22 @@
     window.setTimeout(runChunk, 0);
   }
   function requestBatch(state) {
-    if (state.training || state.batch.running) return;
-    if (!state.models) {
-      state.batchAfterTraining = true;
-      trainPolicies(state);
-      return;
-    }
+    if (state.training || state.batch.running || !state.models) return;
     beginBatch(state);
   }
 
   function buildUI() {
     root = byId('sub-maze');
-    if (!root) return;
+    scenarioSelector = byId('mazeScenarioSelector');
+    if (!root || !scenarioSelector) return;
     var configs = MazeComparisonData.scenarios();
     states = configs.map(createState);
-    root.innerHTML = '<div class="shared-maze-demo"><header class="shared-maze-heading"><div><h1>Maze Comparison</h1>' +
-      '<p>Standard Q-Learning <span>vs</span> Enhanced MODQL</p></div><span class="shared-maze-overall-status" data-overall role="status">Not run yet</span></header>' +
-      '<nav class="maze-scenario-tabs" role="tablist" aria-label="Maze Comparison scenarios">' +
-      states.map(function (state, index) {
-        return '<button type="button" class="btn g" role="tab" data-scenario-tab="' + index + '" aria-selected="' +
-          (index === activeIndex ? 'true' : 'false') + '" aria-controls="maze-scenario-' + index + '" tabindex="' +
-          (index === activeIndex ? '0' : '-1') + '">Tab ' + (index + 1) + '</button>';
-      }).join('') + '</nav>' +
-      states.map(buildTab).join('') + '</div>';
+    scenarioSelector.innerHTML = states.map(function (state) {
+      return '<button type="button" data-scenario-tab="' + state.index + '" aria-pressed="' +
+        (state.index === activeIndex ? 'true' : 'false') + '" tabindex="0" aria-label="' +
+        escapeHtml(state.config.name) + '">' + escapeHtml(state.config.name) + '</button>';
+    }).join('');
+    root.innerHTML = '<div class="shared-maze-demo">' + states.map(buildTab).join('') + '</div>';
     states.forEach(function (state) {
       var panel = panelFor(state);
       panel.id = 'maze-scenario-' + state.index;
@@ -674,13 +772,11 @@
       });
       renderState(state);
     });
-    root.querySelectorAll('[data-scenario-tab]').forEach(function (button) {
+    scenarioSelector.querySelectorAll('[data-scenario-tab]').forEach(function (button) {
       button.addEventListener('click', function () { setActive(Number(button.getAttribute('data-scenario-tab'))); });
     });
-    root.querySelector('[data-scenario-tab]').setAttribute('aria-label', 'Tab 1: one target, no obstacles');
-    root.querySelectorAll('[data-scenario-tab]')[1].setAttribute('aria-label', 'Tab 2: one target, static obstacles');
-    root.querySelectorAll('[data-scenario-tab]')[2].setAttribute('aria-label', 'Tab 3: multiple targets, dynamic obstacles');
-    root.querySelectorAll('[data-scenario-tab]')[3].setAttribute('aria-label', 'Tab 4: Laiban real-data application');
+    document.title = activeState().config.name + ' — Maze Comparison — Philippine Mobile Hub';
+    ensurePolicy(activeState());
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', buildUI);
   else buildUI();
