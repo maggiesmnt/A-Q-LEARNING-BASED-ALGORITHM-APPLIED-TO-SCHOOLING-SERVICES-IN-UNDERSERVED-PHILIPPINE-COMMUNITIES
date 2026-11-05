@@ -42,6 +42,384 @@ function snapshot(models) {
   }));
 }
 
+// Exercise the presentation with real routing records and a small DOM adapter.
+function resultsHarness() {
+  var context = harness();
+  context.document = {readyState: 'loading', addEventListener: function () {}};
+  vm.runInContext(demoSource.replace("  if (document.readyState === 'loading')",
+    '  globalThis.resultsUI = {build: buildCardResultsTable, research: buildResearchDetails, prioritize: prioritizeResearch, formatResearch: formatResearchMetric, sop: resultsSop, formatTravel: formatTravelTime, create: createState, render: renderServiceResults, renderAll: renderResults, select: selectSop, compare: serviceComparison, tab: buildTab};\n' +
+    "  if (document.readyState === 'loading')"), context);
+  return context;
+}
+function resultsPanel() {
+  var nodes = new Map();
+  function node(selector) {
+    if (!nodes.has(selector)) nodes.set(selector, {
+      textContent: '', innerHTML: '', value: 0, attributes: {},
+      classList: {toggle: function () {}},
+      setAttribute: function (key, value) { this.attributes[key] = value; },
+      getAttribute: function (key) { return this.attributes[key]; }
+    });
+    return nodes.get(selector);
+  }
+  return {
+    querySelector: node,
+    querySelectorAll: function (selector) {
+      var match = selector.match(/^\[data-service-result="(.*)"\]$/);
+      if (match) return ['learners', 'fairness', 'travelMinutes', 'destinationsServed', 'deferredCommunities',
+        'qEstimate', 'q1Estimate', 'q2Estimate', 'estimatorDifference'].map(function (key) {
+        var entry = node(match[1] + ':' + key);
+        entry.attributes['data-service-key'] = key;
+        return entry;
+      });
+      match = selector.match(/^\[data-result="(.*)"\]$/);
+      if (match) return ['learners', 'coveragePercent', 'fairness', 'travelMinutes', 'movementSteps', 'destinationsServed',
+        'deferredCommunities', 'completionStatus', 'qEstimate', 'q1Estimate', 'q2Estimate', 'estimatorDifference', 'estimateReturnGap', 'state'].map(function (key) {
+          var entry = node(match[1] + ':research:' + key);
+          entry.attributes['data-key'] = key;
+          return entry;
+        });
+      if (selector === '[data-sop-metric]' || selector === '[data-primary-assessment]') {
+        var attribute = selector.slice(1, -1);
+        return ['learners', 'fairness', 'travelMinutes', 'destinationsServed', 'deferredCommunities',
+          'qEstimate', 'q1Estimate', 'q2Estimate', 'estimatorDifference'].map(function (key) {
+            var entry = node(attribute + ':' + key);
+            entry.attributes[attribute] = key;
+            return entry;
+          });
+      }
+      return [];
+    }
+  };
+}
+
+test('service results use each scenario and algorithm record through running, completion, failure and reset', function () {
+  var context = resultsHarness(), api = context.MazeRouting;
+  context.MazeComparisonData.scenarios().slice(0, 3).forEach(function (config) {
+    var world = makeWorld(api, config);
+    var policy = JSON.parse(fs.readFileSync(path.join(root, 'policies', config.id + '.json'), 'utf8'));
+    var models = api.modelsFromPolicy(policy, config.id, config.seed);
+    var pair = new api.Pair(world, models, false), panel = resultsPanel();
+    var state = {config: config, pair: pair, sop: 1};
+    function renderAndCheck() {
+      var records = {standard: api.metrics(pair.runs.standard, world), modql: api.metrics(pair.runs.modql, world)};
+      context.resultsUI.render(state, panel, records);
+      ['standard', 'modql'].forEach(function (id) {
+        var record = records[id], run = pair.runs[id];
+        var get = function (key) { return panel.querySelector(id + ':' + key).textContent; };
+        if (!record) {
+          assert.equal(get('learners'), 'Not run yet');
+          assert.equal(panel.querySelector('[data-coverage="' + id + '"]').value, 0);
+          assert.equal(panel.querySelector('[data-reward-total="' + id + '"]').textContent, 'Not available');
+          return;
+        }
+        assert.equal(get('learners'), record.learners + ' / ' + world.totalDemand + ' · ' + record.coveragePercent.toFixed(1) + '%');
+        assert.equal(get('travelMinutes'), context.resultsUI.formatTravel(run.minutes));
+        assert.equal(get('fairness'), record.fairness.toFixed(4));
+        assert.equal(get('destinationsServed'), Object.keys(run.served).length + ' / ' + world.sites.length);
+        assert.equal(get('deferredCommunities'), record.deferredCommunities + (run.done ? ' deferred' : ' pending'));
+        assert.equal(panel.querySelector('[data-coverage="' + id + '"]').value, record.coveragePercent);
+        assert.equal(panel.querySelector('[data-reward-total="' + id + '"]').textContent, run.reward.toFixed(4));
+        assert.equal(panel.querySelector('[data-service-status="' + id + '"]').textContent, record.completionStatus);
+      });
+    }
+    renderAndCheck();
+    pair.step();
+    renderAndCheck();
+    driveToEnd(pair, world.maxSteps + 5);
+    renderAndCheck();
+    context.MazeComparisonData.sops.forEach(function (sop) {
+      state.sop = sop.id;
+      renderAndCheck();
+      ['standard', 'modql'].forEach(function (id) {
+        var html = panel.querySelector('[data-result-sop="' + id + '"]').innerHTML;
+        assert.ok(html.includes('SOP ' + sop.id));
+        assert.ok(html.includes(context.resultsUI.sop(state).title.replace(/&/g, '&amp;')));
+        assert.ok(html.includes(sop.question));
+        assert.ok(panel.querySelector('[data-result-method="' + id + '"]').textContent.includes(id === 'standard' ? '1 / completed segment travel hours' : 'normalized destination demand'));
+      });
+    });
+    pair.runs.standard.success = false;
+    pair.runs.standard.status = 'No legal move available';
+    renderAndCheck();
+    pair = state.pair = new api.Pair(world, models, false);
+    renderAndCheck();
+    state.loadError = 'Policy load failed';
+    renderAndCheck();
+    assert.equal(panel.querySelector('[data-service-status="standard"]').textContent, 'Policy unavailable');
+  });
+});
+
+test('new service markup is scoped to the first three scenarios and retains native help and research controls', function () {
+  var context = resultsHarness();
+  context.MazeComparisonData.scenarios().forEach(function (config, index) {
+    var html = context.resultsUI.build('standard', 'Standard Q-Learning', {config: config});
+    if (index === 3) {
+      assert.equal(html, context.resultsUI.build('standard', 'Standard Q-Learning'));
+      assert.ok(!html.includes('maze-service-results'));
+      return;
+    }
+    assert.ok(html.includes('maze-service-results'));
+    assert.ok(html.includes('<progress'));
+    assert.ok(html.includes('<details class="maze-result-help"><summary aria-label='));
+    var research = context.resultsUI.research('standard', 'Standard Q-Learning');
+    assert.ok(research.includes('<summary>Reward calculation &amp; research details</summary>'));
+    assert.ok(research.includes('data-key="qEstimate"'));
+    assert.ok(research.includes('data-key="movementSteps"'));
+    assert.ok(!html.includes('data-key="coveragePercent"'), 'coverage is shown once in the primary summary');
+  });
+});
+
+test('travel display selects units from recorded minutes and preserves fractional precision', function () {
+  var format = resultsHarness().resultsUI.formatTravel;
+  [[0, '0 min'], [22.2, '22.2 min'], [22.222, '22.222 min'], [37, '37 min'],
+    [59.999, '59.999 min'], [60, '1 hr'], [60.001, '1 hr 0.001 min'],
+    [75, '1 hr 15 min'], [75.2, '1 hr 15.2 min'], [120, '2 hr'], [150, '2 hr 30 min'],
+    [0.37 * 60, '22.2 min']].forEach(function (entry) {
+      assert.equal(format(entry[0]), entry[1]);
+    });
+});
+
+test('SOP switching uses the defined metric lists and cached live results without changing runs or policies', function () {
+  var context = resultsHarness(), api = context.MazeRouting;
+  context.MazeComparisonData.scenarios().slice(0, 3).forEach(function (config) {
+    var world = makeWorld(api, config);
+    var policy = JSON.parse(fs.readFileSync(path.join(root, 'policies', config.id + '.json'), 'utf8'));
+    var models = api.modelsFromPolicy(policy, config.id, config.seed);
+    var pair = new api.Pair(world, models, false), panel = resultsPanel();
+    var state = {config: config, env: world, pair: pair, sop: 1};
+    [function () {}, function () { pair.step(); }, function () { driveToEnd(pair, world.maxSteps + 5); },
+      function () { pair.runs.standard.success = false; pair.runs.standard.status = 'No legal move available'; },
+      function () { pair = state.pair = new api.Pair(world, models, false); }].forEach(function (stage) {
+        stage();
+        panel.mazeResultRecords = {standard: api.metrics(pair.runs.standard, world), modql: api.metrics(pair.runs.modql, world)};
+        var before = JSON.stringify({runs: pair.runs, world: world}), policies = snapshot(models);
+        var calculate = api.metrics;
+        api.metrics = function () { throw new Error('SOP selection must reuse cached records'); };
+        try {
+          [2, 3, 1].forEach(function (sopId) {
+            context.resultsUI.select(state, panel, sopId);
+            var sop = context.resultsUI.sop(state);
+            panel.querySelectorAll('[data-sop-metric]').forEach(function (card) {
+              assert.equal(card.hidden, sop.metrics.indexOf(card.getAttribute('data-sop-metric')) < 0);
+            });
+            ['standard', 'modql'].forEach(function (id) {
+              var record = panel.mazeResultRecords[id];
+              var header = panel.querySelector('[data-result-sop="' + id + '"]').innerHTML;
+              assert.ok(header.includes(sop.question));
+              if (sopId === 2) {
+                assert.equal(panel.querySelector(id + ':qEstimate').textContent, record ? record.qEstimate.toFixed(4) : 'Not run yet');
+                assert.equal(panel.querySelector(id + ':q1Estimate').textContent, !record ? 'Not run yet' : id === 'standard' ? 'Not applicable' : record.q1Estimate.toFixed(4));
+              }
+              assert.equal(panel.querySelector('[data-state-representation="' + id + '"]').hidden, sopId !== 3);
+              if (sopId === 3) {
+                assert.ok(header.includes('State Representation &amp; Routing Performance'));
+                assert.ok(header.includes('Standard Q-Learning vs Full MODQL'));
+                assert.equal(panel.querySelector('[data-coverage-label="' + id + '"]').textContent, 'Learner Coverage');
+                assert.equal(panel.querySelector('[data-remaining-label="' + id + '"]').textContent, 'Deferred Communities');
+                assert.equal(panel.querySelector('[data-state-result-label="' + id + '"]').textContent, 'Inputs at Last Decision');
+              } else {
+                assert.equal(panel.querySelector('[data-coverage-label="' + id + '"]').textContent, 'Learners Reached');
+                assert.equal(panel.querySelector('[data-remaining-label="' + id + '"]').textContent, 'Communities Remaining');
+                assert.equal(panel.querySelector('[data-state-result-label="' + id + '"]').textContent, 'State fields at last decision');
+              }
+            });
+            assert.equal(state.pair, pair);
+            assert.equal(JSON.stringify({runs: pair.runs, world: world}), before);
+            assert.equal(snapshot(models), policies);
+          });
+        } finally { api.metrics = calculate; }
+      });
+    var research = context.resultsUI.research('standard', 'Standard Q-Learning');
+    ['learners', 'coveragePercent', 'fairness', 'travelMinutes', 'destinationsServed', 'deferredCommunities',
+      'qEstimate', 'q1Estimate', 'q2Estimate', 'estimatorDifference', 'estimateReturnGap', 'state', 'movementSteps', 'completionStatus'].forEach(function (key) {
+        assert.ok(research.includes('data-key="' + key + '"'), 'research retains ' + key);
+      });
+  });
+});
+
+test('SOP 3 presents full state representations and existing performance metrics while preserving other SOPs and recorded research state', function () {
+  var context = resultsHarness(), ui = context.resultsUI, api = context.MazeRouting;
+  context.MazeComparisonData.scenarios().forEach(function (config, index) {
+    var state = ui.create(config, index);
+    [1, 2].forEach(function (id) {
+      state.sop = id;
+      assert.equal(ui.sop(state), context.MazeComparisonData.sops[id - 1]);
+    });
+    state.sop = 3;
+    if (index === 3) {
+      assert.equal(ui.sop(state), context.MazeComparisonData.sops[2]);
+      return;
+    }
+    assert.deepEqual(Array.from(ui.sop(state).metrics), ['learners', 'coveragePercent', 'travelMinutes', 'destinationsServed', 'deferredCommunities', 'fairness']);
+    ['standard', 'modql'].forEach(function (id) {
+      var html = ui.build(id, id, state);
+      assert.ok(!html.includes('data-service-key="state"'));
+      assert.ok(!html.includes('data-state-representation'), 'state representation is outside primary metrics');
+      var tab = ui.tab(state);
+      assert.equal((tab.match(new RegExp('data-state-representation="' + id + '"', 'g')) || []).length, 1);
+      assert.ok(tab.includes(id === 'standard' ? 'Location only (L)' : 'L · D · T · H · A'));
+      assert.ok(tab.indexOf('data-state-representation="' + id + '"') > tab.indexOf('data-canvas="' + id + '"'));
+      assert.ok(tab.indexOf('data-state-representation="' + id + '"') < tab.indexOf('data-training-detail="' + id + '"'));
+      assert.ok(tab.includes('L = Location; D = Demand; T = Remaining Time; H = Visit History; A = Accessibility.'));
+      assert.ok(ui.research(id, id).includes('data-key="state"'));
+    });
+    var policy = JSON.parse(fs.readFileSync(path.join(root, 'policies', config.id + '.json'), 'utf8'));
+    var models = api.modelsFromPolicy(policy, config.id, config.seed);
+    state.pair = new api.Pair(state.env, models, false);
+    var panel = resultsPanel();
+    [function () {}, function () { state.pair.step(); }, function () { driveToEnd(state.pair, state.env.maxSteps + 5); },
+      function () { state.pair = new api.Pair(state.env, models, false); }].forEach(function (stage) {
+        stage();
+        ui.renderAll(state, panel);
+        ['standard', 'modql'].forEach(function (id) {
+          var record = api.metrics(state.pair.runs[id], state.env);
+          assert.equal(panel.querySelector(id + ':research:state').textContent,
+            record ? id === 'standard' ? 'Location only: ' + record.state : record.state : 'Not available');
+          ['qEstimate', 'q1Estimate', 'q2Estimate', 'estimatorDifference', 'estimateReturnGap'].forEach(function (key) {
+            var expected = id === 'standard' && ['q1Estimate', 'q2Estimate', 'estimatorDifference'].includes(key) ? 'Not applicable' :
+              !record || !Number.isFinite(record[key]) ? 'Not available' : record[key].toFixed(4);
+            assert.equal(panel.querySelector(id + ':research:' + key).textContent, expected);
+          });
+          assert.equal(panel.querySelector(id + ':research:travelMinutes').textContent, record ? ui.formatTravel(record.travelMinutes) : 'Not available');
+        });
+      });
+  });
+  assert.equal(context.MazeComparisonData.sops[2].title, 'Routing Awareness', 'underlying research definitions stay intact');
+  assert.ok(context.MazeComparisonData.sops[2].metrics.includes('state'));
+});
+
+test('research accordion prioritizes each SOP and preserves manual selection during live updates', function () {
+  var ui = resultsHarness().resultsUI, state = {sop: 1};
+  var contextNode = {}, sections = {};
+  ['reward', 'performance', 'diagnostics', 'state'].forEach(function (key) {
+    sections[key] = {key: key, open: false, content: {prepend: function (node) { this.contextNode = node; }}};
+  });
+  var container = {
+    children: [],
+    querySelector: function (selector) {
+      var key = selector.match(/data-research-section="([^"]+)"/)[1];
+      return selector.includes('.maze-research-content') ? sections[key].content : sections[key];
+    },
+    appendChild: function (section) { this.children = this.children.filter(function (child) { return child !== section; }); this.children.push(section); }
+  };
+  var details = {open: false, querySelector: function (selector) { return selector === '[data-research-context]' ? contextNode : container; }};
+  ui.prioritize(state, details, false);
+  assert.deepEqual(container.children.map(function (item) { return item.key; }), ['reward', 'performance', 'diagnostics', 'state']);
+  assert.ok(container.children.every(function (item) { return !item.open; }));
+  details.open = true;
+  ui.prioritize(state, details, true);
+  assert.ok(sections.reward.open);
+  sections.reward.open = false; sections.performance.open = true;
+  ui.prioritize(state, details, false);
+  assert.ok(sections.performance.open && !sections.reward.open, 'live ticks do not override the user');
+  state.sop = 2;
+  ui.prioritize(state, details, false);
+  assert.equal(container.children[0], sections.diagnostics);
+  assert.deepEqual(container.children.filter(function (item) { return item.open; }).map(function (item) { return item.key; }), ['diagnostics']);
+  state.sop = 3;
+  ui.prioritize(state, details, false);
+  assert.deepEqual(container.children.map(function (item) { return item.key; }), ['state', 'performance', 'reward', 'diagnostics']);
+  assert.ok(sections.state.open);
+  assert.equal(sections.state.content.contextNode, contextNode);
+  details.open = false;
+  state.sop = 1;
+  ui.prioritize(state, details, false);
+  assert.ok(container.children.every(function (item) { return !item.open; }));
+  details.open = true;
+  ui.prioritize(state, details, true);
+  assert.ok(sections.reward.open);
+  ['standard', 'modql'].forEach(function (id) {
+    var markup = ui.research(id, id, 'tab-1');
+    assert.equal((markup.match(/class="maze-research-section"/g) || []).length, 4);
+    assert.equal((markup.match(new RegExp('name="research-tab-1-' + id + '"', 'g')) || []).length, 4);
+    assert.ok(markup.includes('data-key="estimateReturnGap"'));
+    assert.ok(markup.includes('data-key="state"'));
+  });
+});
+
+test('research diagnostics distinguish missing and non-applicable values while preserving genuine zero values', function () {
+  var ui = resultsHarness().resultsUI, state = {config: {sites: [{}]}};
+  assert.equal(ui.formatResearch({key: 'q1Estimate', diagnostic: true}, null, state, 'standard'), 'Not applicable');
+  assert.equal(ui.formatResearch({key: 'qEstimate', diagnostic: true}, null, state, 'modql'), 'Not available');
+  assert.equal(ui.formatResearch({key: 'qEstimate', diagnostic: true}, {qEstimate: null}, state, 'modql'), 'Not available');
+  assert.equal(ui.formatResearch({key: 'qEstimate', diagnostic: true}, {qEstimate: 0}, state, 'modql'), '0.0000');
+  assert.equal(ui.formatResearch({key: 'estimateReturnGap', diagnostic: true}, {estimateReturnGap: 0}, state, 'modql'), '0.0000');
+  assert.equal(ui.formatResearch({key: 'travelMinutes', time: true}, {travelMinutes: 75}, state, 'modql'), '1 hr 15 min');
+  assert.equal(ui.formatResearch({key: 'fairness', decimals: 4}, {fairness: NaN}, state, 'modql'), 'Not available');
+});
+
+test('SOP comparisons withhold winners for running, diagnostic, trivial fairness and incomplete travel results', function () {
+  var ui = resultsHarness().resultsUI;
+  var state = {config: {sites: [{}, {}]}};
+  var records = {standard: {learners: 10, travelMinutes: 20, completed: true, completionStatus: 'Completed'},
+    modql: {learners: 15, travelMinutes: 30, completed: true, completionStatus: 'Completed'}};
+  assert.equal(ui.compare({key: 'learners', better: 'higher'}, records, state), 'Favors MODQL');
+  assert.equal(ui.compare({key: 'travelMinutes', better: 'lower'}, records, state), 'Favors Standard');
+  assert.equal(ui.compare({key: 'qEstimate', diagnostic: true}, records, state), 'Diagnostic only; not ranked');
+  records.standard.completed = false;
+  assert.equal(ui.compare({key: 'travelMinutes', better: 'lower'}, records, state), 'Different completion outcomes; not ranked');
+  records.modql.completionStatus = 'In progress';
+  assert.equal(ui.compare({key: 'learners', better: 'higher'}, records, state), 'Comparison available when both runs end');
+  records.modql.completionStatus = 'Completed';
+  state.config.sites = [{}];
+  assert.equal(ui.compare({key: 'fairness', better: 'higher'}, records, state), 'Single community; descriptive only');
+  assert.equal(ui.compare({key: 'learners', better: 'higher'}, {standard: null, modql: null}, state), 'Not run yet');
+});
+
+test('each algorithm keeps its training chart and two independent dropdowns in a bottom row outside maze scrolling', function () {
+  var context = resultsHarness();
+  context.MazeComparisonData.scenarios().forEach(function (config, index) {
+    var tab = context.resultsUI.tab(context.resultsUI.create(config, index));
+    ['standard', 'modql'].forEach(function (id) {
+      var start = tab.indexOf('<section class="shared-maze-panel" data-agent="' + id + '">');
+      var end = tab.indexOf('<section class="shared-maze-panel"', start + 1);
+      var card = tab.slice(start, end < 0 ? undefined : end);
+      assert.equal((card.match(/class="maze-training-curve"/g) || []).length, 1);
+      assert.equal((card.match(new RegExp('data-curve="' + id + '"', 'g')) || []).length, 1);
+      var side = card.indexOf('class="maze-agent-side"'), chart = card.indexOf('class="maze-training-curve"');
+      if (index === 3) {
+        assert.ok(chart > side);
+        assert.ok(!card.includes('class="maze-result-research'));
+        assert.ok(!card.includes('class="maze-agent-bottom-row"'));
+        assert.ok(card.includes('class="maze-agent-description"'));
+        assert.ok(card.includes('data-status="' + id + '"'));
+      } else {
+        assert.ok(!card.includes('data-service-key="estimateReturnGap"'), 'gap has no primary card or whitespace');
+        assert.ok(card.includes('data-key="estimateReturnGap"'), 'gap remains in research details');
+        assert.ok(!card.includes('class="maze-agent-description"'));
+        assert.ok(!card.includes('data-status="' + id + '"'), 'redundant maze status element is removed');
+        assert.ok(!card.includes('class="maze-agent-status-line"'), 'no empty status wrapper remains');
+        assert.ok(card.includes('data-service-status="' + id + '"'), 'results still report run status');
+        assert.ok(card.includes('data-training-detail="' + id + '"'), 'training information remains');
+        assert.ok(card.includes('data-loop-status="' + id + '"'), 'loop feedback remains');
+        assert.ok(chart > card.indexOf('class="maze-service-grid"') && chart < side);
+        var research = card.indexOf('class="maze-result-research');
+        var bottom = card.indexOf('<div class="maze-agent-bottom-row">');
+        assert.ok(bottom > side && research > bottom);
+        assert.ok(card.slice(0, bottom).endsWith('</div></div>'), 'maze info and scrolling side close before the bottom row');
+        var footer = card.slice(bottom, card.indexOf('</section>', bottom));
+        assert.ok(footer.startsWith('<div class="maze-agent-bottom-row"><details class="maze-policy-inputs"><summary>Policy inputs</summary>'));
+        assert.equal((footer.match(/class="maze-research-section"/g) || []).length, 4);
+        assert.ok(footer.endsWith('</details></div></div>'), 'both dropdowns close in normal document flow');
+        assert.ok(!footer.includes(' open'), 'dropdowns start closed');
+        assert.ok(footer.includes('name="research-' + config.id + '-' + id + '"'), 'only internal sections share a unique accordion group');
+        assert.ok(research > card.indexOf('data-canvas="' + id + '"'));
+        assert.ok(research > card.indexOf('class="maze-agent-info"'));
+        assert.equal((card.match(/class="maze-result-research/g) || []).length, 1);
+      }
+    });
+    if (index < 3) assert.ok(!tab.includes('data-assessment-summary'), 'no empty interpretation container remains');
+  });
+  assert.doesNotMatch(demoSource, /resultInterpretation|Result Interpretation|maze-result-interpretation/);
+  assert.doesNotMatch(demoSource, /data-sop-description|Higher learner coverage and service fairness/);
+  var css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
+  assert.doesNotMatch(css, /maze-result-interpretation/);
+  assert.match(css, /\.maze-agent-bottom-row\{grid-column:1\/-1;display:grid;/);
+  assert.match(css, /\.maze-agent-bottom-row>\.maze-policy-inputs\{min-width:0;width:100%;margin:0;/);
+  assert.match(css, /@media\(max-width:600px\)\{\.maze-agent-bottom-row\{grid-template-columns:minmax\(0,1fr\)\}\}/);
+});
+
 test('four fixed scenarios use the saved Laiban values and requested shared budget', function () {
   var context = harness();
   var scenarios = context.MazeComparisonData.scenarios();
@@ -666,7 +1044,7 @@ test('UI exposes four fixed tabs, per-tab SOP selection, live results and separa
   assert.match(demoSource, /Laiban reachability is recomputed from the fixed 10×10 tile grid and start at \(0,0\)/);
   var styleSource = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   assert.match(styleSource, /\.maze-loop-status\[hidden\]\s*\{\s*display:none;/);
-  assert.match(demoSource, /<div class="maze-agent-body">'\s*\+\s*buildCardResultsTable\(id, title\)\s*\+\s*'<div class="maze-agent-side">/);
+  assert.match(demoSource, /<div class="maze-agent-body">'\s*\+\s*buildCardResultsTable\(id, title, state\)\s*\+\s*'<div class="maze-agent-side">/);
   assert.match(demoSource, /<div class="maze-agent-side"><div class="maze-agent-grid">[\s\S]*?<div class="maze-agent-info">/);
   assert.match(demoSource, /maze-agent-status-line"><div class="maze-agent-status"[\s\S]*?maze-loop-status/);
   assert.match(styleSource, /grid-template-columns:minmax\(0,2fr\) minmax\(0,3fr\)/);
@@ -689,7 +1067,7 @@ test('UI exposes four fixed tabs, per-tab SOP selection, live results and separa
   assert.match(demoSource, /label: 'Travel time \(minutes\)', decimals: 2/);
   assert.match(demoSource, /data-action="reset"/);
   assert.match(demoSource, /data-dynamic="tick"/);
-  assert.match(demoSource, /function buildCardResultsTable\(id, title\)/);
+  assert.match(demoSource, /function buildCardResultsTable\(id, title, state\)/);
   assert.match(demoSource, /METRICS\.map\(function \(metric\)/);
   assert.match(demoSource, /data-result="' \+\s*id \+ '" data-key="' \+\s*metric\.key/);
   assert.match(demoSource, /<th scope="col">Metric<\/th><th scope="col">Result'\s*\+\s*'<\/th><th scope="col">Metric-by-metric assessment<\/th>/);
@@ -704,8 +1082,8 @@ test('UI exposes four fixed tabs, per-tab SOP selection, live results and separa
   assert.match(demoSource, /var records = \{\s*standard: readMetrics\(state, 'standard'\),\s*modql: readMetrics\(state, 'modql'\)/);
   assert.match(demoSource, /formatMetric\(metric, records\[id\], state, id\)/);
   assert.match(demoSource, /var metric = records\[id\]/);
-  assert.match(demoSource, /querySelectorAll\('tr\[data-assessment-row\]'\)/);
-  assert.match(demoSource, /assessment\.textContent = started\s*\? comparisonText\(metric, records\.standard, records\.modql\)/);
+  assert.match(demoSource, /querySelectorAll\('\[data-assessment-row\]'\)/);
+  assert.match(demoSource, /assessment\.textContent = started\s*\? \(state\.config\.id === 'tab-4' \? comparisonText\(metric, records\.standard, records\.modql\) : serviceComparison\(metric, records, state\)\)/);
   assert.match(demoSource, /valueNode\.title = valueNode\.textContent/);
   assert.match(demoSource, /assessment\.title = assessment\.textContent/);
   assert.match(demoSource, /valueNode\.classList\.toggle\('is-placeholder', !sideStarted\)/);
