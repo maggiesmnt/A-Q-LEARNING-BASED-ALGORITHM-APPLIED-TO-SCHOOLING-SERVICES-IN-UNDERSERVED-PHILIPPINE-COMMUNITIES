@@ -90,7 +90,20 @@ test('four fixed scenarios use the saved Laiban values and requested shared budg
   });
   assert.equal(scenarios[1].dynamicFrequency, 0);
   assert.ok(scenarios[2].sites.length > 1);
-  assert.equal(scenarios[2].dynamicFrequency, 20);
+  assert.equal(scenarios[2].dynamicFrequency, 0);
+  assert.equal(scenarios[2].obstacleRatio, 0);
+  assert.equal(scenarios[2].obstacles.length, 24);
+  var tabThreeMaps = [303, 1303, 100303].map(function (seed) {
+    return Array.from(makeWorld(context.MazeRouting, scenarios[2], seed).obstacles).sort().join(';');
+  });
+  assert.equal(new Set(tabThreeMaps).size, 1, 'Tab 3 training and evaluation share one fixed seed-303 map');
+  var tabThreeWorld = makeWorld(context.MazeRouting, scenarios[2]);
+  scenarios[2].sites.forEach(function (site) {
+    assert.ok(tabThreeWorld.pathExists(scenarios[2].start, site.position),
+      site.id + ' must remain reachable on the fixed Tab 3 map');
+  });
+  for (var tick = 0; tick < 60; tick++) tabThreeWorld.beginTick();
+  assert.equal(tabThreeWorld.obstacleUpdates, 0, 'fixed Tab 3 obstacles do not update');
   assert.equal(scenarios[3].sites.length, 9);
   assert.equal(scenarios[3].rainfallMm, 38);
   assert.equal(scenarios[3].budgetMinutes, 480);
@@ -236,6 +249,30 @@ test('Tab 2 held-out batch varies only paired starts on its fixed map and counts
     assert.ok(Math.abs(mean - 28.66) < 1e-9, id + ' batch mean steps');
     assert.ok(Math.abs(Math.sqrt(variance) - 15.51) < 0.005, id + ' batch population SD');
   });
+});
+
+test('Tab 3 fixed-map policy batch completes all MODQL routes and detects Standard loops', function () {
+  var context = harness(), api = context.MazeRouting, config = context.MazeComparisonData.scenarios()[2];
+  var policy = JSON.parse(fs.readFileSync(path.join(root, 'policies', 'tab-3.json'), 'utf8'));
+  var models = api.modelsFromPolicy(policy, config.id, config.seed), outcomes = {standard: [], modql: []};
+  for (var index = 0; index < 200; index++) {
+    var world = makeWorld(api, config, config.seed + 100000 + index * 7919);
+    var pair = new api.Pair(world, models, false);
+    driveToEnd(pair, 190);
+    ['standard', 'modql'].forEach(function (id) {
+      outcomes[id].push(api.metrics(pair.runs[id], world));
+    });
+  }
+  assert.equal(outcomes.standard.filter(function (result) { return result.loopDetected; }).length, 200);
+  assert.equal(outcomes.standard.filter(function (result) { return result.completed; }).length, 0);
+  assert.equal(outcomes.modql.filter(function (result) { return result.loopDetected; }).length, 0);
+  assert.equal(outcomes.modql.filter(function (result) { return result.completed; }).length, 200);
+  assert.ok(outcomes.standard.every(function (result) {
+    return result.destinationsServed === 1 && result.movementSteps === 110;
+  }));
+  assert.ok(outcomes.modql.every(function (result) {
+    return result.destinationsServed === 6 && result.movementSteps === 49;
+  }));
 });
 
 test('Q rows use typed arrays and background training does not render grids', function () {

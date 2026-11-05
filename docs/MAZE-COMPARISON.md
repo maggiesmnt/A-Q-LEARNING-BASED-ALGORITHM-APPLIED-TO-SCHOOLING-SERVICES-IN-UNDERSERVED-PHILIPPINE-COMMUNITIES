@@ -13,8 +13,8 @@ The page has four fixed-seed scenarios, selected in the global header:
 1. **Basic Grid** — one agent and one target on a plain grid.
 2. **Obstacles** — one agent and one target in a fixed maze-like layout with
    alternating corridor bottlenecks and dead-end pockets.
-3. **Multi-Target** — one agent and multiple targets with obstacles that may
-   change every 20 shared ticks.
+3. **Multi-Target** — one agent and six targets with a fixed seed-303 obstacle
+   map shared by training and evaluation.
 4. **Laiban Case** — the Laiban application, using the saved ALS Hub and nine-sitio schematic,
    learner allocation, previous-visit counts, visit recency, closed roads,
    simulated 38 mm/24h rainfall, a 480-minute shift and 60-minute service stops.
@@ -89,7 +89,12 @@ an episode. A measured 5,000-episode Laiban training run fell from about 40
 seconds before optimization to about 16 seconds in the same Node environment;
 the browser remains responsive while the Worker reports progress.
 
-## Tab 3 diagnosis (current policy, no algorithm changes)
+## Tab 3 diagnosis and fixed-map follow-up
+
+The initial diagnostic below describes Tab 3 with obstacles changing every 20
+shared ticks. After reviewing those results, the user approved freezing the
+seed-303 initial obstacle layout for both training and evaluation. The
+algorithm, reward, state, parameters, and 5,000-episode budget were not changed.
 
 The implementation and tests confirm two distinct agents. Standard uses its
 single `q` table: the state key is only `row,column`, `values()` reads `q`,
@@ -161,8 +166,8 @@ or accessibility changes; it is unchanged across this particular loop because
 the same destinations remain served, T stays at 0, and the reachability bits
 stay constant.
 
-Tab 3 changes the grid obstacle layout every 20 shared movement ticks during
-both training and evaluation. Each grid update toggles one to three cells.
+In the original dynamic version, Tab 3 changed the grid obstacle layout every
+20 shared movement ticks during both training and evaluation. Each grid update toggled one to three cells.
 Training made 25,199 updates and 50,282 cell toggles across 5,000 episodes
 (5.04 updates and 10.06 toggles per episode); every episode had at least one
 update. The 200 evaluations made 1,028 updates and 2,054 cell toggles
@@ -173,6 +178,30 @@ layout shared by training and evaluation would make transitions stationary
 and remove that sequence mismatch, which should make convergence more
 plausible; it cannot guarantee convergence, particularly with sparse rewards
 and Standard's location-only state.
+
+### Results after freezing the Tab 3 map
+
+The fixed layout is the seed-303 sample from the prior 24%-obstacle generator,
+stored explicitly in `maze-scenarios.js`. It has 24 obstacle cells, every site
+is reachable from `(0,0)`, and obstacle updates are disabled. The offline
+script regenerated `policies/tab-3.json` using the existing training budget
+and parameters.
+
+In the last 500 training episodes, Standard completed all six sites 0 times
+and served a mean 1.494 sites per episode. MODQL completed all six 498 times
+and served a mean 5.996 sites; across all 5,000 episodes it completed 4,096.
+The agents visited 74 distinct Standard location states and 734 MODQL encoded
+states during training.
+
+On the frozen 200-run batch, Standard completed 0 runs, triggered the loop
+detector in 200, and served a mean of 1 site in 110 moves (SD 0). MODQL
+completed 200/200 runs, served all 6 sites in 49 moves (SD 0), and had no
+loop detections or other failures. Standard's representative loop is
+`(2,2)` ↔ `(3,2)`: its greedy moves are Down and Up, with legal-action Q
+spreads 0.1191 and 0.0651 respectively. MODQL did not loop. Thus, with this
+fixed map and unchanged learner definitions, MODQL's training and evaluation
+converged on the six-site task while Standard still did not. This is a
+scenario-specific simulated result, not a general convergence guarantee.
 
 ## Policy and environment behavior
 

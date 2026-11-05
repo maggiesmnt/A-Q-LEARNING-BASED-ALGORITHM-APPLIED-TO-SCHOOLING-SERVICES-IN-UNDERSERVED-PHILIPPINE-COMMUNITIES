@@ -85,6 +85,13 @@ var MazeComparisonData = (function () {
     });
     return obstacles;
   }
+  function fixedTabThreeObstacles() {
+    return [
+      [0, 2], [1, 5], [2, 0], [3, 0], [3, 5], [3, 6], [3, 7], [3, 9],
+      [4, 3], [4, 4], [4, 8], [4, 9], [5, 0], [5, 1], [5, 6], [6, 0],
+      [6, 1], [6, 5], [6, 8], [7, 6], [7, 9], [9, 3], [9, 4], [9, 6]
+    ];
+  }
   function tabTwoStartCells(config) {
     var blocked = new Set((config.obstacles || []).map(function (point) { return point.join(','); }));
     var targets = new Set(config.sites.map(function (target) { return target.position.join(','); }));
@@ -183,6 +190,18 @@ var MazeComparisonData = (function () {
     };
   }
   function getScenarios() {
+    var tabThree = basic('tab-3', 303, 'Multi-Target', true, [
+      site('a', 'Community A', 'A', [1, 8], 18, 0, 30),
+      site('b', 'Community B', 'B', [3, 2], 30, 1, 21),
+      site('c', 'Community C', 'C', [5, 8], 22, 0, 25),
+      site('d', 'Community D', 'D', [7, 1], 28, 1, 16),
+      site('e', 'Community E', 'E', [8, 8], 16, 0, 30),
+      site('f', 'Community F', 'F', [2, 5], 24, 0, 19)
+    ]);
+    tabThree.obstacles = fixedTabThreeObstacles();
+    tabThree.obstacleRatio = 0;
+    tabThree.dynamicFrequency = 0;
+    tabThree.description = 'Fixed seed-303 obstacle layout shared by training and evaluation.';
     return [
       basic('tab-1', 101, 'Basic Grid', false, [
         site('goal', 'Target', 'T', [9, 9], 40, 0, 30)
@@ -193,14 +212,7 @@ var MazeComparisonData = (function () {
         obstacles: fixedTabTwoObstacles(),
         description: 'Fixed maze-like corridors, alternating single-cell bottlenecks, and two dead-end pockets.'
       }),
-      Object.assign(basic('tab-3', 303, 'Multi-Target', true, [
-        site('a', 'Community A', 'A', [1, 8], 18, 0, 30),
-        site('b', 'Community B', 'B', [3, 2], 30, 1, 21),
-        site('c', 'Community C', 'C', [5, 8], 22, 0, 25),
-        site('d', 'Community D', 'D', [7, 1], 28, 1, 16),
-        site('e', 'Community E', 'E', [8, 8], 16, 0, 30),
-        site('f', 'Community F', 'F', [2, 5], 24, 0, 19)
-      ]), {dynamicFrequency: 20, description: 'Multiple service targets; obstacles change every 20 shared ticks.'}),
+      tabThree,
       laiban()
     ];
   }
