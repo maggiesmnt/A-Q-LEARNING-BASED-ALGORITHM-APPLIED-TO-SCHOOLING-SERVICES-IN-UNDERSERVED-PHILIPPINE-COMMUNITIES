@@ -308,23 +308,21 @@
   function metricHint(metric) {
     return metric.better ? 'Prefer ' + metric.better : 'Report only';
   }
-  function buildCardMetricRows(id, reportOnly) {
-    return METRICS.filter(function (metric) {
-      return reportOnly ? !metric.better : !!metric.better;
-    }).map(function (metric) {
-      return '<div class="maze-result-row" data-metric="' + metric.key + '">' +
-        '<div class="maze-result-description"><span class="maze-result-name">' +
-        escapeHtml(metric.label) + '</span><span class="shared-maze-direction">' +
-        escapeHtml(metricHint(metric)) + '</span></div><span class="maze-result-value" data-result="' +
-        id + '" data-key="' + metric.key + '">Not run yet</span></div>';
-    }).join('');
-  }
-  function buildAssessmentRows() {
-    return METRICS.map(function (metric) {
-      return '<tr data-metric="' + metric.key + '" data-assessment-row="' + metric.key + '">' +
-        '<th scope="row">' + escapeHtml(metric.label) + '</th><td data-assessment="' +
-        metric.key + '">Not run yet</td></tr>';
-    }).join('');
+  function buildCardResultsTable(id, title) {
+    return '<div class="maze-agent-metrics"><header><span class="shared-maze-eyebrow">Computed from this run</span>' +
+      '<h4>Comparative Performance Results</h4></header><div class="maze-metrics-table-scroll">' +
+      '<table class="maze-metrics-table" aria-label="' + escapeHtml(title) + ' results">' +
+      '<colgroup><col class="maze-metric-column"><col class="maze-value-column"><col class="maze-assessment-column"></colgroup>' +
+      '<thead><tr><th scope="col">Metric</th><th scope="col">' + escapeHtml(title) +
+      '</th><th scope="col">Metric-by-metric assessment</th></tr></thead><tbody>' +
+      METRICS.map(function (metric) {
+        return '<tr data-metric="' + metric.key + '" data-assessment-row="' + metric.key + '">' +
+          '<th scope="row"><span class="maze-result-name">' + escapeHtml(metric.label) +
+          '</span><span class="shared-maze-direction">' + escapeHtml(metricHint(metric)) + '</span></th>' +
+          '<td><span class="maze-result-value is-placeholder" data-result="' + id + '" data-key="' +
+          metric.key + '">Not run yet</span></td><td class="maze-comparison-assessment is-placeholder" data-assessment="' +
+          metric.key + '">Not run yet</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
   }
   function buildTab(state) {
     var config = state.config;
@@ -401,7 +399,10 @@
         return '<section class="shared-maze-panel" data-agent="' + id + '"><header class="shared-maze-panel-header">' +
           '<div><span class="shared-maze-eyebrow">' + (id === 'standard' ? 'Existing algorithm' : 'Proposed algorithm') +
           '</span><h3>' + title + '</h3></div><span class="shared-maze-panel-badge" data-training="' + id + '">' +
-          'Not trained</span></header><div class="maze-agent-body"><div class="maze-agent-info">' +
+          'Not trained</span></header><div class="maze-agent-body">' + buildCardResultsTable(id, title) +
+          '<div class="maze-agent-side"><div class="maze-agent-grid"><div class="shared-maze-board"><canvas width="500" height="500" data-canvas="' + id +
+          '" role="img" aria-label="' + title + ' route in the ' + escapeHtml(config.name) + ' scenario"></canvas></div></div>' +
+          '<div class="maze-agent-info">' +
           '<div class="maze-training-indicator" data-training-detail="' + id + '">' + trainingLabel(state, id) + '</div>' +
           '<p class="maze-agent-description">' + (id === 'standard'
             ? 'Standard Q-Learning explores randomly during training; evaluation follows the learned policy (epsilon = 0).'
@@ -411,25 +412,15 @@
           '<div class="maze-training-curve"><span>Training log · steps per episode</span>' +
           '<canvas width="320" height="72" data-curve="' + id + '" role="img" aria-label="' + title +
           ' training log, steps per episode"></canvas></div>' +
-          '<section class="maze-agent-results" aria-label="' + title + ' results">' +
-          '<h4 class="maze-agent-live" data-live="' + id + '">Results</h4>' +
-          '<div class="maze-result-list">' + buildCardMetricRows(id, false) + '</div>' +
-          '<details class="maze-policy-inputs maze-metric-diagnostics"><summary>Report-only diagnostics</summary>' +
-          '<div class="maze-result-list">' + buildCardMetricRows(id, true) + '</div></details>' +
-          '<p class="maze-agent-live maze-reachable-results" data-reachable-results="' + id + '" hidden></p></section></div>' +
-          '<div class="maze-agent-grid"><div class="shared-maze-board"><canvas width="500" height="500" data-canvas="' + id +
-          '" role="img" aria-label="' + title + ' route in the ' + escapeHtml(config.name) + ' scenario"></canvas></div>' +
-          '</div></div><details class="maze-policy-inputs"><summary>Policy inputs</summary><div data-environment="' + id +
+          '<p class="maze-reachable-results" data-reachable-results="' + id + '" hidden></p></div></div>' +
+          '<details class="maze-policy-inputs"><summary>Policy inputs</summary><div data-environment="' + id +
           '"></div><p class="maze-state-encoding">' + (id === 'standard'
             ? 'State encoding: current grid location only (L).'
             : 'Research state encoding: location (L), two-level demand buckets (D), remaining-time bucket (T), visit-history buckets (H), and two-level road accessibility (A: reachable or unreachable).') +
           '</p></details></section>';
       }).join('') + '</div>' + laibanTable + closed +
-      '<section class="shared-maze-summary"><header><div><span class="shared-maze-eyebrow">Computed from this run</span>' +
-      '<h2>Metric-by-metric assessment</h2></div><span class="shared-maze-summary-note">Live evaluation only</span></header>' +
-      '<div class="shared-maze-table-scroll"><table><thead><tr><th>Metric</th>' +
-      '<th>Assessment</th></tr></thead><tbody>' + buildAssessmentRows() +
-      '</tbody></table></div><div class="maze-assessment" data-assessment-summary>Not run yet</div></section>' +
+      '<section class="maze-assessment-note"><span class="shared-maze-eyebrow">Run assessment</span>' +
+      '<div class="maze-assessment" data-assessment-summary>Not run yet</div></section>' +
       '<section class="maze-sop-section"><div class="maze-sop-header"><div><span class="shared-maze-eyebrow">Research objective alignment</span>' +
       '<h2>Statement of the Problem</h2></div><div class="maze-sop-buttons" role="group" aria-label="Select SOP">' +
       sopButtons + '</div></div><div data-sop-content></div></section>' +
@@ -497,6 +488,8 @@
         valueNode.textContent = sideStarted
           ? formatMetric(metric, records[id], state, id)
           : 'Not run yet';
+        valueNode.classList.toggle('is-placeholder', !sideStarted);
+        valueNode.classList.toggle('is-live', sideStarted);
       });
     });
     panel.querySelectorAll('tr[data-assessment-row]').forEach(function (row) {
@@ -507,6 +500,8 @@
       assessment.textContent = started
         ? comparisonText(metric, records.standard, records.modql)
         : 'Not run yet';
+      assessment.classList.toggle('is-placeholder', !started);
+      assessment.classList.toggle('is-live', started);
     });
     renderAssessment(state, panel, started ? records.standard : null, started ? records.modql : null);
     ['standard', 'modql'].forEach(function (id) {

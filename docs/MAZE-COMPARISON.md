@@ -6,14 +6,15 @@ computed from simulation runs; the page does not preload comparison metrics.
 The simulation is not field evidence and does not establish an overall winning
 algorithm.
 
-Each algorithm card displays its own live evaluation metrics beside its grid.
-The seven preferred-direction primary metrics (learners served through
-deferred communities) are visible by default; completion status and the other
-Report-only diagnostics are collapsible. Both use the same per-policy values
-produced by the live evaluation renderer. A slim assessment-only table below
-the cards compares the two policies metric by metric; no cross-policy values
-are placed inside either algorithm card. Before a run (and after reset), each
-card metric reads “Not run yet.”
+Each algorithm card contains the full 14-row results table: Metric (including
+its preference hint), that policy's value, and the live metric-by-metric
+assessment. The metric table sits on the left; the grid, trained details, run
+status and training log sit on the right. Every metric row is visible, and the
+collapsed Policy inputs section remains below the card body. Both cards bind
+values to the existing live evaluation records and comparison formatter.
+Before a run (and after reset), values read “Not run yet”; after a run, each
+card shows only its own policy's metrics. No separate comparative-results
+table is repeated below the cards; a short run assessment note remains.
 
 ## Scenarios and controls
 
