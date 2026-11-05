@@ -5073,12 +5073,12 @@ body[data-theme="dark"] .shared-maze-summary :is(thead th,h2,h3){color:#fff}
 .maze-closed-roads>summary{cursor:pointer}
 .maze-closed-roads ul{margin:7px 0;padding-left:22px;line-height:1.6}
 .maze-scenario-panel .shared-maze-legend{margin:12px 0}
-.maze-laiban-legend .legend-road{background:#285d41;border-color:#285d41}
-.maze-laiban-legend .legend-hazard{background:#273129;border-color:#d58a22}
-.maze-laiban-legend .legend-restricted{background:#8d4a27;border-color:#e0732f}
-.maze-laiban-legend .legend-closed{background:#7c3434;border-color:#d64545}
-.maze-laiban-legend .legend-open{background:#285d41;border-color:#3fae7a}
-.maze-laiban-legend .legend-caution{background:#80621f;border-color:#d9a441}
+.maze-laiban-legend .legend-road{background:#f5f2e8;border-color:#c9c4b4}
+.maze-laiban-legend .legend-hazard{background:#f5dfad;border:1px dashed #b56c25}
+.maze-laiban-legend .legend-restricted{background:#efb27b;border-color:#c36e32}
+.maze-laiban-legend .legend-closed{background:#e8a09a;border-color:#a6403b}
+.maze-laiban-legend .legend-open{background:#d8ead8;border-color:#528360}
+.maze-laiban-legend .legend-caution{background:#f4e3ad;border-color:#b38326}
 .maze-laiban-sites{margin:16px 0;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--bg-panel)}
 .maze-laiban-sites h3{margin:0 0 5px;font-size:14px}
 .maze-laiban-sites>p{margin:0 0 10px;color:var(--dim);font-size:11px;line-height:1.55}

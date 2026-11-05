@@ -32,7 +32,9 @@ The page has four fixed-seed scenarios, selected in the global header:
 Both policies share a single environment, start location, destinations,
 obstacles, seed, and training episode for each paired rollout. Tab 4's saved
 road closures are preserved. Its additional temporary obstacle is explicitly
-a simulated overlay and is applied only to open road cells. The sitio-level
+a simulated overlay and is applied only to non-node traversable corridor
+cells. At the saved rainfall, those candidates include Restricted and Open
+accessibility bands. The sitio-level
 learner allocation and visit history remain labeled simulated, not verified
 field data. The saved map has four reachable (open) sitios; B, C, D, H and I
 are closed/unreachable under the saved rainfall conditions.
@@ -126,8 +128,70 @@ closed sitios are not expected service targets. Learner counts and visit
 history remain simulated allocations. The batch's deferred-community count
 includes only reachable sitios that were not served; closed sitios are
 excluded. The batch protocol keeps this map and
-its closures fixed, while the temporary obstacle follows the existing seeded
-overlay schedule on open road cells.
+its closures fixed. The seed-based temporary overlay is selected from
+`World.overlayCandidates`: non-node cells in the saved `openCells` corridor
+set. At the saved 38 mm/24h data those candidates include both Restricted and
+Open accessibility-band cells; `openCells` means traversable corridor cells,
+not only the band literally named Open. There are 12 such candidates in the
+saved snapshot: 11 Restricted-band cells and one Open-band cell. Every 20
+paired movement ticks the world replaces the overlay with one seeded
+candidate, excluding the current
+agent positions and hub/sitio cells. While active, that one cell is blocked
+from movement; the overlay has no separate travel-time charge. This audit
+does not change overlay selection or movement behavior.
+
+### Laiban tile rendering and movement-rule verification
+
+The Laiban-only restyle uses the same cream base and grid lines as the other
+maze grids, then paints the saved road statuses and hazard markers. It does
+not alter `COMPARISON_GRID_POSITIONS`, saved waypoints, `roadTiles`,
+`hazardTiles`, `openCells`, or the overlay. Blank cream cells are schematic
+background: only saved corridor cells in `openCells` are traversable. A
+hazard marker is decoration over its underlying road; it does not independently
+change the cell's status or cost. An active temporary overlay is different: it
+temporarily blocks its selected corridor cell.
+
+At the saved 38 mm/24h snapshot the road-cell status counts are 3 Open, 14
+Restricted, 0 Caution, and 18 Closed. Fixed hazard markers are on six Closed
+cells and three Restricted cells. A Restricted hazard marker remains
+passable; a Closed hazard marker is not.
+
+The fixed node positions use `(row,column)`: hub `(4,4)`; A `(1,1)`, B
+`(1,4)`, C `(1,7)`, D `(8,4)`, E `(6,1)`, F `(4,8)`, G `(6,4)`, H `(8,6)`
+and I `(8,8)`. Fixed hazard-marker cells are `(2,4)`, `(2,6)`, `(4,2)`,
+`(5,2)`, `(5,6)`, `(6,2)`, `(7,4)`, `(8,5)` and `(8,7)`. The 12 possible
+seeded overlay cells are `(2,1)`, `(3,1)`, `(4,1)`, `(4,2)`, `(4,3)`,
+`(5,4)`, `(5,5)`, `(5,6)`, `(5,7)`, `(5,8)`, `(6,2)` and `(6,3)`;
+the fixed roads and hazard markers do not move.
+
+| Tile type | Passable? | Travel-time cost or penalty | Rule source | Same for both agents? |
+|---|---|---|---|---|
+| Traversable road (cream mapped corridor) | Yes, only where the saved corridor cell is in `openCells`; blank schematic background is not passable. | Uses the cell's saved cost: each contributing edge's `edgeMin()` divided across its corridor steps, averaged where paths share a cell; 5 minutes is the configured fallback. | `maze-scenarios.js` builds `openCells`/`cellMinutes`; `maze-routing.js` `World.isOpen()` and `World.cellMinutes()`. | Yes; both agents share the same `World`. |
+| Road hazard / temporary obstacle | Static hazard markers inherit the underlying status: Restricted markers pass; Closed markers do not. A seeded temporary overlay is impassable while active. | Static markers add no cost. The temporary overlay adds no time charge; it temporarily blocks one eligible corridor cell, then the seeded schedule replaces it at the next update. | `maze-scenarios.js` builds `hazardTiles`/`overlayCandidates`; `maze-routing.js` `World.beginTick()`, `World.isOpen()` and `World.move()`. | Yes; one paired environment is shared. |
+| Restricted (`0.20 <= A < 0.45`) | Yes. | Passable with a higher cost from the same `edgeMin()` formula. On this saved map, mapped Restricted cell costs range about 1.57–11.68 minutes per cell. | `engine.js` `band()`/`edgeMin()`; `maze-scenarios.js` derives per-cell costs; `maze-routing.js` applies them. | Yes. |
+| Closed (`A < 0.20`) | No. Closed corridor cells are excluded from `openCells`. | No movement cost is applied because the cell cannot be entered. | `engine.js` `band()`; `maze-scenarios.js` only adds cells/costs when `access >= 0.20`; `maze-routing.js` `World.isOpen()`. | Yes. |
+| Open (`A >= 0.75`) | Yes. | Uses `edgeMin()` with road surface and accessibility. The Hub–Old Laiban (G) edge is about 1.40 minutes total; its mapped cell costs are about 1.14–1.82 minutes per cell. | `engine.js` `band()`/`edgeMin()`; `maze-scenarios.js` per-cell aggregation. | Yes. |
+| Caution (`0.45 <= A < 0.75`) | Yes. | Passable; its lower accessibility raises the same `edgeMin()`-derived cost. There are no Caution roads in the saved 38 mm/24h snapshot. | `engine.js` `band()`/`edgeMin()`; `maze-scenarios.js` per-cell aggregation. | Yes. |
+
+`edgeMin(e)` is `(e.km / speed(e.surf)) * 60 / max(accA(e), 0.08)`.
+Accessible edge costs are distributed across the saved schematic corridor
+steps, then averaged for cells shared by multiple corridors. Therefore there
+is no single fixed minute value for an entire color category. The paired
+evaluation uses one shared world (`Pair.step()`), so Standard Q-Learning and
+MODQL use identical passability, overlay timing and travel-time costs.
+References: `engine.js` lines 238–245; `analysis.js` lines 244–272;
+`maze-scenarios.js` lines 113–212; `maze-routing.js` lines 176–185,
+271–315 and 510–530.
+
+#### Report-only what-if: make Restricted, Hazard and Caution impassable
+
+This hypothetical was evaluated against the fixed saved map only; no rule was
+changed. If every Restricted, Hazard and Caution tile were excluded like
+Closed, only **1 of 9 sitios** would remain reachable from the hub:
+**G — Old Laiban**. Its direct Hub–Old Laiban road is in the Open band.
+Sitios A, E and F lose their passable Restricted corridors; B, C, D, H and I
+remain unreachable on the saved Closed roads. This result is a reachability
+check, not a new policy run or a recommendation to change the rules.
 
 The regenerated Tab 4 policy's last 500 training episodes completed all four
 reachable sitios 0/500 times for Standard and 381/500 times for MODQL. In the
