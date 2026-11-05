@@ -5443,3 +5443,80 @@ body[data-theme="dark"] .shared-maze-summary :is(thead th,h2,h3){color:#fff}
     margin:6px 0;
   }
 }
+
+.maze-scenario-panel .shared-maze-controls{
+  display:flex;
+  align-items:flex-end;
+  flex-wrap:nowrap;
+  gap:10px;
+}
+.maze-scenario-panel .maze-control-item{
+  display:flex;
+  flex:0 0 auto;
+  flex-direction:column;
+  gap:4px;
+  margin:0;
+  color:var(--dim);
+  font-size:11px;
+  line-height:14px;
+}
+.maze-scenario-panel .maze-control-label{
+  display:block;
+  height:14px;
+  white-space:nowrap;
+}
+.maze-scenario-panel .maze-control-item>.btn,
+.maze-scenario-panel .maze-control-item>select{
+  box-sizing:border-box;
+  height:44px;
+  min-height:44px;
+  border-radius:8px;
+  font-family:inherit;
+  font-size:13px;
+  line-height:1;
+}
+.maze-scenario-panel .maze-control-item>.btn{
+  min-width:0;
+  padding:0 14px;
+  white-space:nowrap;
+}
+.maze-scenario-panel .maze-control-run>.btn{width:166px}
+.maze-scenario-panel .maze-control-reset>.btn{width:88px}
+.maze-scenario-panel .maze-control-step>.btn{width:160px}
+.maze-scenario-panel .maze-control-train>.btn{width:180px}
+.maze-scenario-panel .maze-control-item>select{
+  width:max-content;
+  min-width:108px;
+  padding:0 30px 0 10px;
+  color:var(--txt);
+  background:var(--bg-inset);
+  border:1px solid var(--line);
+}
+.maze-scenario-panel .maze-control-speed>select{min-width:122px}
+.maze-scenario-panel .maze-control-unit>select{min-width:116px}
+@media(max-width:999px){
+  .maze-scenario-panel .shared-maze-controls{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    align-items:end;
+    gap:10px;
+  }
+  .maze-scenario-panel .maze-control-item{
+    min-width:0;
+    width:100%;
+  }
+  .maze-scenario-panel .maze-control-item>.btn,
+  .maze-scenario-panel .maze-control-item>select{
+    width:100%;
+    min-width:0;
+  }
+  .maze-scenario-panel .maze-control-label{
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+}
+@media(max-width:560px){
+  .maze-scenario-panel .shared-maze-controls{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}

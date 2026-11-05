@@ -560,8 +560,18 @@ test('UI exposes four fixed tabs, per-tab SOP selection, live results and separa
   assert.match(demoSource, /Not run yet/);
   assert.match(demoSource, /200 Held-Out/);
   assert.match(demoSource, /data-action="step"/);
+  assert.match(demoSource, /class="maze-control-item maze-control-run"/);
+  assert.match(demoSource, /class="maze-control-label" aria-hidden="true"/);
+  assert.match(demoSource, /class="maze-control-item maze-control-speed"><span class="maze-control-label">Simulation speed<\/span>/);
+  assert.match(demoSource, /class="maze-control-item maze-control-unit"><span class="maze-control-label">Travel time units<\/span>/);
   assert.match(demoSource, /data-action="reset"/);
   assert.match(demoSource, /data-dynamic="tick"/);
+  assert.match(styleSource, /\.maze-scenario-panel \.shared-maze-controls\{\s*display:flex;\s*align-items:flex-end;\s*flex-wrap:nowrap/);
+  assert.match(styleSource, /height:44px;\s*min-height:44px/);
+  assert.match(styleSource, /@media\(max-width:999px\)/);
+  assert.match(styleSource, /grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+  assert.match(styleSource, /\.maze-control-run>\.btn\{width:166px\}/);
+  assert.match(styleSource, /\.maze-control-speed>select\{min-width:122px\}/);
   assert.match(demoSource, /Environment-only values; not part of Standard state or Q updates/);
   assert.doesNotMatch(demoSource, /Scenario seed\s*<input|Load Scenario|Episodes per algorithm/);
   var scenarios = harness().MazeComparisonData.scenarios();

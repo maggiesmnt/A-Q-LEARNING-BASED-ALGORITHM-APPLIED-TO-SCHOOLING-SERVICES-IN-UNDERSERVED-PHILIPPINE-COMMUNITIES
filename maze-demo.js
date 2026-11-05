@@ -368,12 +368,18 @@
       '<b>5,000 training episodes each, equal budget</b><span>Alpha 0.10 · Gamma 0.90 · Epsilon 1.00 → 0.05 (0.995 decay)</span>' +
       '<span>Same scenario, start, targets, obstacles and seed for both policies.</span></div></details>' +
       '<div class="shared-maze-controls">' +
-      '<button type="button" class="btn p" data-action="run">Start Comparison</button>' +
-      '<button type="button" class="btn g" data-action="reset">Reset</button>' +
-      '<button type="button" class="btn g" data-action="step">Advance One Step</button>' +
-      '<button type="button" class="btn g" data-action="train">Retrain from scratch</button>' +
-      '<label>Simulation speed <select data-action="speed"><option value="800">0.25×</option><option value="400">0.5×</option><option value="200" selected>1×</option><option value="100">2×</option><option value="50">4×</option></select></label>' +
-      '<label>Travel time units <select data-action="unit"><option value="minutes" selected>Minutes</option><option value="hours">Hours</option></select></label>' +
+      '<div class="maze-control-item maze-control-run"><span class="maze-control-label" aria-hidden="true">&nbsp;</span>' +
+      '<button type="button" class="btn p" data-action="run">Start Comparison</button></div>' +
+      '<div class="maze-control-item maze-control-reset"><span class="maze-control-label" aria-hidden="true">&nbsp;</span>' +
+      '<button type="button" class="btn g" data-action="reset">Reset</button></div>' +
+      '<div class="maze-control-item maze-control-step"><span class="maze-control-label" aria-hidden="true">&nbsp;</span>' +
+      '<button type="button" class="btn g" data-action="step">Advance One Step</button></div>' +
+      '<div class="maze-control-item maze-control-train"><span class="maze-control-label" aria-hidden="true">&nbsp;</span>' +
+      '<button type="button" class="btn g" data-action="train">Retrain from scratch</button></div>' +
+      '<label class="maze-control-item maze-control-speed"><span class="maze-control-label">Simulation speed</span>' +
+      '<select data-action="speed"><option value="800">0.25×</option><option value="400">0.5×</option><option value="200" selected>1×</option><option value="100">2×</option><option value="50">4×</option></select></label>' +
+      '<label class="maze-control-item maze-control-unit"><span class="maze-control-label">Travel time units</span>' +
+      '<select data-action="unit"><option value="minutes" selected>Minutes</option><option value="hours">Hours</option></select></label>' +
       '</div>' +
       '<progress class="maze-training-progress" data-training-progress max="' + EPISODES + '" value="0" hidden></progress>' +
       '<div class="maze-run-status"><p class="maze-status-message" role="status">Results are not available until a run starts.</p>' +
