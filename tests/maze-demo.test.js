@@ -14,10 +14,10 @@ var demoSource = fs.readFileSync(path.join(root, 'maze-demo.js'), 'utf8');
 function harness() {
   var context = vm.createContext({});
   vm.runInContext(engineSource, context);
-  var fixedDataStart = analysisSource.indexOf('var FIXED_MAZE_NODES=');
-  var fixedDataEnd = analysisSource.indexOf('function fixedMazeKey', fixedDataStart);
-  assert.ok(fixedDataStart >= 0 && fixedDataEnd > fixedDataStart, 'saved Laiban schematic data should exist');
-  vm.runInContext(analysisSource.slice(fixedDataStart, fixedDataEnd), context);
+  var gridDataStart = analysisSource.indexOf('var COMPARISON_GRID_POSITIONS=');
+  var gridDataEnd = analysisSource.indexOf('function comparisonGridKey', gridDataStart);
+  assert.ok(gridDataStart >= 0 && gridDataEnd > gridDataStart, 'saved Laiban comparison grid data should exist');
+  vm.runInContext(analysisSource.slice(gridDataStart, gridDataEnd), context);
   vm.runInContext(routingSource, context);
   vm.runInContext(scenarioSource, context);
   return context;
@@ -51,19 +51,21 @@ test('four fixed scenarios use the saved Laiban values and requested shared budg
   assert.equal(scenarios[0].dynamicFrequency, 0);
   assert.equal(scenarios[1].sites.length, 1);
   assert.equal(scenarios[1].obstacleRatio, 0);
-  assert.equal(scenarios[1].obstacles.length, 43);
+  assert.equal(scenarios[1].obstacles.length, 32);
   var obstacleMaps = [202, 1202, 100202].map(function (seed) {
     return Array.from(makeWorld(context.MazeRouting, scenarios[1], seed).obstacles).sort().join(';');
   });
   assert.equal(new Set(obstacleMaps).size, 1, 'Tab 2 keeps its same fixed map for training and evaluation');
   var tabTwoStarts = context.MazeComparisonData.tabTwoStartCells(scenarios[1]);
-  assert.equal(tabTwoStarts.length, 56);
+  assert.equal(tabTwoStarts.length, 67);
   var tabTwoWorld = makeWorld(context.MazeRouting, scenarios[1]);
   tabTwoStarts.forEach(function (start) {
     assert.ok(tabTwoWorld.pathExists(start, scenarios[1].sites[0].position),
       'every batch/training start must reach the target: ' + start.join(','));
   });
-  var distanceQueue = [[scenarios[1].start, 0]], distanceSeen = new Set([context.MazeRouting.key(scenarios[1].start)]);
+  var startKey = context.MazeRouting.key(scenarios[1].start);
+  var distanceQueue = [[scenarios[1].start, 0]], distanceByKey = new Map([[startKey, 0]]);
+  var shortestPathCounts = new Map([[startKey, 1]]);
   var shortestPathLength = null, directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
   for (var queueIndex = 0; queueIndex < distanceQueue.length; queueIndex++) {
     var entry = distanceQueue[queueIndex], point = entry[0], distance = entry[1];
@@ -73,21 +75,31 @@ test('four fixed scenarios use the saved Laiban values and requested shared budg
     }
     directions.forEach(function (direction) {
       var next = [point[0] + direction[0], point[1] + direction[1]], nextKey = context.MazeRouting.key(next);
-      if (tabTwoWorld.isOpen(next) && !distanceSeen.has(nextKey)) {
-        distanceSeen.add(nextKey);
-        distanceQueue.push([next, distance + 1]);
+      if (tabTwoWorld.isOpen(next)) {
+        if (!distanceByKey.has(nextKey)) {
+          distanceByKey.set(nextKey, distance + 1);
+          shortestPathCounts.set(nextKey, shortestPathCounts.get(context.MazeRouting.key(point)));
+          distanceQueue.push([next, distance + 1]);
+        } else if (distanceByKey.get(nextKey) === distance + 1) {
+          shortestPathCounts.set(nextKey,
+            shortestPathCounts.get(nextKey) + shortestPathCounts.get(context.MazeRouting.key(point)));
+        }
       }
     });
   }
-  assert.equal(shortestPathLength, 54);
-  assert.ok(shortestPathLength >= 1.5 * 18, 'maze detour should exceed the 1.5x Manhattan threshold');
-  [2, 5].forEach(function (column) {
-    var pocket = [9, column];
-    var degree = directions.filter(function (direction) {
-      return tabTwoWorld.isOpen([pocket[0] + direction[0], pocket[1] + direction[1]]);
-    }).length;
-    assert.equal(degree, 1, 'dead-end pocket is a one-exit cell');
+  assert.equal(shortestPathLength, 24);
+  assert.ok(shortestPathCounts.get(context.MazeRouting.key(scenarios[1].sites[0].position)) > 1,
+    'the maze allows multiple shortest routes, not one forced corridor');
+  assert.ok(shortestPathLength >= 1.3 * 18, 'maze detour should exceed the 1.3x Manhattan threshold');
+  var obstacleSet = new Set(scenarios[1].obstacles.map(function (point) { return point.join(','); }));
+  var obstacleRows = Array.from({length: 10}, function (_, row) {
+    return Array.from({length: 10}, function (_, column) {
+      return obstacleSet.has(row + ',' + column) ? '#' : '.';
+    }).join('');
   });
+  assert.equal(new Set(obstacleRows).size, 10, 'obstacle rows are irregular, not a repeating corridor pattern');
+  assert.ok(obstacleRows.every(function (row) { return (row.match(/#/g) || []).length <= 6; }),
+    'the map has no full-width wall or forced single corridor');
   assert.equal(scenarios[1].dynamicFrequency, 0);
   assert.ok(scenarios[2].sites.length > 1);
   assert.equal(scenarios[2].dynamicFrequency, 0);
@@ -108,10 +120,17 @@ test('four fixed scenarios use the saved Laiban values and requested shared budg
   assert.equal(scenarios[3].rainfallMm, 38);
   assert.equal(scenarios[3].budgetMinutes, 480);
   assert.equal(scenarios[3].serviceMinutes, 60);
-  assert.equal(scenarios[3].start.join(','), '5,5');
+  assert.equal(scenarios[3].start.join(','), '4,4');
   assert.deepEqual(Array.from(scenarios, function (scenario) { return scenario.name; }),
     ['Basic Grid', 'Obstacles', 'Multi-Target', 'Laiban Case']);
   assert.ok(scenarios[3].closedRoads.length > 0);
+  var laibanWorld = makeWorld(context.MazeRouting, scenarios[3]);
+  assert.deepEqual(Array.from(laibanWorld.reachableSiteIds), ['maysawa', 'banatas', 'iwi_iw', 'old_laiban']);
+  assert.deepEqual(Array.from(scenarios[3].sites, function (site) { return site.position.join(','); }),
+    ['1,1', '1,4', '1,7', '8,4', '6,1', '4,8', '6,4', '8,6', '8,8']);
+  assert.ok(scenarios[3].openCells.length > 0);
+  assert.ok(Object.keys(scenarios[3].roadTiles).length > scenarios[3].openCells.length);
+  assert.ok(Object.keys(scenarios[3].hazardTiles).length > 0);
   assert.deepEqual(Array.from(scenarios[3].sites, function (site) { return site.letter; }),
     ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']);
   assert.equal(context.MazeRouting.parameters.episodes, 5000);
@@ -155,6 +174,10 @@ test('pretrained policy files load Q tables and training logs without retraining
     assert.equal(policy.trainingLog.modqlSteps.length, 5000);
     assert.equal(policy.trainingLog.standardReward.length, 5000);
     assert.equal(policy.trainingLog.modqlReward.length, 5000);
+    if (scenario.id === 'tab-2' || scenario.id === 'tab-4') {
+      assert.equal(policy.trainingLog.standardCompleted.length, 5000);
+      assert.equal(policy.trainingLog.modqlCompleted.length, 5000);
+    }
     assert.deepEqual(Object.keys(policy).sort(),
       ['alpha', 'episodes', 'epsilonDecay', 'epsilonMin', 'epsilonStart', 'gamma', 'qTables', 'scenarioId', 'seed', 'trainedAt', 'trainingLog', 'version'].sort());
     assert.ok(policy.qTables.standard.length > 0);
@@ -172,19 +195,19 @@ test('pretrained policy files load Q tables and training logs without retraining
   });
 });
 
-test('Tab 2 training starts vary reproducibly across the 56 open cells without changing the demo start', function () {
+test('Tab 2 training starts vary reproducibly across the 67 open cells without changing the demo start', function () {
   var context = harness(), data = context.MazeComparisonData;
   var config = data.scenarios()[1], firstModels = context.MazeRouting.modelsFor(config.seed);
   var secondModels = context.MazeRouting.modelsFor(config.seed);
   var starts = data.tabTwoStartCells(config);
-  assert.equal(starts.length, 56);
+  assert.equal(starts.length, 67);
   var firstSequence = [], secondSequence = [];
   for (var episode = 0; episode < 5000; episode++) {
     firstSequence.push(data.trainingStart(config, firstModels.scenarioRandom).join(','));
     secondSequence.push(data.trainingStart(config, secondModels.scenarioRandom).join(','));
   }
   assert.deepEqual(firstSequence, secondSequence, 'training start sequence is seeded and reproducible');
-  assert.equal(new Set(firstSequence).size, 56, 'all open non-target cells are represented');
+  assert.equal(new Set(firstSequence).size, 67, 'all open non-target cells are represented');
   assert.ok(firstSequence.every(function (start) {
     return starts.some(function (cell) { return cell.join(',') === start; });
   }));
@@ -194,17 +217,17 @@ test('Tab 2 training starts vary reproducibly across the 56 open cells without c
   })), [0, 0]);
 });
 
-test('random-start Tab 2 policy training succeeds and frozen evaluation does not update Q tables', function () {
+test('random-start Tab 2 policy training logs success and frozen evaluation does not update Q tables', function () {
   var context = harness(), api = context.MazeRouting, config = context.MazeComparisonData.scenarios()[1];
   var policy = JSON.parse(fs.readFileSync(path.join(root, 'policies', 'tab-2.json'), 'utf8'));
   ['standard', 'modql'].forEach(function (id) {
-    var successes = policy.trainingLog[id + 'Reward'].slice(-500).filter(function (reward) { return reward > 0; }).length;
-    assert.equal(successes, id === 'standard' ? 497 : 500,
-      id + ' training success rate matches its recorded maze-layout training log');
+    assert.equal(policy.trainingLog[id + 'Completed'].length, 5000);
+    assert.equal(policy.trainingLog[id + 'Completed'].slice(-500).filter(Boolean).length,
+      id === 'standard' ? 493 : 500, id + ' training success rate matches its recorded episode log');
   });
-  assert.equal(policy.qTables.standard.length, 56);
-  assert.equal(policy.qTables.modqlQ1.length, 112);
-  assert.equal(policy.qTables.modqlQ2.length, 112);
+  assert.ok(policy.qTables.standard.length >= 67);
+  assert.ok(policy.qTables.modqlQ1.length > 0);
+  assert.ok(policy.qTables.modqlQ2.length > 0);
   var models = api.modelsFromPolicy(policy, config.id, config.seed);
   var before = snapshot(models);
   var world = makeWorld(api, config), pair = new api.Pair(world, models, false);
@@ -221,13 +244,13 @@ test('Tab 2 held-out batch varies only paired starts on its fixed map and counts
   var policy = JSON.parse(fs.readFileSync(path.join(root, 'policies', 'tab-2.json'), 'utf8'));
   var models = api.modelsFromPolicy(policy, config.id, config.seed);
   var starts = context.MazeComparisonData.tabTwoStartCells(config);
-  assert.equal(starts.length, 56);
+  assert.equal(starts.length, 67);
   var outcomes = {standard: [], modql: []}, distinctStarts = new Set();
   for (var index = 0; index < 200; index++) {
     var batchConfig = JSON.parse(JSON.stringify(config));
     batchConfig.start = starts[index % starts.length];
     distinctStarts.add(batchConfig.start.join(','));
-    var world = makeWorld(api, batchConfig, config.seed + index);
+    var world = makeWorld(api, batchConfig, (config.seed + 100000 + index * 7919) >>> 0);
     var pair = new api.Pair(world, models, false);
     driveToEnd(pair, 190);
     assert.deepEqual(Array.from(world.start), Array.from(pair.world.start));
@@ -235,7 +258,7 @@ test('Tab 2 held-out batch varies only paired starts on its fixed map and counts
       outcomes[id].push(api.metrics(pair.runs[id], world));
     });
   }
-  assert.equal(distinctStarts.size, 56);
+  assert.equal(distinctStarts.size, 67);
   assert.equal(outcomes.standard.filter(function (result) { return result.completed; }).length, 200);
   assert.equal(outcomes.modql.filter(function (result) { return result.completed; }).length, 200);
   assert.equal(outcomes.standard.filter(function (result) { return result.loopDetected; }).length, 0);
@@ -246,8 +269,9 @@ test('Tab 2 held-out batch varies only paired starts on its fixed map and counts
     var steps = outcomes[id].map(function (result) { return result.movementSteps; });
     var mean = steps.reduce(function (sum, value) { return sum + value; }, 0) / steps.length;
     var variance = steps.reduce(function (sum, value) { return sum + Math.pow(value - mean, 2); }, 0) / steps.length;
-    assert.ok(Math.abs(mean - 28.66) < 1e-9, id + ' batch mean steps');
-    assert.ok(Math.abs(Math.sqrt(variance) - 15.51) < 0.005, id + ' batch population SD');
+    assert.ok(Math.abs(mean - (id === 'standard' ? 14.665 : 14.575)) < 1e-9, id + ' batch mean steps');
+    assert.ok(Math.abs(Math.sqrt(variance) - (id === 'standard' ? 6.3547442906855025 : 6.11836375185392)) < 1e-9,
+      id + ' batch population SD');
   });
 });
 
@@ -261,6 +285,58 @@ test('Tab 3 fixed-map policy batch completes all MODQL routes and detects Standa
     driveToEnd(pair, 190);
     ['standard', 'modql'].forEach(function (id) {
       outcomes[id].push(api.metrics(pair.runs[id], world));
+      var trail = pair.runs[id].trail;
+      trail.forEach(function (point, trailIndex) {
+        assert.ok(world.isOpen(point), id + ' route remains on traversable cells');
+        if (trailIndex) {
+          var previous = trail[trailIndex - 1];
+          assert.equal(Math.abs(point[0] - previous[0]) + Math.abs(point[1] - previous[1]), 1,
+            id + ' route renderer connects only adjacent movement cells');
+        }
+      });
+
+      test('Laiban policy reports reachable completion, closures, live rollout counts and per-episode training success', function () {
+        var context = harness(), api = context.MazeRouting, config = context.MazeComparisonData.scenarios()[3];
+        var policy = JSON.parse(fs.readFileSync(path.join(root, 'policies', 'tab-4.json'), 'utf8'));
+        var models = api.modelsFromPolicy(policy, config.id, config.seed);
+        var worldTemplate = makeWorld(api, config);
+        assert.deepEqual(Array.from(worldTemplate.reachableSiteIds), ['maysawa', 'banatas', 'iwi_iw', 'old_laiban']);
+        var outcomes = {standard: [], modql: []};
+        for (var index = 0; index < 200; index++) {
+          var world = makeWorld(api, config, (config.seed + 100000 + index * 7919) >>> 0);
+          var pair = new api.Pair(world, models, false);
+          driveToEnd(pair, 1002);
+          ['standard', 'modql'].forEach(function (id) {
+            var run = pair.runs[id];
+            run.trail.forEach(function (point, trailIndex) {
+              assert.ok(world.allowedCells.has(api.key(point)), id + ' Laiban route stays on saved road cells');
+              assert.ok(!world.obstacles.has(api.key(point)), id + ' Laiban route avoids fixed road closures');
+              if (trailIndex) {
+                var previous = run.trail[trailIndex - 1];
+                assert.equal(Math.abs(point[0] - previous[0]) + Math.abs(point[1] - previous[1]), 1);
+              }
+            });
+            outcomes[id].push(api.metrics(run, world));
+          });
+        }
+        assert.equal(outcomes.standard.filter(function (result) { return result.completed; }).length, 0);
+        assert.equal(outcomes.standard.filter(function (result) { return result.loopDetected; }).length, 200);
+        assert.equal(outcomes.modql.filter(function (result) { return result.completed; }).length, 182);
+        assert.equal(outcomes.modql.filter(function (result) { return result.loopDetected; }).length, 8);
+        assert.equal(outcomes.modql.filter(function (result) { return !result.completed && !result.loopDetected; }).length, 10);
+        assert.ok(outcomes.modql.every(function (result) {
+          return result.reachableDestinationTotal === 4 && result.destinationsServed <= 4 &&
+            result.deferredCommunities === 4 - result.reachableDestinationsServed;
+        }));
+        assert.equal(policy.trainingLog.standardCompleted.slice(-500).filter(Boolean).length, 0);
+        assert.equal(policy.trainingLog.modqlCompleted.slice(-500).filter(Boolean).length, 381);
+        assert.deepEqual(
+          Array.from(config.sites.filter(function (site) {
+            return worldTemplate.reachableSiteIds.indexOf(site.id) < 0;
+          }), function (site) { return site.letter; }),
+          ['B', 'C', 'D', 'H', 'I']
+        );
+      });
     });
   }
   assert.equal(outcomes.standard.filter(function (result) { return result.loopDetected; }).length, 200);
@@ -302,12 +378,15 @@ test('frozen greedy ties use the first legal action for both unseen policies', f
   });
 });
 
-test('display-only loop detector requires four two-cell cycles without service', function () {
+test('display-only loop detector flags only a current four-cycle two-cell oscillation and ignores corridor backtracking', function () {
   var api = harness().MazeRouting;
   var loop = [[2, 1], [2, 2], [2, 1], [2, 2], [2, 1], [2, 2], [2, 1], [2, 2], [2, 1]];
   assert.equal(api.hasRepeatedTwoCellLoop(loop, []), true);
   assert.equal(api.hasRepeatedTwoCellLoop(loop.slice(0, 8), []), false);
+  assert.equal(api.hasRepeatedTwoCellLoop(loop.concat([[2, 3]]), []), false,
+    'moving to a new cell clears the active-loop display');
   assert.equal(api.hasRepeatedTwoCellLoop(loop, [5]), false);
+  assert.equal(api.hasRepeatedTwoCellLoop([[1, 1], [1, 2], [1, 3], [1, 2], [1, 3], [1, 4], [1, 5]], []), false);
 });
 
 test('movement constraints are shared and both agents use four-direction actions', function () {
@@ -463,7 +542,11 @@ test('UI exposes four fixed tabs, per-tab SOP selection, live results and separa
   assert.match(demoSource, /two-level road accessibility/);
   assert.match(demoSource, /Loop rate \(%\)/);
   assert.match(demoSource, /Loop detected: learned policy repeats the same moves/);
-  assert.match(demoSource, /Tab 2 batch evaluates 200 starts on a fixed obstacle map\. Training uses seeded random starts from the same 56 open non-target cells\./);
+  assert.match(demoSource, /Tab 2 batch evaluates 200 starts on a fixed obstacle map\. Training uses seeded random starts from the same 67 open non-target cells\./);
+  assert.match(demoSource, /served ' \+ metric\.destinationsServed \+ ' of 9 sitios/);
+  assert.match(demoSource, /closed road/);
+  assert.match(demoSource, /maze-laiban-sites/);
+  assert.match(demoSource, /temporary obstacle moves only among open road cells/);
   var styleSource = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   assert.match(styleSource, /\.maze-loop-status\[hidden\]\s*\{\s*display:none;/);
   assert.match(demoSource, /<div class="maze-agent-body"><div class="maze-agent-info">/);

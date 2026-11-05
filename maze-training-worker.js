@@ -10,7 +10,9 @@ self.onmessage = function (event) {
     standardSteps: [],
     modqlSteps: [],
     standardReward: [],
-    modqlReward: []
+    modqlReward: [],
+    standardCompleted: [],
+    modqlCompleted: []
   };
   var episode = 0;
 
@@ -27,6 +29,8 @@ self.onmessage = function (event) {
         trainingLog.modqlSteps.push(pair.runs.modql.steps);
         trainingLog.standardReward.push(pair.runs.standard.reward);
         trainingLog.modqlReward.push(pair.runs.modql.reward);
+        trainingLog.standardCompleted.push(pair.runs.standard.success);
+        trainingLog.modqlCompleted.push(pair.runs.modql.success);
         episode++;
       }
       self.postMessage({type: 'progress', episodes: episode});

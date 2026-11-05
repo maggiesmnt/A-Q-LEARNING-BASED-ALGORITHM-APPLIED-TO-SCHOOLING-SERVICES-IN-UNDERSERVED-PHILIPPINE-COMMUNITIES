@@ -79,24 +79,19 @@ var MazeRouting = (function () {
   }
   function hasRepeatedTwoCellLoop(trail, serviceSteps) {
     if (!Array.isArray(trail) || trail.length < 9) return false;
-    for (var start = 0; start + 8 < trail.length; start++) {
-      var first = trail[start], second = trail[start + 1];
-      if (!first || !second || (first[0] === second[0] && first[1] === second[1])) continue;
-      var matches = true;
-      for (var offset = 0; offset <= 8; offset++) {
-        var expected = offset % 2 ? second : first, actual = trail[start + offset];
-        if (!actual || actual[0] !== expected[0] || actual[1] !== expected[1]) {
-          matches = false;
-          break;
-        }
+    var start = trail.length - 9;
+    var first = trail[start], second = trail[start + 1];
+    if (!first || !second || (first[0] === second[0] && first[1] === second[1])) return false;
+    for (var offset = 0; offset <= 8; offset++) {
+      var expected = offset % 2 ? second : first, actual = trail[start + offset];
+      if (!actual || actual[0] !== expected[0] || actual[1] !== expected[1]) {
+        return false;
       }
-      if (!matches) continue;
-      var servedDuringLoop = serviceSteps && serviceSteps.some(function (step) {
-        return step > start && step <= start + 8;
-      });
-      if (!servedDuringLoop) return true;
     }
-    return false;
+    var servedDuringLoop = serviceSteps && serviceSteps.some(function (step) {
+      return step > start && step <= start + 8;
+    });
+    return !servedDuringLoop;
   }
   function demandBucket(value, maximum) {
     return value / Math.max(maximum, 1) < 0.65 ? 1 : 2;
@@ -151,6 +146,10 @@ var MazeRouting = (function () {
     this.topologyVersion = 0;
     this.reachabilityCache = new Map();
     this.travelCache = new Map();
+    var initiallyReachable = this.reachableFrom(this.start);
+    this.reachableSiteIds = this.sites.filter(function (site) {
+      return initiallyReachable.has(key(site.position));
+    }).map(function (site) { return site.id; });
     if (this.dynamicKind === 'laiban') {
       this.overlayCandidates = this.overlayCandidates.filter(function (point) {
         return this.allowedCells && this.allowedCells.has(key(point)) && !this.protected.has(key(point));
@@ -602,8 +601,14 @@ var MazeRouting = (function () {
             run.reward += reward;
             run.segmentMinutes = 0;
             run.estimatedTravelMinutes = null;
-            if (Object.keys(run.served).length === world.sites.length) {
-              finishRun(run, world, 'All destinations served', true, model);
+            var allReachableServed = world.reachableSiteIds.every(function (siteId) {
+              return !!run.served[siteId];
+            });
+            if (allReachableServed) {
+              var allDestinationsServed = world.reachableSiteIds.length === world.sites.length;
+              finishRun(run, world, allDestinationsServed
+                ? 'All destinations served'
+                : 'All reachable destinations served', true, model);
             }
           }
         }
@@ -646,6 +651,9 @@ var MazeRouting = (function () {
   function metrics(run, world) {
     if (!run.didRun && !run.done) return null;
     var served = Object.keys(run.served).length;
+    var reachableServed = world.reachableSiteIds.filter(function (siteId) {
+      return !!run.served[siteId];
+    }).length;
     return {
       learners: run.learners,
       totalLearners: world.totalDemand,
@@ -655,7 +663,9 @@ var MazeRouting = (function () {
       movementSteps: run.steps,
       destinationsServed: served,
       destinationTotal: world.sites.length,
-      deferredCommunities: run.done ? run.deferred.length : world.sites.length - served,
+      reachableDestinationsServed: reachableServed,
+      reachableDestinationTotal: world.reachableSiteIds.length,
+      deferredCommunities: world.reachableSiteIds.length - reachableServed,
       completionStatus: run.done ? run.status : 'In progress',
       completed: run.done && run.success,
       loopDetected: hasRepeatedTwoCellLoop(run.trail, run.serviceSteps),

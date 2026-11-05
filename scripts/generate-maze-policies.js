@@ -10,12 +10,12 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 
 vm.runInContext(read('engine.js'), context);
 const analysis = read('analysis.js');
-const fixedDataStart = analysis.indexOf('var FIXED_MAZE_NODES=');
-const fixedDataEnd = analysis.indexOf('function fixedMazeKey', fixedDataStart);
-if (fixedDataStart < 0 || fixedDataEnd <= fixedDataStart) {
-  throw new Error('Saved Laiban grid data could not be located in analysis.js.');
+const gridDataStart = analysis.indexOf('var COMPARISON_GRID_POSITIONS=');
+const gridDataEnd = analysis.indexOf('function comparisonGridKey', gridDataStart);
+if (gridDataStart < 0 || gridDataEnd <= gridDataStart) {
+  throw new Error('Saved Laiban comparison grid data could not be located in analysis.js.');
 }
-vm.runInContext(analysis.slice(fixedDataStart, fixedDataEnd), context);
+vm.runInContext(analysis.slice(gridDataStart, gridDataEnd), context);
 vm.runInContext(read('maze-routing.js'), context);
 vm.runInContext(read('maze-scenarios.js'), context);
 
@@ -37,7 +37,9 @@ for (const config of configs) {
     standardSteps: [],
     modqlSteps: [],
     standardReward: [],
-    modqlReward: []
+    modqlReward: [],
+    standardCompleted: [],
+    modqlCompleted: []
   };
   const startedAt = Date.now();
   for (let episode = 0; episode < api.parameters.episodes; episode++) {
@@ -50,6 +52,8 @@ for (const config of configs) {
     trainingLog.modqlSteps.push(pair.runs.modql.steps);
     trainingLog.standardReward.push(pair.runs.standard.reward);
     trainingLog.modqlReward.push(pair.runs.modql.reward);
+    trainingLog.standardCompleted.push(pair.runs.standard.success);
+    trainingLog.modqlCompleted.push(pair.runs.modql.success);
   }
   const policy = api.policyFor(models, {
     scenarioId: config.id,

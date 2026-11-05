@@ -26,6 +26,8 @@
     {key: 'travelMinutes', label: 'Travel time (minutes)', decimals: 2},
     {key: 'movementSteps', label: 'Movement steps', decimals: 2},
     {key: 'destinationsServed', label: 'Destinations served', decimals: 2},
+    {key: 'reachableDestinationsServed', label: 'Reachable sitios served', decimals: 2},
+    {key: 'reachableDestinationTotal', label: 'Reachable sitio denominator', decimals: 2},
     {key: 'deferredCommunities', label: 'Deferred communities', decimals: 2},
     {key: 'completed', label: 'Completion rate (%)', decimals: 2, percent: true},
     {key: 'loopDetected', label: 'Loop rate (%)', decimals: 2, percent: true}
@@ -323,8 +325,11 @@
       ? '<details class="maze-disclaimer"><summary>Simulated, not verified field data.</summary><p>Rainfall, allocated sitio demand and visit history are scenario inputs; the temporary-obstacle overlay is simulated and does not change saved road closures.</p></details>'
       : '';
     var batchProtocolNote = config.id === 'tab-2'
-      ? '<p>Tab 2 batch evaluates 200 starts on a fixed obstacle map. Training uses seeded random starts from the same 56 open non-target cells.</p>'
+      ? '<p>Tab 2 batch evaluates 200 starts on a fixed obstacle map. Training uses seeded random starts from the same 67 open non-target cells.</p>'
       : '';
+    if (config.id === 'tab-4') {
+      batchProtocolNote = '<p>Laiban completion is reported as sitios served out of 9 and out of the 4 sitios reachable under the saved closures. Toyang (B), Ibucao (C), Kilabuwan (D), Manggahan (H), and Magata (I) are closed/unreachable; neither policy is expected to serve them. The 38 mm/24h closure map is fixed. The simulated temporary obstacle moves only among open road cells.</p>';
+    }
     var closed = config.closedRoads && config.closedRoads.length
       ? '<details class="maze-closed-roads"><summary>Saved closed roads (' + config.closedRoads.length + ')</summary><ul>' +
         config.closedRoads.map(function (road) { return '<li>' + escapeHtml(road.name) + ': ' + escapeHtml(road.reason) + '</li>'; }).join('') +
@@ -334,6 +339,25 @@
       return '<button type="button" class="btn g" data-sop="' + sop.id + '" aria-pressed="' +
         (sop.id === state.sop ? 'true' : 'false') + '">SOP ' + sop.id + '</button>';
     }).join('');
+    var legend = config.id === 'tab-4'
+      ? '<div class="shared-maze-legend maze-laiban-legend"><span><i class="legend-road"></i>Traversable road</span>' +
+        '<span><i class="legend-hazard"></i>Road hazard / temporary obstacle</span><span><i class="legend-restricted"></i>Restricted</span>' +
+        '<span><i class="legend-closed"></i>Closed</span><span><i class="legend-open"></i>Open</span>' +
+        '<span><i class="legend-caution"></i>Caution</span><span><i class="legend-route standard"></i>Standard route</span>' +
+        '<span><i class="legend-route modql"></i>MODQL route</span></div>'
+      : '<div class="shared-maze-legend"><span><i class="legend-route standard"></i>Standard route</span>' +
+        '<span><i class="legend-route modql"></i>MODQL route</span><span><i class="legend-wall"></i>Obstacle / closed road</span>' +
+        '<span><i class="legend-goal"></i>Service target</span></div>';
+    var laibanTable = config.id === 'tab-4'
+      ? '<section class="maze-laiban-sites"><h3>Laiban sitios</h3><p>Learner counts and visit history are simulated allocations. Saved closures remain fixed; only four of nine sitios are reachable in this scenario.</p>' +
+        '<div class="shared-maze-table-scroll"><table><thead><tr><th>Letter + Sitio</th><th>Learners</th><th>Last visit</th><th>Standard</th><th>MODQL</th></tr></thead><tbody>' +
+        config.sites.map(function (site) {
+          return '<tr data-site-status="' + escapeHtml(site.id) + '"><th scope="row"><span class="maze-site-letter">' +
+            escapeHtml(site.letter) + '</span> ' + escapeHtml(site.name) + '</th><td>' + site.demand +
+            '</td><td>' + site.lastVisitDays + ' d</td><td data-site-agent="standard">Not run yet</td>' +
+            '<td data-site-agent="modql">Not run yet</td></tr>';
+        }).join('') + '</tbody></table></div></section>'
+      : '';
     return '<section class="maze-scenario-panel" data-scenario-panel="' + state.index + '" ' +
       (state.index === activeIndex ? '' : 'hidden') + '>' +
       '<div class="maze-scenario-overview"><div><h2>' + escapeHtml(config.name) + '</h2><p>' +
@@ -355,9 +379,7 @@
       '<div class="maze-run-status"><p class="maze-status-message" role="status">Results are not available until a run starts.</p>' +
       dynamicCounters + '</div>' +
       roadDisclaimer +
-      '<div class="shared-maze-legend"><span><i class="legend-route standard"></i>Standard route</span>' +
-      '<span><i class="legend-route modql"></i>MODQL route</span><span><i class="legend-wall"></i>Obstacle / closed road</span>' +
-      '<span><i class="legend-goal"></i>Service target</span></div>' +
+      legend +
       '<div class="shared-maze-panels">' + ['standard', 'modql'].map(function (id) {
         var title = id === 'standard' ? 'Standard Q-Learning' : 'Enhanced MODQL';
         var name = id === 'standard' ? 'Standard' : 'MODQL';
@@ -382,7 +404,7 @@
             ? 'State encoding: current grid location only (L).'
             : 'Research state encoding: location (L), two-level demand buckets (D), remaining-time bucket (T), visit-history buckets (H), and two-level road accessibility (A: reachable or unreachable).') +
           '</p></details></section>';
-      }).join('') + '</div>' + closed +
+      }).join('') + '</div>' + laibanTable + closed +
       '<section class="shared-maze-summary"><header><div><span class="shared-maze-eyebrow">Computed from this run</span>' +
       '<h2>Comparative Performance Results</h2></div><span class="shared-maze-summary-note">No pre-filled results</span></header>' +
       '<div class="shared-maze-table-scroll"><table><thead><tr><th>Metric</th><th>Standard Q-Learning</th>' +
@@ -431,7 +453,9 @@
     }
     var completed = allDone(state);
     summary.textContent = completed
-      ? 'Metric-by-metric comparison for this simulated scenario only. No overall score or result beyond this scenario is claimed.'
+      ? (state.config.id === 'tab-4'
+        ? 'Completion means all 4 reachable (open) sitios were served. The five sitios on closed roads are unreachable under the saved 38 mm/24h conditions and are not expected to be served. Results remain simulated.'
+        : 'Metric-by-metric comparison for this simulated scenario only. No overall score or result beyond this scenario is claimed.')
       : 'Run in progress. Metric differences are descriptive only; no overall score is calculated.';
   }
 
@@ -470,7 +494,27 @@
       var served = metric.destinationsServed + ' / ' + metric.destinationTotal + ' destinations';
       status.textContent = run.done ? run.status : 'Running';
       live.textContent = metric.learners + ' learners (' + number(metric.coveragePercent, 1) +
-        '%) · ' + served + ' · ' + number(metric.travelMinutes, 1) + ' travel minutes';
+        '%) · ' + served + ' · ' + number(metric.travelMinutes, 1) + ' travel minutes' +
+        (state.config.id === 'tab-4'
+          ? ' · served ' + metric.destinationsServed + ' of 9 sitios; served ' +
+            metric.reachableDestinationsServed + ' of ' + metric.reachableDestinationTotal + ' reachable (open) sitios'
+          : '');
+    });
+    renderLaibanSiteStatuses(state, panel);
+  }
+
+  function renderLaibanSiteStatuses(state, panel) {
+    if (state.config.id !== 'tab-4') return;
+    var reachable = new Set(state.env.reachableSiteIds);
+    panel.querySelectorAll('[data-site-status]').forEach(function (row) {
+      var siteId = row.getAttribute('data-site-status');
+      ['standard', 'modql'].forEach(function (id) {
+        var cell = row.querySelector('[data-site-agent="' + id + '"]');
+        var run = state.pair && state.pair.runs[id];
+        if (!run || !run.didRun) cell.textContent = 'Not run yet';
+        else if (run.served[siteId]) cell.textContent = 'served';
+        else cell.textContent = reachable.has(siteId) ? 'open' : 'closed road';
+      });
     });
   }
 
@@ -542,16 +586,57 @@
     var world = state.env, run = state.pair && state.pair.runs[id];
     var size = world.size, cell = canvas.width / size;
     var obstacles = new Set(world.obstacleCells().map(MazeRouting.key));
+    var theme = window.getComputedStyle(document.body);
+    var roadColors = {
+      open: theme.getPropertyValue('--road-open').trim() || '#3fae7a',
+      caut: theme.getPropertyValue('--road-caution').trim() || '#d9a441',
+      rest: theme.getPropertyValue('--road-restricted').trim() || '#e0732f',
+      cls: theme.getPropertyValue('--road-closed').trim() || '#d64545'
+    };
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (var rowIndex = 0; rowIndex < size; rowIndex++) {
       for (var colIndex = 0; colIndex < size; colIndex++) {
         var point = [rowIndex, colIndex], key = MazeRouting.key(point);
-        ctx.fillStyle = obstacles.has(key) ? '#273129' : '#f5f2e8';
+        var road = state.config.roadTiles && state.config.roadTiles[key];
+        var overlay = world.isOverlayObstacle(point);
+        ctx.fillStyle = overlay ? '#273129' : road ? roadColors[road.status] :
+          obstacles.has(key) ? '#273129' : '#f5f2e8';
         ctx.fillRect(colIndex * cell, rowIndex * cell, cell, cell);
         ctx.strokeStyle = '#c9c4b4';
         ctx.lineWidth = 1;
         ctx.strokeRect(colIndex * cell, rowIndex * cell, cell, cell);
+        if (state.config.id === 'tab-4' && state.config.hazardTiles &&
+            state.config.hazardTiles[key] && !overlay) {
+          ctx.save();
+          ctx.strokeStyle = state.config.hazardTiles[key] === 'cls' ? roadColors.cls : roadColors.caut;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 3]);
+          ctx.strokeRect(colIndex * cell + 3, rowIndex * cell + 3, cell - 6, cell - 6);
+          ctx.restore();
+        }
+        if (overlay) {
+          ctx.strokeStyle = roadColors.caut;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(colIndex * cell + 8, rowIndex * cell + 8);
+          ctx.lineTo((colIndex + 1) * cell - 8, (rowIndex + 1) * cell - 8);
+          ctx.moveTo((colIndex + 1) * cell - 8, rowIndex * cell + 8);
+          ctx.lineTo(colIndex * cell + 8, (rowIndex + 1) * cell - 8);
+          ctx.stroke();
+        }
       }
+    }
+    if (state.config.id === 'tab-4') {
+      var hubX = (world.start[1] + 0.5) * cell, hubY = (world.start[0] + 0.5) * cell;
+      ctx.beginPath();
+      ctx.fillStyle = '#5e6828';
+      ctx.arc(hubX, hubY, cell * 0.34, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fffaf0';
+      ctx.font = 'bold ' + Math.max(10, cell * 0.32) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('H', hubX, hubY);
     }
     world.sites.forEach(function (target) {
       var x = (target.position[1] + 0.5) * cell, y = (target.position[0] + 0.5) * cell;
@@ -604,12 +689,20 @@
     }
     status.textContent = 'Completed live evaluation on ' + BATCH_SIZE + ' held-out paired scenarios.';
     var summary = state.batch.result;
-    resultContainer.innerHTML = '<div class="shared-maze-table-scroll"><table><thead><tr><th>Metric</th>' +
+    var batchMetrics = BATCH_METRICS.filter(function (metric) {
+      return state.config.id === 'tab-4' ||
+        (metric.key !== 'reachableDestinationsServed' && metric.key !== 'reachableDestinationTotal');
+    });
+    resultContainer.innerHTML = (state.config.id === 'tab-4'
+      ? '<p>Mean service is reported against both all 9 sitios and the 4 reachable (open) sitios; the five closed sitios are not expected targets.</p>'
+      : '') + '<div class="shared-maze-table-scroll"><table><thead><tr><th>Metric</th>' +
       '<th>Standard mean</th><th>Standard SD</th><th>MODQL mean</th><th>MODQL SD</th></tr></thead><tbody>' +
-      BATCH_METRICS.map(function (metric) {
+      batchMetrics.map(function (metric) {
         var a = summary.standard[metric.key], b = summary.modql[metric.key];
         var scale = metric.percent ? 100 : 1;
-        return '<tr><th scope="row">' + escapeHtml(metric.label) + '</th><td>' +
+        var label = state.config.id === 'tab-4' && metric.key === 'completed'
+          ? 'Reachable-site completion rate (%)' : metric.label;
+        return '<tr><th scope="row">' + escapeHtml(label) + '</th><td>' +
           number(a.mean * scale, metric.decimals) + '</td><td>' + number(a.sd * scale, metric.decimals) +
           '</td><td>' + number(b.mean * scale, metric.decimals) + '</td><td>' +
           number(b.sd * scale, metric.decimals) + '</td></tr>';
@@ -691,7 +784,9 @@
     BATCH_METRICS.forEach(function (metric) {
       var values = records.map(function (record) {
         return metric.key === 'completed' ? (record.completed ? 1 : 0) :
-          metric.key === 'loopDetected' ? (record.loopDetected ? 1 : 0) : record[metric.key];
+          metric.key === 'loopDetected' ? (record.loopDetected ? 1 : 0) :
+          metric.key === 'reachableDestinationsServed' ? record.reachableDestinationsServed :
+          metric.key === 'reachableDestinationTotal' ? record.reachableDestinationTotal : record[metric.key];
       });
       var mean = values.reduce(function (sum, value) { return sum + value; }, 0) / values.length;
       var variance = values.reduce(function (sum, value) { return sum + Math.pow(value - mean, 2); }, 0) / values.length;
