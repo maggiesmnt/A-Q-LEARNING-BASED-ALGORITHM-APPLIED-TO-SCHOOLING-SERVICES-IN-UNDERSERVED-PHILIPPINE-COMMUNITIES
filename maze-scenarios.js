@@ -30,6 +30,29 @@ var MazeComparisonData = (function () {
       metrics: ['learners', 'coveragePercent', 'fairness', 'deferredCommunities', 'state']
     }
   ];
+  var LAIBAN_GRID_TILES = [
+    '.........o',
+    '.o...###..',
+    '.r..oxxr..',
+    'or....or..',
+    'r..#......',
+    '#..#o...ox',
+    '#..#r.#r##',
+    '#orrrx#.r#',
+    '.r..xxx.rx',
+    '####x.xor.'
+  ];
+  var LAIBAN_SITE_CELLS = {
+    A: [1, 9],
+    B: [6, 5],
+    C: [8, 1],
+    D: [4, 9],
+    E: [9, 5],
+    F: [5, 1],
+    G: [3, 3],
+    H: [7, 7],
+    I: [9, 9]
+  };
 
   function site(id, name, letter, position, demand, initialVisits, lastVisitDays) {
     return {
@@ -112,25 +135,21 @@ var MazeComparisonData = (function () {
   }
   function laiban() {
     if (typeof N === 'undefined' || typeof EDGES === 'undefined' ||
-        typeof COMPARISON_GRID_POSITIONS === 'undefined' ||
         typeof COMPARISON_GRID_ROAD_WAYPOINTS === 'undefined' ||
         typeof COMPARISON_GRID_HAZARD_POINTS === 'undefined' ||
         typeof accA !== 'function' || typeof edgeMin !== 'function') {
       throw new Error('Laiban scenario data is unavailable; load engine.js and analysis.js first.');
     }
-    var sites = [], cells = new Set(), overlayCandidates = [], minuteTotals = {}, minuteCounts = {};
-    var closedRoads = [], roadTiles = {}, hazardTiles = {}, nodeIds = SERVICE_IDS.slice();
+    var sites = [], overlayCandidates = [], minuteTotals = {}, minuteCounts = {};
+    var openCells = [], obstacles = [], roadTiles = {}, hazardTiles = {}, nodeIds = SERVICE_IDS.slice();
     nodeIds.forEach(function (id, index) {
-      var node = N[id], savedPoint = COMPARISON_GRID_POSITIONS[id];
-      var point = savedPoint && [savedPoint[1], savedPoint[0]];
-      if (!node || !point) throw new Error('Missing saved Laiban node mapping for ' + id + '.');
+      var node = N[id], letter = String.fromCharCode(65 + index);
+      var point = LAIBAN_SITE_CELLS[letter];
+      if (!node || !point) throw new Error('Missing Laiban grid position for sitio ' + letter + '.');
       sites.push(site(id, node.name.replace(/^Sitio /, ''), String.fromCharCode(65 + index),
         point.slice(), node.learners, node.visits30, node.days));
     });
-    var savedHub = COMPARISON_GRID_POSITIONS.hub;
-    if (!savedHub) throw new Error('Missing saved Laiban hub position.');
-    var hub = [savedHub[1], savedHub[0]];
-    cells.add(hub.join(','));
+    var hub = [0, 0];
     var previousRainfall = WX.mm;
     WX.mm = 38;
     try {
@@ -152,28 +171,15 @@ var MazeComparisonData = (function () {
           }
         }
         var access = accA(edge), status = band(access).k;
-        if (access < 0.20) {
-          closedRoads.push({
-            id: roadKey,
-            name: N[edge.a].name + ' – ' + N[edge.b].name,
-            reason: typeof accessibilityReason === 'function' ? accessibilityReason(edge) : 'Closed at the saved accessibility threshold'
-          });
-        }
         var perCellMinutes = edgeMin(edge) / Math.max(path.length - 1, 1);
         path.forEach(function (point, index) {
-          var cell = point.join(','), existing = roadTiles[cell];
-          var rank = {open: 3, caut: 2, rest: 1, cls: 0}[status];
-          if (!existing || rank > existing.rank) roadTiles[cell] = {status: status, rank: rank};
-          if (access >= 0.20) cells.add(cell);
+          var cell = point.join(',');
           if (index) {
             if (access >= 0.20) {
               minuteTotals[cell] = (minuteTotals[cell] || 0) + perCellMinutes;
               minuteCounts[cell] = (minuteCounts[cell] || 0) + 1;
             }
           }
-        });
-        (COMPARISON_GRID_HAZARD_POINTS[roadKey] || []).forEach(function (point) {
-          if (status === 'rest' || status === 'cls') hazardTiles[point[1] + ',' + point[0]] = status;
         });
       });
     } finally {
@@ -183,12 +189,23 @@ var MazeComparisonData = (function () {
     Object.keys(minuteTotals).forEach(function (cell) {
       cellMinutes[cell] = minuteTotals[cell] / minuteCounts[cell];
     });
-    cells.forEach(function (cell) {
-      var point = cell.split(',').map(Number);
-      if (cell !== hub.join(',') &&
-          !sites.some(function (target) { return target.position.join(',') === cell; })) {
-        overlayCandidates.push(point);
-      }
+    LAIBAN_GRID_TILES.forEach(function (row, rowIndex) {
+      Array.from(row).forEach(function (tile, colIndex) {
+        var cell = rowIndex + ',' + colIndex, point = [rowIndex, colIndex];
+        var status = tile === '.' ? 'open' : tile === 'r' || tile === 'o' ? 'rest' :
+          tile === 'x' ? 'cls' : null;
+        if (status) roadTiles[cell] = {status: status};
+        if (tile === 'o') hazardTiles[cell] = 'rest';
+        if (tile === '.' || tile === 'r' || tile === 'o') openCells.push(point);
+        else obstacles.push(point);
+        if (tile === '.' || tile === 'r') overlayCandidates.push(point);
+      });
+    });
+    overlayCandidates = overlayCandidates.filter(function (point) {
+      var cell = point.join(',');
+      return cell !== hub.join(',') && !sites.some(function (target) {
+        return target.position.join(',') === cell;
+      });
     });
     return {
       id: 'tab-4',
@@ -197,7 +214,9 @@ var MazeComparisonData = (function () {
       size: 10,
       start: hub,
       sites: sites,
-      openCells: Array.from(cells).map(function (cell) { return cell.split(',').map(Number); }),
+      gridTiles: LAIBAN_GRID_TILES.slice(),
+      openCells: openCells,
+      obstacles: obstacles,
       cellMinutes: cellMinutes,
       roadTiles: roadTiles,
       hazardTiles: hazardTiles,
@@ -208,10 +227,10 @@ var MazeComparisonData = (function () {
       dynamicFrequency: 20,
       dynamicKind: 'laiban',
       overlayCandidates: overlayCandidates,
-      closedRoads: closedRoads,
+      closedRoads: [],
       rainfallMm: 38,
       simulated: true,
-      description: 'Saved Laiban node values and road closures; temporary obstacles are simulated overlays.'
+      description: 'Fixed 10×10 Laiban schematic grid with simulated learner allocations and temporary obstacles.'
     };
   }
   function getScenarios() {

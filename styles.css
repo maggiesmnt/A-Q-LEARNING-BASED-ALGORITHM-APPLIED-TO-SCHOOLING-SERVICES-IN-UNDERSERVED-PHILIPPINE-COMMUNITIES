@@ -5089,8 +5089,7 @@ body[data-theme="dark"] .shared-maze-summary :is(thead th,h2,h3){color:#fff}
     linear-gradient(45deg,transparent 44%,#b54b43 46%,#b54b43 54%,transparent 56%),
     linear-gradient(-45deg,transparent 44%,#b54b43 46%,#b54b43 54%,transparent 56%);
 }
-.maze-laiban-legend .legend-open{background:#d8ead8;border-color:#528360}
-.maze-laiban-legend .legend-caution{background:#f4e3ad;border-color:#b38326}
+.maze-laiban-legend .legend-open{background:#f5f2e8;border-color:#dad5c8}
 .maze-laiban-sites{margin:16px 0;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--bg-panel)}
 .maze-laiban-sites h3{margin:0 0 5px;font-size:14px}
 .maze-laiban-sites>p{margin:0 0 10px;color:var(--dim);font-size:11px;line-height:1.55}

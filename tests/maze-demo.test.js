@@ -120,86 +120,109 @@ test('four fixed scenarios use the saved Laiban values and requested shared budg
   assert.equal(scenarios[3].rainfallMm, 38);
   assert.equal(scenarios[3].budgetMinutes, 480);
   assert.equal(scenarios[3].serviceMinutes, 60);
-  assert.equal(scenarios[3].start.join(','), '4,4');
+  assert.equal(scenarios[3].start.join(','), '0,0');
   assert.deepEqual(Array.from(scenarios, function (scenario) { return scenario.name; }),
     ['Basic Grid', 'Obstacles', 'Multi-Target', 'Laiban Case']);
-  assert.ok(scenarios[3].closedRoads.length > 0);
-  var laibanWorld = makeWorld(context.MazeRouting, scenarios[3]);
-  assert.deepEqual(Array.from(laibanWorld.reachableSiteIds), ['maysawa', 'banatas', 'iwi_iw', 'old_laiban']);
+  assert.deepEqual(Array.from(scenarios[3].gridTiles), [
+    '.........o', '.o...###..', '.r..oxxr..', 'or....or..', 'r..#......',
+    '#..#o...ox', '#..#r.#r##', '#orrrx#.r#', '.r..xxx.rx', '####x.xor.'
+  ]);
   assert.deepEqual(Array.from(scenarios[3].sites, function (site) { return site.position.join(','); }),
-    ['1,1', '1,4', '1,7', '8,4', '6,1', '4,8', '6,4', '8,6', '8,8']);
-  assert.ok(scenarios[3].openCells.length > 0);
-  assert.ok(Object.keys(scenarios[3].roadTiles).length > scenarios[3].openCells.length);
-  assert.ok(Object.keys(scenarios[3].hazardTiles).length > 0);
+    ['1,9', '6,5', '8,1', '4,9', '9,5', '5,1', '3,3', '7,7', '9,9']);
+  scenarios[3].sites.forEach(function (site) {
+    assert.equal(site.demand, context.N[site.id].learners,
+      'marker and table demand must use the source sitio allocation');
+  });
   assert.deepEqual(Array.from(scenarios[3].sites, function (site) { return site.letter; }),
     ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']);
+  var laibanWorld = makeWorld(context.MazeRouting, scenarios[3]);
+  assert.deepEqual(Array.from(laibanWorld.reachableSiteIds),
+    ['maysawa', 'toyang', 'ibucao', 'kilabuwan', 'iwi_iw', 'old_laiban', 'manggahan', 'magata']);
+  assert.deepEqual(Array.from(laibanWorld.positions.standard), [0, 0]);
+  assert.deepEqual(Array.from(laibanWorld.positions.modql), [0, 0]);
+  assert.ok(scenarios[3].openCells.length > 0);
+  assert.equal(scenarios[3].openCells.length, 72);
+  assert.equal(scenarios[3].obstacles.length, 28);
+  assert.ok(Object.keys(scenarios[3].hazardTiles).length > 0);
+  assert.equal(scenarios[3].closedRoads.length, 0,
+    'the new grid does not expose closed roads from the former corridor map');
   assert.equal(context.MazeRouting.parameters.episodes, 5000);
   assert.equal(context.MazeRouting.parameters.heldOutScenarios, 200);
 });
 
-test('Laiban tile presentation reflects the saved passability rules without changing them', function () {
+test('Laiban routes, tile passability, markers, and all-site metrics use the current grid', function () {
   var context = harness();
   var config = context.MazeComparisonData.scenarios()[3];
   var world = makeWorld(context.MazeRouting, config);
-  var toPoint = function (key) { return key.split(',').map(Number); };
-  var hazardCells = Object.keys(config.hazardTiles);
-  assert.ok(hazardCells.length > 0);
-  hazardCells.forEach(function (cell) {
-    assert.equal(world.isOpen(toPoint(cell)), config.hazardTiles[cell] === 'rest',
-      'a static hazard marker inherits passability from its saved road status');
+  var gridRows = Array.from(config.gridTiles);
+  var toPoint = function (cell) { return cell.split(',').map(Number); };
+  assert.equal(config.start.join(','), '0,0');
+  assert.equal(world.isOpen(config.start), true);
+  assert.equal(config.sites.length, 9);
+  assert.deepEqual(Array.from(config.sites.slice(0, 6), function (site) {
+    return [site.letter, site.position.join(',')];
+  }), [['A', '1,9'], ['B', '6,5'], ['C', '8,1'], ['D', '4,9'], ['E', '9,5'], ['F', '5,1']]);
+  assert.deepEqual(Array.from(config.sites.slice(6), function (site) {
+    return [site.letter, site.position.join(',')];
+  }), [['G', '3,3'], ['H', '7,7'], ['I', '9,9']]);
+  config.sites.forEach(function (site) {
+    assert.equal(site.demand, context.N[site.id].learners,
+      'the rendered marker uses the same learner count as its sitio table row');
   });
-  ['open', 'rest'].forEach(function (status) {
-    var cell = Object.keys(config.roadTiles).filter(function (key) {
-      return config.roadTiles[key].status === status;
-    })[0];
-    assert.ok(cell, 'saved Laiban map includes ' + status + ' road cells');
-    assert.equal(world.isOpen(toPoint(cell)), true, status + ' road cells are traversable');
+  assert.equal(new Set(config.sites.map(function (site) { return site.position.join(','); })).size, 9);
+  assert.ok(world.pathExists(config.start, config.sites[6].position), 'G stays reachable at its requested open cell');
+  assert.ok(world.pathExists(config.start, config.sites[7].position), 'H stays reachable at its requested open cell');
+
+  gridRows.forEach(function (row, rowIndex) {
+    assert.equal(row.length, config.size, 'each fixed map row has ten cells');
+    Array.from(row).forEach(function (tile, colIndex) {
+      var point = [rowIndex, colIndex];
+      var shouldBeOpen = tile === '.' || tile === 'r' || tile === 'o';
+      assert.equal(world.isOpen(point), shouldBeOpen, 'engine passability matches tile at ' + point.join(','));
+      if (tile === '#' || tile === 'x') {
+        assert.ok(world.obstacles.has(context.MazeRouting.key(point)), 'walls and closed tiles are blocked');
+      }
+    });
   });
-  var closedCell = Object.keys(config.roadTiles).filter(function (key) {
-    return config.roadTiles[key].status === 'cls';
-  })[0];
-  assert.ok(closedCell);
-  assert.equal(world.isOpen(toPoint(closedCell)), false, 'closed road cells cannot be entered');
+  assert.equal(gridRows[8][5], 'x');
+  assert.equal(world.isOpen([9, 5]), true, 'E is a cream open cell isolated by closed tiles');
+  [[8, 5], [9, 4], [9, 6]].forEach(function (point) {
+    assert.equal(gridRows[point[0]][point[1]], 'x', 'each neighboring blocker around E is closed');
+  });
+  assert.equal(world.pathExists(config.start, [9, 5]), false, 'E is isolated from the start by closed cells');
   assert.equal(context.band(0.6).k, 'caut');
   assert.equal(context.band(0.6).lab, 'CAUTION');
   assert.ok(config.overlayCandidates.length > 0);
   var allowed = new Set(config.openCells.map(function (point) { return point.join(','); }));
   config.overlayCandidates.forEach(function (point) {
-    assert.ok(allowed.has(point.join(',')), 'temporary overlay candidates stay on traversable mapped corridors');
+    assert.ok(allowed.has(point.join(',')), 'temporary overlays stay on traversable map cells');
     assert.ok(!world.protected.has(point.join(',')), 'temporary overlay candidates exclude hub and sitios');
   });
   assert.deepEqual(Array.from(new Set(config.overlayCandidates.map(function (point) {
     return config.roadTiles[point.join(',')].status;
   })).values()).sort(), ['open', 'rest'],
-  'at saved rainfall, seed-based overlays can select traversable Restricted or Open road cells');
+  'seed-based overlays can select traversable Restricted or Open road cells');
   assert.equal(config.dynamicFrequency, 20);
 
-  var reachableIfOnlyOpenBandsRemain = new Set(['hub']);
-  var queue = ['hub'];
-  for (var index = 0; index < queue.length; index++) {
-    context.EDGES.forEach(function (edge) {
-      if (context.band(context.accA(edge)).k !== 'open') return;
-      var next = edge.a === queue[index] ? edge.b : edge.b === queue[index] ? edge.a : null;
-      if (next && !reachableIfOnlyOpenBandsRemain.has(next)) {
-        reachableIfOnlyOpenBandsRemain.add(next);
-        queue.push(next);
-      }
-    });
-  }
-  assert.deepEqual(Array.from(config.sites.filter(function (site) {
-    return reachableIfOnlyOpenBandsRemain.has(site.id);
-  }).map(function (site) { return site.letter; })), ['G'],
-  'if Hazard, Restricted and Caution tiles are blocked, only Old Laiban remains reachable');
   assert.match(demoSource, /var isLaiban = state\.config\.id === 'tab-4'/);
-  assert.match(demoSource, /open: '#d8ead8',\s*caut: '#f4e3ad',\s*rest: '#f6d2b2',\s*cls: '#f2c8c4'/);
-  assert.match(demoSource, /ctx\.fillStyle = isHazard \? '#efb27b'/);
+  assert.match(demoSource, /open: '#f5f2e8',\s*caut: '#f4e3ad',\s*rest: '#f6d2b2',\s*cls: '#f2c8c4'/);
   assert.match(demoSource, /ctx\.roundRect\(tileX \+ 0\.5, tileY \+ 0\.5, cell - 1, cell - 1/);
   assert.match(demoSource, /if \(isLaiban\) \{\s*ctx\.fillStyle = '#dad5c8';\s*ctx\.fillRect\(0, 0, canvas\.width, canvas\.height\);/);
-  assert.match(demoSource, /ctx\.setLineDash\(road && road\.status === 'rest' \? \[4, 3\] : \[\]\)/);
+  assert.match(demoSource, /var visualTile = overlay \? 'o' : state\.config\.gridTiles\[rowIndex\]\.charAt\(colIndex\)/);
+  assert.match(demoSource, /ctx\.setLineDash\(visualTile === 'r' \? \[4, 3\] : \[\]\)/);
+  assert.match(demoSource, /var inset = Math\.max\(2, cell \* 0\.09\)/);
+  assert.match(demoSource, /ctx\.moveTo\(tileX \+ cell \* 0\.1, tileY \+ cell \* 0\.1\)/);
+  assert.match(demoSource, /world\.sites\.forEach\(function \(target\)/);
+  assert.match(demoSource, /<td>' \+ site\.demand/);
   assert.match(demoSource, /ctx\.strokeStyle = '#b54b43'/);
   assert.match(demoSource, /if \(isLaiban\) \{\s*ctx\.strokeStyle = '#24352d'/);
-  assert.match(demoSource, /Restricted cells remain passable in the unchanged simulator/);
-  assert.match(demoSource, /Caution roads remain passable in the unchanged simulator/);
+  assert.match(demoSource, /config\.gridTiles/);
+  assert.match(demoSource, /state\.config\.sites\.length[\s\S]*state\.env\.reachableSiteIds\.length/);
+  assert.doesNotMatch(demoSource, /the 4 reachable \(open\) sitios/);
+  assert.match(demoSource, /title="Cream tile\./);
+  assert.match(demoSource, /title="Peach tile with a dashed orange border\./);
+  assert.match(demoSource, /title="Pink tile with an X\./);
+  assert.match(demoSource, /title="Solid orange tile\./);
   var styleSource = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   assert.match(styleSource, /\.maze-laiban-legend \.legend-road\{background:#f5f2e8;border-color:#dad5c8\}/);
   assert.match(styleSource, /\.maze-laiban-legend \.legend-hazard\{background:#efb27b;border:0\}/);
@@ -207,8 +230,38 @@ test('Laiban tile presentation reflects the saved passability rules without chan
   assert.match(styleSource, /\.maze-laiban-legend \.legend-closed::after/);
   assert.match(styleSource, /linear-gradient\(45deg,transparent 44%,#b54b43 46%,#b54b43 54%,transparent 56%\)/);
   assert.match(styleSource, /\.maze-laiban-legend \.legend-closed\{[\s\S]*?background:#f2c8c4/);
-  assert.match(styleSource, /\.maze-laiban-legend \.legend-open\{background:#d8ead8/);
-  assert.match(styleSource, /\.maze-laiban-legend \.legend-caution\{background:#f4e3ad/);
+  assert.match(styleSource, /\.maze-laiban-legend \.legend-open\{background:#f5f2e8;border-color:#dad5c8\}/);
+  assert.doesNotMatch(demoSource, /<i class="legend-caution"><\/i>Caution/);
+
+  ['standard', 'modql'].forEach(function (id) {
+    var fixedConfig = Object.assign({}, config, {dynamicFrequency: 0});
+    var routeWorld = makeWorld(context.MazeRouting, fixedConfig);
+    var models = context.MazeRouting.modelsFor(config.seed);
+    var pair = new context.MazeRouting.Pair(routeWorld, models, false);
+    driveToEnd(pair, routeWorld.maxSteps + 2);
+    var route = pair.runs[id].trail;
+    assert.deepEqual(Array.from(route[0]), [0, 0], id + ' route starts at the orange dot');
+    route.forEach(function (point, index) {
+      assert.ok(routeWorld.isOpen(point), id + ' route never enters a wall or blocked cell');
+      if (index) {
+        var previous = route[index - 1];
+        assert.equal(Math.abs(point[0] - previous[0]) + Math.abs(point[1] - previous[1]), 1,
+          id + ' route consists of adjacent cell-to-cell moves');
+      }
+    });
+    assert.match(demoSource, /if \(run && run\.trail\.length\)/);
+  });
+
+  var allSites = makeWorld(context.MazeRouting, config);
+  var metricPair = new context.MazeRouting.Pair(allSites, context.MazeRouting.modelsFor(config.seed), false);
+  driveToEnd(metricPair, allSites.maxSteps + 2);
+  ['standard', 'modql'].forEach(function (id) {
+    var metric = context.MazeRouting.metrics(metricPair.runs[id], allSites);
+    assert.equal(metric.totalLearners, config.sites.reduce(function (sum, site) { return sum + site.demand; }, 0));
+    assert.equal(metric.destinationTotal, 9);
+    assert.equal(metric.deferredCommunities, 9 - metric.destinationsServed,
+      'Laiban deferred count includes all nine table sites, including unreachable sites');
+  });
 });
 
 test('Standard policy state is location only and cannot read run or environment details', function () {
@@ -369,48 +422,6 @@ test('Tab 3 fixed-map policy batch completes all MODQL routes and detects Standa
         }
       });
 
-      test('Laiban policy reports reachable completion, closures, live rollout counts and per-episode training success', function () {
-        var context = harness(), api = context.MazeRouting, config = context.MazeComparisonData.scenarios()[3];
-        var policy = JSON.parse(fs.readFileSync(path.join(root, 'policies', 'tab-4.json'), 'utf8'));
-        var models = api.modelsFromPolicy(policy, config.id, config.seed);
-        var worldTemplate = makeWorld(api, config);
-        assert.deepEqual(Array.from(worldTemplate.reachableSiteIds), ['maysawa', 'banatas', 'iwi_iw', 'old_laiban']);
-        var outcomes = {standard: [], modql: []};
-        for (var index = 0; index < 200; index++) {
-          var world = makeWorld(api, config, (config.seed + 100000 + index * 7919) >>> 0);
-          var pair = new api.Pair(world, models, false);
-          driveToEnd(pair, 1002);
-          ['standard', 'modql'].forEach(function (id) {
-            var run = pair.runs[id];
-            run.trail.forEach(function (point, trailIndex) {
-              assert.ok(world.allowedCells.has(api.key(point)), id + ' Laiban route stays on saved road cells');
-              assert.ok(!world.obstacles.has(api.key(point)), id + ' Laiban route avoids fixed road closures');
-              if (trailIndex) {
-                var previous = run.trail[trailIndex - 1];
-                assert.equal(Math.abs(point[0] - previous[0]) + Math.abs(point[1] - previous[1]), 1);
-              }
-            });
-            outcomes[id].push(api.metrics(run, world));
-          });
-        }
-        assert.equal(outcomes.standard.filter(function (result) { return result.completed; }).length, 0);
-        assert.equal(outcomes.standard.filter(function (result) { return result.loopDetected; }).length, 200);
-        assert.equal(outcomes.modql.filter(function (result) { return result.completed; }).length, 182);
-        assert.equal(outcomes.modql.filter(function (result) { return result.loopDetected; }).length, 8);
-        assert.equal(outcomes.modql.filter(function (result) { return !result.completed && !result.loopDetected; }).length, 10);
-        assert.ok(outcomes.modql.every(function (result) {
-          return result.reachableDestinationTotal === 4 && result.destinationsServed <= 4 &&
-            result.deferredCommunities === 4 - result.reachableDestinationsServed;
-        }));
-        assert.equal(policy.trainingLog.standardCompleted.slice(-500).filter(Boolean).length, 0);
-        assert.equal(policy.trainingLog.modqlCompleted.slice(-500).filter(Boolean).length, 381);
-        assert.deepEqual(
-          Array.from(config.sites.filter(function (site) {
-            return worldTemplate.reachableSiteIds.indexOf(site.id) < 0;
-          }), function (site) { return site.letter; }),
-          ['B', 'C', 'D', 'H', 'I']
-        );
-      });
     });
   }
   assert.equal(outcomes.standard.filter(function (result) { return result.loopDetected; }).length, 200);
@@ -423,6 +434,38 @@ test('Tab 3 fixed-map policy batch completes all MODQL routes and detects Standa
   assert.ok(outcomes.modql.every(function (result) {
     return result.destinationsServed === 6 && result.movementSteps === 49;
   }));
+});
+
+test('Laiban saved policies evaluate on the fixed grid and report all nine sitios', function () {
+  var context = harness(), api = context.MazeRouting, config = context.MazeComparisonData.scenarios()[3];
+  var policy = JSON.parse(fs.readFileSync(path.join(root, 'policies', 'tab-4.json'), 'utf8'));
+  var models = api.modelsFromPolicy(policy, config.id, config.seed);
+  var world = makeWorld(api, config);
+  assert.deepEqual(Array.from(world.reachableSiteIds),
+    ['maysawa', 'toyang', 'ibucao', 'kilabuwan', 'iwi_iw', 'old_laiban', 'manggahan', 'magata']);
+  var pair = new api.Pair(world, models, false);
+  driveToEnd(pair, world.maxSteps + 2);
+
+  ['standard', 'modql'].forEach(function (id) {
+    var run = pair.runs[id], metric = api.metrics(run, world);
+    assert.deepEqual(Array.from(run.trail[0]), [0, 0], id + ' begins at the orange start');
+    run.trail.forEach(function (point, index) {
+      assert.ok(world.isOpen(point), id + ' route avoids walls and blocked cells');
+      if (index) {
+        var previous = run.trail[index - 1];
+        assert.equal(Math.abs(point[0] - previous[0]) + Math.abs(point[1] - previous[1]), 1,
+          id + ' route moves one adjacent cell at a time');
+      }
+    });
+    assert.equal(metric.totalLearners, 284);
+    assert.equal(metric.destinationTotal, 9);
+    assert.equal(metric.deferredCommunities, 9 - metric.destinationsServed,
+      'deferred communities include all table-backed sitios');
+  });
+  assert.equal(api.metrics(pair.runs.standard, world).learners, 69);
+  assert.equal(api.metrics(pair.runs.standard, world).movementSteps, 66);
+  assert.equal(api.metrics(pair.runs.modql, world).learners, 162);
+  assert.equal(api.metrics(pair.runs.modql, world).movementSteps, 30);
 });
 
 test('Q rows use typed arrays and background training does not render grids', function () {
@@ -617,10 +660,10 @@ test('UI exposes four fixed tabs, per-tab SOP selection, live results and separa
   assert.match(demoSource, /Loop rate \(%\)/);
   assert.match(demoSource, /Loop detected: learned policy repeats the same moves/);
   assert.match(demoSource, /Tab 2 batch evaluates 200 starts on a fixed obstacle map\. Training uses seeded random starts from the same 67 open non-target cells\./);
-  assert.match(demoSource, /'Served ' \+ metric\.destinationsServed \+ ' of ' \+ metric\.destinationTotal \+\s*' sitios; served '/);
-  assert.match(demoSource, /closed road/);
+  assert.match(demoSource, /'Served ' \+ metric\.destinationsServed \+ ' of ' \+ metric\.destinationTotal \+\s*' sitios; ' \+ metric\.reachableDestinationTotal/);
+  assert.match(demoSource, /unreachable from start/);
   assert.match(demoSource, /maze-laiban-sites/);
-  assert.match(demoSource, /simulated temporary obstacle is selected only from non-node traversable corridor cells; at this rainfall that set includes Restricted and Open road bands/);
+  assert.match(demoSource, /Laiban reachability is recomputed from the fixed 10×10 tile grid and start at \(0,0\)/);
   var styleSource = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   assert.match(styleSource, /\.maze-loop-status\[hidden\]\s*\{\s*display:none;/);
   assert.match(demoSource, /<div class="maze-agent-body">'\s*\+\s*buildCardResultsTable\(id, title\)\s*\+\s*'<div class="maze-agent-side">/);

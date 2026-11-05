@@ -665,7 +665,9 @@ var MazeRouting = (function () {
       destinationTotal: world.sites.length,
       reachableDestinationsServed: reachableServed,
       reachableDestinationTotal: world.reachableSiteIds.length,
-      deferredCommunities: world.reachableSiteIds.length - reachableServed,
+      deferredCommunities: world.id === 'tab-4'
+        ? world.sites.length - served
+        : world.reachableSiteIds.length - reachableServed,
       completionStatus: run.done ? run.status : 'In progress',
       completed: run.done && run.success,
       loopDetected: hasRepeatedTwoCellLoop(run.trail, run.serviceSteps),
