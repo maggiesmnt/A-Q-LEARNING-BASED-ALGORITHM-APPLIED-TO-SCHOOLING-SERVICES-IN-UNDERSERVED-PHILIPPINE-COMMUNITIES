@@ -128,83 +128,54 @@ Both algorithms start at `(0,0)`. The nine markers and learner labels come
 from the same `config.sites` records used to render the sitio table; no Tab 3
 target data or duplicate learner counts are used. Their grid positions are:
 A `(1,9)`, B `(6,5)`, C `(8,1)`, D `(4,9)`, E `(9,5)`, F `(5,1)`, G `(3,3)`,
-H `(7,7)`, and I `(9,9)`. The existing tile array, start, movement rules,
-travel-cost calculation, and Tabs 1?3 are not changed. The seeded temporary
-obstacle is the only varying overlay; it is selected from the existing
-eligible road cells and temporarily blocks its selected cell. The paired
-Standard and MODQL agents share the same world, overlay timing, passability,
-and travel-time costs. In the unchanged engine, `r`/`o` road cells are
-passable; `x` and `#` cells are blocked. A route is the evaluation trajectory
-including its start and each adjacent cell traversed. A run can terminate on
-its travel/service-time limit without completing all sites. The site allocation
-and visit history are labeled ?Simulated, not verified field data.?
+H `(7,7)`, and I `(9,9)`. The fixed grid, start, travel-cost calculation,
+and Tabs 1-3 are unchanged. Only `.` cream-road cells are passable. Restricted
+(`r`), fixed hazard (`o`), Closed (`x`), and wall (`#`) cells block both
+algorithms. The seed-selected temporary overlay is placed only on an eligible
+`.` cell, blocks it while active, and is reselected every 20 shared steps. The
+paired agents use the same world, overlay timing, passability, and travel-time
+costs. A route records the start and each adjacent cell traversed; a run can
+end at its travel/service-time limit without completing all reachable sites.
+Site allocations and visit history are labeled "Simulated, not verified field
+data."
 
 ### Reachability from the hub
 
-Reachability below is from `(0,0)` using the unchanged `World.isOpen()` and
-`World.legalActions()` movement rules, with no temporary overlay active. G at
-`(3,3)` and H at `(7,7)` are both open and reachable, so no fallback position
-was needed. E is itself an open site cell but is isolated by its closed
-neighbors:
+Reachability below is from `(0,0)` using `World.isOpen()` and
+`World.legalActions()`, with no temporary overlay active. Five of nine sitios
+are reachable. G is reachable at its requested cell; H remains at its fixed
+open cell but is unreachable under the blocked-tile rules:
 
 | Site | Name | Cell | Reachable? | Blocking cells if unreachable |
 |---|---|---:|---|---|
-| A | Maysawa | `(1,9)` | Yes | ? |
-| B | Toyang | `(6,5)` | Yes | ? |
-| C | Ibucao | `(8,1)` | Yes | ? |
-| D | Kilabuwan | `(4,9)` | Yes | ? |
+| A | Maysawa | `(1,9)` | Yes | - |
+| B | Toyang | `(6,5)` | Yes | - |
+| C | Ibucao | `(8,1)` | No | The sitio cell itself is Restricted |
+| D | Kilabuwan | `(4,9)` | Yes | - |
 | E | Banatas | `(9,5)` | No | Closed `(8,5)`, `(9,4)`, `(9,6)` |
-| F | Iwi-Iw | `(5,1)` | Yes | ? |
-| G | Old Laiban | `(3,3)` | Yes | ? |
-| H | Manggahan | `(7,7)` | Yes | ? |
-| I | Magata | `(9,9)` | Yes | ? |
+| F | Iwi-Iw | `(5,1)` | Yes | - |
+| G | Old Laiban | `(3,3)` | Yes | - |
+| H | Manggahan | `(7,7)` | No | Disconnected by fixed blocked terrain |
+| I | Magata | `(9,9)` | No | Disconnected by fixed blocked terrain |
 
 ### Regenerated policy run
 
-The Tab 4 policy was regenerated on this grid with 5,000 episodes, seed 404,
-alpha 0.10, gamma 0.90, epsilon 1.00?0.05, and 0.995 per-episode decay.
-Results below are from evaluation of those policies on the current grid with
-seed 404. The former corridor-layout results are not comparable because they
-were produced by a different environment; the following values and routes
-belong to the regenerated Tab 4 policies.
+The Tab 4 policy was regenerated after making Restricted and fixed hazard
+cells impassable, using 5,000 episodes, seed 404, alpha 0.10, gamma 0.90,
+epsilon 1.00-0.05, and 0.995 per-episode decay. The former Tab 4 results are
+not comparable because they used different passability rules. Evaluation of
+the regenerated policies on the current grid with seed 404 produced:
 
 | Algorithm | Learners served | Coverage | Jain fairness | Travel time | Movement steps | Sites served | Deferred sites | Run termination |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
-| Standard Q-Learning | 69 / 284 | 24.30% | 0.6049 | 356.72 min | 66 | 2 / 9 | 7 / 9 | Travel-time budget exhausted |
-| Enhanced MODQL | 162 / 284 | 57.04% | 0.6173 | 166.67 min | 30 | 5 / 9 | 4 / 9 | Not enough time to complete service |
+| Standard Q-Learning | 0 / 284 | 0.00% | 0.3968 | 480 min | 96 | 0 / 9 | 9 / 9 | Service-time budget exhausted |
+| Enhanced MODQL | 124 / 284 | 43.66% | 0.5294 | 236.28 min | 40 | 4 / 9 | 5 / 9 | Travel-time budget exhausted |
 
-The complete recorded trajectories (row, column), including `(0,0)` and every
-movement in order, are:
-
-**Standard Q-Learning (67 cells):**
-
-```text
-(0,0), (0,1), (1,1), (2,1), (3,1), (4,1), (5,1), (6,1)
-(7,1), (8,1), (7,1), (8,1), (7,1), (8,1), (7,1), (8,1)
-(7,1), (8,1), (7,1), (8,1), (7,1), (8,1), (7,1), (8,1)
-(7,1), (8,1), (7,1), (8,1), (7,1), (8,1), (7,1), (8,1)
-(7,1), (8,1), (7,1), (8,1), (7,1), (8,1), (7,1), (8,1)
-(7,1), (8,1), (7,1), (8,1), (7,1), (8,1), (7,1), (8,1)
-(7,1), (8,1), (7,1), (8,1), (7,1), (8,1), (7,1), (8,1)
-(7,1), (8,1), (7,1), (8,1), (7,1), (8,1), (7,1), (8,1)
-(7,1), (8,1), (7,1)
-```
-
-**Enhanced MODQL (31 cells):**
-
-```text
-(0,0), (0,1), (1,1), (2,1), (3,1), (4,1), (5,1), (6,1)
-(7,1), (8,1), (7,1), (7,2), (7,3), (7,4), (6,4), (6,5)
-(5,5), (4,5), (3,5), (3,4), (3,3), (3,4), (3,5), (3,6)
-(4,6), (4,7), (4,8), (4,9), (3,9), (2,9), (1,9)
-```
-
-The trajectories are generated from each agent's cell-by-cell evaluation trail;
-they start at the orange dot and only include legal adjacent moves. Standard's
-long repeated segment is a learned loop and ends when its travel-time budget is
-exhausted. The deferred-site metric for Tab 4 counts all nine table-backed
-sitios, including any sitio unreachable on this map; other tabs retain their
-existing metric behavior.
+Both routes remain legal cell-by-cell trajectories on the fixed map. Standard
+loops between `(0,0)` and `(1,0)` and serves no sitio under these rules. MODQL
+serves four sitios before its travel-time budget is exhausted. Tab 4's
+deferred-site metric counts all nine table-backed sitios, including those
+unreachable on this map; other tabs retain their existing metric behavior.
 
 ## Tab 3 diagnosis and fixed-map follow-up
 

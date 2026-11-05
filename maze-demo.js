@@ -314,25 +314,8 @@
     panel.querySelector('[data-action="train"]').disabled = true;
     setStatus(state, 'Retraining both policies in a background worker; no evaluation is running.', false);
   }
-  function metricHint(metric) {
-    return metric.better ? 'Prefer ' + metric.better : 'Report only';
-  }
   function buildCardResultsTable(id, title, state) {
-    if (state && state.config.id !== 'tab-4') return buildServiceResults(id, title);
-    return '<div class="maze-agent-metrics"><header><span class="shared-maze-eyebrow">Computed from this run</span>' +
-      '<h4>Comparative Performance Results</h4></header><div class="maze-metrics-table-scroll">' +
-      '<table class="maze-metrics-table" aria-label="' + escapeHtml(title) + ' results">' +
-      '<colgroup><col class="maze-metric-column"><col class="maze-value-column"><col class="maze-assessment-column"></colgroup>' +
-      '<thead><tr><th scope="col">Metric</th><th scope="col">Result' +
-      '</th><th scope="col">Metric-by-metric assessment</th></tr></thead><tbody>' +
-      METRICS.map(function (metric) {
-        return '<tr data-metric="' + metric.key + '" data-assessment-row="' + metric.key + '">' +
-          '<th scope="row"><span class="maze-result-name">' + escapeHtml(metric.label) +
-          '</span><span class="shared-maze-direction">' + escapeHtml(metricHint(metric)) + '</span></th>' +
-          '<td><span class="maze-result-value is-placeholder" data-result="' + id + '" data-key="' +
-          metric.key + '">Not run yet</span></td><td class="maze-comparison-assessment is-placeholder" data-assessment="' +
-          metric.key + '">Not run yet</td></tr>';
-      }).join('') + '</tbody></table></div></div>';
+    return buildServiceResults(id, title, !(state && state.config.id === 'tab-4'));
   }
   function metricHelp(label, explanation) {
     return '<details class="maze-result-help"><summary aria-label="About ' + escapeHtml(label) +
@@ -343,7 +326,7 @@
       '<canvas width="320" height="72" data-curve="' + id + '" role="img" aria-label="' + title +
       ' training log, steps per episode"></canvas></div>';
   }
-  function buildServiceResults(id, title) {
+  function buildServiceResults(id, title, includeTrainingLog) {
     var primary = [
       ['fairness', 'Service Fairness', "Jain's Fairness Index measures how evenly visits are shared across communities. Closer to 1 means more even service, including prior visits."],
       ['travelMinutes', 'Travel Time', 'Time spent travelling in this run. Durations below one hour use minutes; longer durations use hours and remaining minutes. Service time is excluded.'],
@@ -369,7 +352,7 @@
           '" data-service-key="' + entry[0] + '">Not run yet</strong><small data-primary-assessment="' + entry[0] + '"></small></section>';
       }).join('') + '</div>' +
       '<p class="maze-result-run-state" data-service-status="' + id + '" role="status">Not run yet</p>' +
-      buildTrainingLog(id, title) + '</div>';
+      (includeTrainingLog === false ? '' : buildTrainingLog(id, title)) + '</div>';
   }
   function buildResearchRows(metrics, id) {
     var hints = {
@@ -461,13 +444,11 @@
   }
   function selectSop(state, panel, sopId) {
     state.sop = sopId;
-    if (state.config.id === 'tab-4') { renderState(state); return; }
     var records = panel.mazeResultRecords || {standard: null, modql: null};
     renderServiceResults(state, panel, records);
     renderSop(state, panel);
   }
   function renderServiceResults(state, panel, records) {
-    if (state.config.id === 'tab-4') return;
     var sop = resultsSop(state);
     panel.querySelectorAll('[data-sop-metric]').forEach(function (card) {
       card.hidden = sop.metrics.indexOf(card.getAttribute('data-sop-metric')) < 0;
@@ -475,17 +456,23 @@
     ['standard', 'modql'].forEach(function (id) {
       var run = state.pair && state.pair.runs[id], record = records[id];
       var available = !!run && (run.didRun || run.done) && !!record;
-      panel.querySelector('[data-state-representation="' + id + '"]').hidden = sop.id !== 3;
-      panel.querySelector('[data-coverage-label="' + id + '"]').textContent = sop.id === 3 ? 'Learner Coverage' : 'Learners Reached';
-      panel.querySelector('[data-remaining-label="' + id + '"]').textContent = sop.id === 3 ? 'Deferred Communities' : 'Communities Remaining';
-      panel.querySelector('[data-state-result-label="' + id + '"]').textContent = sop.id === 3 ? 'Inputs at Last Decision' : 'State fields at last decision';
+      var stateRepresentation = panel.querySelector('[data-state-representation="' + id + '"]');
+      if (stateRepresentation) stateRepresentation.hidden = sop.id !== 3;
+      var coverageLabel = panel.querySelector('[data-coverage-label="' + id + '"]');
+      if (coverageLabel) coverageLabel.textContent = sop.id === 3 ? 'Learner Coverage' : 'Learners Reached';
+      var remainingLabel = panel.querySelector('[data-remaining-label="' + id + '"]');
+      if (remainingLabel) remainingLabel.textContent = sop.id === 3 ? 'Deferred Communities' : 'Communities Remaining';
+      var stateResultLabel = panel.querySelector('[data-state-result-label="' + id + '"]');
+      if (stateResultLabel) stateResultLabel.textContent = sop.id === 3 ? 'Inputs at Last Decision' : 'State fields at last decision';
       panel.querySelector('[data-result-sop="' + id + '"]').innerHTML =
         '<span class="shared-maze-eyebrow">SOP ' + sop.id + (sop.id === 3 ? ' · Standard Q-Learning vs Full MODQL' : '') + '</span><h4>' + escapeHtml(sop.title) +
         '</h4><p>' + escapeHtml(sop.question) + '</p>';
-      panel.querySelector('[data-result-method="' + id + '"]').textContent = id === 'standard'
+      var resultMethod = panel.querySelector('[data-result-method="' + id + '"]');
+      if (resultMethod) resultMethod.textContent = id === 'standard'
         ? 'Service reward = 1 / completed segment travel hours. Travel hours have a minimum of 0.000001.'
         : 'Service reward = normalized destination demand × Jain fairness after service × 1 / (1 + travel hours). Demand is divided by the scenario maximum. Travel uses the decision-time route estimate when available, otherwise actual segment travel, with a minimum of 0.000001 hours.';
-      panel.querySelector('[data-research-context="' + id + '"]').textContent = sop[id];
+      var researchContext = panel.querySelector('[data-research-context="' + id + '"]');
+      if (researchContext) researchContext.textContent = sop[id];
       panel.querySelectorAll('[data-service-result="' + id + '"]').forEach(function (node) {
         var key = node.getAttribute('data-service-key'), value = 'Not run yet';
         if (available) {
@@ -504,10 +491,13 @@
       progress.setAttribute('aria-valuetext', available ? number(record.coveragePercent, 1) + '% of learners reached' : 'Not run yet');
       panel.querySelector('[data-service-status="' + id + '"]').textContent = available ? record.completionStatus :
         state.training ? 'Training policies' : state.loading ? 'Loading policy' : state.loadError ? 'Policy unavailable' : 'Not run yet';
-      panel.querySelector('[data-reward-latest="' + id + '"]').textContent = available ?
+      var rewardLatest = panel.querySelector('[data-reward-latest="' + id + '"]');
+      if (rewardLatest) rewardLatest.textContent = available ?
         (Number.isFinite(run.latestReward) ? number(run.latestReward, 4) : 'Not available') : 'Not available';
-      panel.querySelector('[data-reward-total="' + id + '"]').textContent = available && Number.isFinite(run.reward) ? number(run.reward, 4) : 'Not available';
-      panel.querySelector('[data-decision-action="' + id + '"]').textContent = available && run.currentAction ? run.currentAction : 'Not available';
+      var rewardTotal = panel.querySelector('[data-reward-total="' + id + '"]');
+      if (rewardTotal) rewardTotal.textContent = available && Number.isFinite(run.reward) ? number(run.reward, 4) : 'Not available';
+      var decisionAction = panel.querySelector('[data-decision-action="' + id + '"]');
+      if (decisionAction) decisionAction.textContent = available && run.currentAction ? run.currentAction : 'Not available';
     });
     panel.querySelectorAll('[data-research-details]').forEach(function (details) { prioritizeResearch(state, details, false); });
     panel.querySelectorAll('[data-reward-latest], [data-reward-total], [data-decision-action]').forEach(function (node) {
@@ -527,7 +517,7 @@
       ? '<span class="maze-dynamic-counters">Shared tick <b data-dynamic="tick">0</b> · obstacle updates <b data-dynamic="updates">0</b></span>'
       : '';
     var roadDisclaimer = config.simulated
-      ? '<details class="maze-disclaimer"><summary>Simulated, not verified field data.</summary><p>Allocated sitio demand and visit history are simulated inputs. The fixed Laiban tile layout is paired with seed-based temporary obstacles on traversable cells.</p></details>'
+      ? '<details class="maze-disclaimer"><summary>Simulated, not verified field data.</summary><p>Allocated sitio demand and visit history are simulated inputs. Restricted, fixed hazard, and Closed cells are impassable. A seed-based temporary obstacle is reselected from open roads during the run.</p></details>'
       : '';
     var batchProtocolNote = config.id === 'tab-2'
       ? '<p>Tab 2 batch evaluates 200 starts on a fixed obstacle map. Training uses seeded random starts from the same 67 open non-target cells.</p>'
@@ -546,9 +536,9 @@
     }).join('');
     var legend = config.id === 'tab-4'
       ? '<div class="shared-maze-legend maze-laiban-legend">' +
-        '<span title="Solid orange tile."><i class="legend-hazard"></i>Road hazard / temporary obstacle</span>' +
+        '<span title="Solid orange tile; blocked to both agents."><i class="legend-hazard"></i>Road hazard / temporary obstacle</span>' +
         '<span title="Cream tile."><i class="legend-open"></i>Open</span>' +
-        '<span title="Peach tile with a dashed orange border."><i class="legend-restricted"></i>Restricted</span>' +
+        '<span title="Peach tile with a dashed orange border; blocked to both agents."><i class="legend-restricted"></i>Restricted</span>' +
         '<span title="Pink tile with an X."><i class="legend-closed"></i>Closed</span>' +
         '<span><i class="legend-route standard"></i>Standard route</span>' +
         '<span><i class="legend-route modql"></i>MODQL route</span></div>'
@@ -668,7 +658,7 @@
     var completed = allDone(state);
     summary.textContent = completed
       ? (state.config.id === 'tab-4'
-        ? 'Completion means all 4 reachable (open) sitios were served. The five sitios on closed roads are unreachable under the saved 38 mm/24h conditions and are not expected to be served. Reachability is computed from the engine’s movement rules on the fixed 10×10 grid from (0,0); each policy is evaluated against all nine table-backed sitios. Travel time is reported in minutes and movement steps are separate. Results remain simulated.'
+        ? 'Both runs finished on the fixed 10×10 grid from (0,0). Reachability is computed under the grid’s movement rules, and results include all nine table-backed sitios. Travel time is reported in minutes and movement steps are separate. Results remain simulated.'
         : 'Travel time is reported in minutes and movement steps are separate. Metric-by-metric comparison is for this simulated scenario only; no overall score or result beyond this scenario is claimed.')
       : 'Travel time is reported in minutes and movement steps are separate. Run in progress; metric differences are descriptive only.';
   }
@@ -678,7 +668,7 @@
       standard: readMetrics(state, 'standard'),
       modql: readMetrics(state, 'modql')
     };
-    if (state.config.id !== 'tab-4') panel.mazeResultRecords = records;
+    panel.mazeResultRecords = records;
     renderServiceResults(state, panel, records);
     var started = ['standard', 'modql'].some(function (id) {
       return state.pair && state.pair.runs[id].didRun;

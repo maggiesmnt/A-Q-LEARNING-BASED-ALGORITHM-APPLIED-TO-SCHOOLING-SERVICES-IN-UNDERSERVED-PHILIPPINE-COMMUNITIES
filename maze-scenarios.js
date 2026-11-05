@@ -196,9 +196,9 @@ var MazeComparisonData = (function () {
           tile === 'x' ? 'cls' : null;
         if (status) roadTiles[cell] = {status: status};
         if (tile === 'o') hazardTiles[cell] = 'rest';
-        if (tile === '.' || tile === 'r' || tile === 'o') openCells.push(point);
+        if (tile === '.') openCells.push(point);
         else obstacles.push(point);
-        if (tile === '.' || tile === 'r') overlayCandidates.push(point);
+        if (tile === '.') overlayCandidates.push(point);
       });
     });
     overlayCandidates = overlayCandidates.filter(function (point) {

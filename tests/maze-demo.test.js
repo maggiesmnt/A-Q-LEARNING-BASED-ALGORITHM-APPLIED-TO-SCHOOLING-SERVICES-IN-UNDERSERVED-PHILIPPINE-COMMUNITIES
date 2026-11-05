@@ -93,9 +93,9 @@ function resultsPanel() {
   };
 }
 
-test('service results use each scenario and algorithm record through running, completion, failure and reset', function () {
+test('service results use each scenario including Laiban through running, completion, failure and reset', function () {
   var context = resultsHarness(), api = context.MazeRouting;
-  context.MazeComparisonData.scenarios().slice(0, 3).forEach(function (config) {
+  context.MazeComparisonData.scenarios().forEach(function (config) {
     var world = makeWorld(api, config);
     var policy = JSON.parse(fs.readFileSync(path.join(root, 'policies', config.id + '.json'), 'utf8'));
     var models = api.modelsFromPolicy(policy, config.id, config.seed);
@@ -150,23 +150,22 @@ test('service results use each scenario and algorithm record through running, co
   });
 });
 
-test('new service markup is scoped to the first three scenarios and retains native help and research controls', function () {
+test('all four scenarios use the SOP service layout with native help and research controls', function () {
   var context = resultsHarness();
-  context.MazeComparisonData.scenarios().forEach(function (config, index) {
+  context.MazeComparisonData.scenarios().forEach(function (config) {
     var html = context.resultsUI.build('standard', 'Standard Q-Learning', {config: config});
-    if (index === 3) {
-      assert.equal(html, context.resultsUI.build('standard', 'Standard Q-Learning'));
-      assert.ok(!html.includes('maze-service-results'));
-      return;
-    }
     assert.ok(html.includes('maze-service-results'));
     assert.ok(html.includes('<progress'));
+    assert.ok(html.includes('data-result-sop="standard"'));
+    assert.ok(html.includes('data-service-result="standard"'));
     assert.ok(html.includes('<details class="maze-result-help"><summary aria-label='));
+    assert.ok(!html.includes('Computed from this run'));
+    assert.ok(!html.includes('Comparative Performance Results'));
     var research = context.resultsUI.research('standard', 'Standard Q-Learning');
     assert.ok(research.includes('<summary>Reward calculation &amp; research details</summary>'));
     assert.ok(research.includes('data-key="qEstimate"'));
     assert.ok(research.includes('data-key="movementSteps"'));
-    assert.ok(!html.includes('data-key="coveragePercent"'), 'coverage is shown once in the primary summary');
+    assert.ok(!html.includes('data-key="coveragePercent"'), 'coverage is shown with learners reached');
   });
 });
 
@@ -514,13 +513,12 @@ test('four fixed scenarios use the saved Laiban values and requested shared budg
   assert.deepEqual(Array.from(scenarios[3].sites, function (site) { return site.letter; }),
     ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']);
   var laibanWorld = makeWorld(context.MazeRouting, scenarios[3]);
-  assert.deepEqual(Array.from(laibanWorld.reachableSiteIds),
-    ['maysawa', 'toyang', 'ibucao', 'kilabuwan', 'iwi_iw', 'old_laiban', 'manggahan', 'magata']);
+  assert.ok(laibanWorld.reachableSiteIds.length < scenarios[3].sites.length,
+    'impassable Restricted and hazard cells can make sitios unreachable');
   assert.deepEqual(Array.from(laibanWorld.positions.standard), [0, 0]);
   assert.deepEqual(Array.from(laibanWorld.positions.modql), [0, 0]);
   assert.ok(scenarios[3].openCells.length > 0);
-  assert.equal(scenarios[3].openCells.length, 72);
-  assert.equal(scenarios[3].obstacles.length, 28);
+  assert.equal(scenarios[3].openCells.length + scenarios[3].obstacles.length, 100);
   assert.ok(Object.keys(scenarios[3].hazardTiles).length > 0);
   assert.equal(scenarios[3].closedRoads.length, 0,
     'the new grid does not expose closed roads from the former corridor map');
@@ -549,25 +547,27 @@ test('Laiban routes, tile passability, markers, and all-site metrics use the cur
   });
   assert.equal(new Set(config.sites.map(function (site) { return site.position.join(','); })).size, 9);
   assert.ok(world.pathExists(config.start, config.sites[6].position), 'G stays reachable at its requested open cell');
-  assert.ok(world.pathExists(config.start, config.sites[7].position), 'H stays reachable at its requested open cell');
+  assert.equal(world.pathExists(config.start, config.sites[7].position), false,
+    'H is unreachable through the fixed grid when Restricted and hazard cells are blocked');
 
   gridRows.forEach(function (row, rowIndex) {
     assert.equal(row.length, config.size, 'each fixed map row has ten cells');
     Array.from(row).forEach(function (tile, colIndex) {
       var point = [rowIndex, colIndex];
-      var shouldBeOpen = tile === '.' || tile === 'r' || tile === 'o';
+      var shouldBeOpen = tile === '.';
       assert.equal(world.isOpen(point), shouldBeOpen, 'engine passability matches tile at ' + point.join(','));
-      if (tile === '#' || tile === 'x') {
-        assert.ok(world.obstacles.has(context.MazeRouting.key(point)), 'walls and closed tiles are blocked');
+      if (tile !== '.') {
+        assert.ok(world.obstacles.has(context.MazeRouting.key(point)),
+          'walls and all non-open tile statuses are blocked');
       }
     });
   });
   assert.equal(gridRows[8][5], 'x');
-  assert.equal(world.isOpen([9, 5]), true, 'E is a cream open cell isolated by closed tiles');
+  assert.equal(world.isOpen([9, 5]), true, 'E is on a cream open cell');
   [[8, 5], [9, 4], [9, 6]].forEach(function (point) {
     assert.equal(gridRows[point[0]][point[1]], 'x', 'each neighboring blocker around E is closed');
   });
-  assert.equal(world.pathExists(config.start, [9, 5]), false, 'E is isolated from the start by closed cells');
+  assert.equal(world.pathExists(config.start, [9, 5]), false, 'E remains unreachable on its closed cell');
   assert.equal(context.band(0.6).k, 'caut');
   assert.equal(context.band(0.6).lab, 'CAUTION');
   assert.ok(config.overlayCandidates.length > 0);
@@ -575,12 +575,26 @@ test('Laiban routes, tile passability, markers, and all-site metrics use the cur
   config.overlayCandidates.forEach(function (point) {
     assert.ok(allowed.has(point.join(',')), 'temporary overlays stay on traversable map cells');
     assert.ok(!world.protected.has(point.join(',')), 'temporary overlay candidates exclude hub and sitios');
+    assert.equal(gridRows[point[0]][point[1]], '.',
+      'temporary overlays vary only on open-road cells, never Restricted or fixed hazard cells');
   });
   assert.deepEqual(Array.from(new Set(config.overlayCandidates.map(function (point) {
     return config.roadTiles[point.join(',')].status;
-  })).values()).sort(), ['open', 'rest'],
-  'seed-based overlays can select traversable Restricted or Open road cells');
+  })).values()).sort(), ['open'],
+  'seed-based overlays select only open-road cells');
   assert.equal(config.dynamicFrequency, 20);
+  var dynamicWorld = makeWorld(context.MazeRouting, config);
+  for (var tick = 0; tick < config.dynamicFrequency; tick++) dynamicWorld.beginTick();
+  assert.equal(dynamicWorld.overlay.size, 1, 'a temporary obstacle activates after twenty shared steps');
+  var activeObstacle = Array.from(dynamicWorld.overlay)[0].split(',').map(Number);
+  assert.equal(gridRows[activeObstacle[0]][activeObstacle[1]], '.');
+  assert.equal(dynamicWorld.isOpen(activeObstacle), false, 'the active temporary obstacle is impassable');
+  for (var nextTick = 0; nextTick < config.dynamicFrequency; nextTick++) dynamicWorld.beginTick();
+  assert.equal(dynamicWorld.obstacleUpdates, 2, 'the temporary overlay is reselected every twenty steps');
+  assert.equal(dynamicWorld.overlay.size, 1);
+  assert.ok(config.overlayCandidates.some(function (point) {
+    return point.join(',') === Array.from(dynamicWorld.overlay)[0];
+  }), 'reselected temporary obstacles remain on eligible open-road cells');
 
   assert.match(demoSource, /var isLaiban = state\.config\.id === 'tab-4'/);
   assert.match(demoSource, /open: '#f5f2e8',\s*caut: '#f4e3ad',\s*rest: '#f6d2b2',\s*cls: '#f2c8c4'/);
@@ -598,9 +612,9 @@ test('Laiban routes, tile passability, markers, and all-site metrics use the cur
   assert.match(demoSource, /state\.config\.sites\.length[\s\S]*state\.env\.reachableSiteIds\.length/);
   assert.doesNotMatch(demoSource, /the 4 reachable \(open\) sitios/);
   assert.match(demoSource, /title="Cream tile\./);
-  assert.match(demoSource, /title="Peach tile with a dashed orange border\./);
+  assert.match(demoSource, /title="Peach tile with a dashed orange border; blocked to both agents\./);
   assert.match(demoSource, /title="Pink tile with an X\./);
-  assert.match(demoSource, /title="Solid orange tile\./);
+  assert.match(demoSource, /title="Solid orange tile; blocked to both agents\./);
   var styleSource = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   assert.match(styleSource, /\.maze-laiban-legend \.legend-road\{background:#f5f2e8;border-color:#dad5c8\}/);
   assert.match(styleSource, /\.maze-laiban-legend \.legend-hazard\{background:#efb27b;border:0\}/);
@@ -820,7 +834,7 @@ test('Laiban saved policies evaluate on the fixed grid and report all nine sitio
   var models = api.modelsFromPolicy(policy, config.id, config.seed);
   var world = makeWorld(api, config);
   assert.deepEqual(Array.from(world.reachableSiteIds),
-    ['maysawa', 'toyang', 'ibucao', 'kilabuwan', 'iwi_iw', 'old_laiban', 'manggahan', 'magata']);
+    ['maysawa', 'toyang', 'kilabuwan', 'iwi_iw', 'old_laiban']);
   var pair = new api.Pair(world, models, false);
   driveToEnd(pair, world.maxSteps + 2);
 
@@ -840,10 +854,10 @@ test('Laiban saved policies evaluate on the fixed grid and report all nine sitio
     assert.equal(metric.deferredCommunities, 9 - metric.destinationsServed,
       'deferred communities include all table-backed sitios');
   });
-  assert.equal(api.metrics(pair.runs.standard, world).learners, 69);
-  assert.equal(api.metrics(pair.runs.standard, world).movementSteps, 66);
-  assert.equal(api.metrics(pair.runs.modql, world).learners, 162);
-  assert.equal(api.metrics(pair.runs.modql, world).movementSteps, 30);
+  assert.equal(api.metrics(pair.runs.standard, world).learners, 0);
+  assert.equal(api.metrics(pair.runs.standard, world).movementSteps, 96);
+  assert.equal(api.metrics(pair.runs.modql, world).learners, 124);
+  assert.equal(api.metrics(pair.runs.modql, world).movementSteps, 40);
 });
 
 test('Q rows use typed arrays and background training does not render grids', function () {
@@ -1068,14 +1082,11 @@ test('UI exposes four fixed tabs, per-tab SOP selection, live results and separa
   assert.match(demoSource, /data-action="reset"/);
   assert.match(demoSource, /data-dynamic="tick"/);
   assert.match(demoSource, /function buildCardResultsTable\(id, title, state\)/);
-  assert.match(demoSource, /METRICS\.map\(function \(metric\)/);
-  assert.match(demoSource, /data-result="' \+\s*id \+ '" data-key="' \+\s*metric\.key/);
-  assert.match(demoSource, /<th scope="col">Metric<\/th><th scope="col">Result'\s*\+\s*'<\/th><th scope="col">Metric-by-metric assessment<\/th>/);
+  assert.match(demoSource, /return buildServiceResults\(id, title, !\(state && state\.config\.id === 'tab-4'\)\)/);
+  assert.match(demoSource, /data-result-sop="' \+ id \+ '"/);
+  assert.match(demoSource, /data-service-result="' \+ id \+ '" data-service-key=/);
   assert.match(demoSource, /return 'Trained · ' \+ state\.policyMetadata\.episodes\.toLocaleString\('en-US'\) \+\s*' episodes · seed ' \+ state\.policyMetadata\.seed;/);
   assert.doesNotMatch(demoSource.slice(demoSource.indexOf('function trainingLabel'), demoSource.indexOf('function renderTrainingProgress')), /trainedAt/);
-  assert.match(demoSource, /<td><span class="maze-result-value is-placeholder" data-result=/);
-  assert.match(demoSource, /data-assessment-row="' \+ metric\.key \+ '"/);
-  assert.match(demoSource, /data-assessment="' \+\s*metric\.key \+ '">Not run yet/);
   var metricDefinitions = demoSource.match(/var METRICS = \[([\s\S]*?)\n  \];/);
   assert.ok(metricDefinitions);
   assert.equal((metricDefinitions[1].match(/\{key: '/g) || []).length, 14, 'all 14 metrics are defined');
@@ -1089,7 +1100,7 @@ test('UI exposes four fixed tabs, per-tab SOP selection, live results and separa
   assert.match(demoSource, /valueNode\.classList\.toggle\('is-placeholder', !sideStarted\)/);
   assert.match(demoSource, /assessment\.classList\.toggle\('is-placeholder', !started\)/);
   assert.doesNotMatch(demoSource, /Report-only diagnostics|buildAssessmentRows\(\)|<section class="shared-maze-summary"/);
-  assert.match(demoSource, /Metric-by-metric assessment/);
+  assert.doesNotMatch(demoSource, /Computed from this run|Comparative Performance Results/);
   assert.doesNotMatch(demoSource, /<th>Standard Q-Learning<\/th>|<th>Enhanced MODQL<\/th>/);
   assert.match(styleSource, /\.maze-metrics-table thead th:nth-child\(2\)\{\s*text-align:right/);
   assert.match(styleSource, /\.maze-metrics-table \.maze-metric-column\{width:38%\}\s*\.maze-metrics-table \.maze-value-column\{width:25%\}\s*\.maze-metrics-table \.maze-assessment-column\{width:37%\}/);
