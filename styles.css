@@ -5600,10 +5600,11 @@ body[data-theme="dark"] .shared-maze-summary :is(thead th,h2,h3){color:#fff}
 }
 .maze-scenario-panel .shared-maze-panel{
   height:100%;
+  overflow:clip;
 }
 .maze-agent-body{
   flex:1;
-  grid-template-columns:minmax(0,3fr) minmax(0,2fr);
+  grid-template-columns:minmax(0,55fr) minmax(0,45fr);
   align-items:stretch;
 }
 .maze-agent-metrics{
@@ -5622,50 +5623,55 @@ body[data-theme="dark"] .shared-maze-summary :is(thead th,h2,h3){color:#fff}
   width:100%;
   min-width:0;
 }
-.maze-metrics-table{
+.maze-scenario-panel .maze-metrics-table{
   display:table;
+  overflow:visible;
   width:100%;
   min-width:0;
   border-collapse:collapse;
   border-spacing:0;
   table-layout:fixed;
-  font-size:clamp(13px,.95vw,15px);
+  font-size:clamp(10px,.72vw,13px);
 }
-.maze-metrics-table .maze-metric-column{width:34%}
-.maze-metrics-table .maze-value-column{width:22%}
-.maze-metrics-table .maze-assessment-column{width:44%}
+.maze-metrics-table .maze-metric-column{width:38%}
+.maze-metrics-table .maze-value-column{width:25%}
+.maze-metrics-table .maze-assessment-column{width:37%}
 .maze-metrics-table thead th{
-  padding:8px 7px;
+  padding:7px 4px;
   color:var(--dim);
   background:transparent;
   border-bottom:1px solid var(--line);
-  font-size:clamp(11px,.76vw,13px);
+  font-size:clamp(7px,.5vw,10px);
   font-weight:650;
-  line-height:1.3;
+  line-height:1.1;
   text-align:left;
   vertical-align:bottom;
-  overflow-wrap:anywhere;
+  white-space:nowrap;
 }
 .maze-metrics-table thead th:nth-child(2){
   text-align:right;
 }
+.maze-metrics-table thead th:last-child{
+  text-align:left;
+}
 .maze-metrics-table tbody th,
 .maze-metrics-table tbody td{
-  padding:8px 7px;
+  box-sizing:border-box;
+  height:36px;
+  padding:3px 4px;
   border-bottom:1px solid var(--line);
   background:transparent!important;
   color:var(--txt);
-  font-size:clamp(13px,.95vw,15px);
-  line-height:1.35;
+  font-size:inherit;
+  line-height:1.2;
   text-align:left;
   vertical-align:middle;
-  overflow-wrap:anywhere;
-  word-break:normal;
+  overflow:hidden;
 }
 .maze-metrics-table tbody th{
   font-weight:600;
   text-transform:none;
-  letter-spacing:normal;
+  letter-spacing:-.35px;
 }
 .maze-metrics-table tbody tr:last-child th,
 .maze-metrics-table tbody tr:last-child td{
@@ -5673,22 +5679,28 @@ body[data-theme="dark"] .shared-maze-summary :is(thead th,h2,h3){color:#fff}
 }
 .maze-metrics-table .maze-result-name{
   display:block;
+  overflow:hidden;
   color:var(--txt);
-  font-size:inherit;
-  line-height:1.3;
+  font-size:clamp(7.5px,.6vw,12px);
+  line-height:1.15;
+  white-space:nowrap;
 }
 .maze-metrics-table .shared-maze-direction{
-  margin:3px 0 0;
+  margin:2px 0 0;
   color:var(--dim);
-  font-size:clamp(10px,.68vw,12px);
-  line-height:1.25;
+  font-size:clamp(8px,.56vw,10px);
+  line-height:1.05;
+  white-space:nowrap;
 }
 .maze-metrics-table .maze-result-value{
   display:block;
   max-width:none;
-  font-size:inherit;
+  font-size:clamp(8px,.6vw,11.5px);
   font-variant-numeric:tabular-nums;
-  overflow-wrap:anywhere;
+  text-align:right;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 .maze-metrics-table .maze-result-value.is-placeholder,
 .maze-metrics-table .maze-comparison-assessment.is-placeholder{
@@ -5698,25 +5710,39 @@ body[data-theme="dark"] .shared-maze-summary :is(thead th,h2,h3){color:#fff}
   white-space:nowrap;
 }
 .maze-metrics-table .maze-result-value.is-live{
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
   color:var(--txt);
   font-weight:700;
-  text-align:right;
+  line-height:1.05;
   white-space:normal;
 }
 .maze-metrics-table .maze-comparison-assessment{
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  overflow:hidden;
   color:var(--txt);
-  font-size:clamp(11px,.76vw,13px);
+  font-size:clamp(9px,.62vw,11px);
   font-weight:600;
+  line-height:1.15;
+  overflow-wrap:anywhere;
 }
 .maze-metrics-table tbody tr.maze-sop-highlight,
 .maze-scenario-panel .maze-metrics-table tbody tr.maze-sop-highlight>*{
   background:transparent!important;
 }
 .maze-agent-side{
+  position:sticky;
+  top:12px;
+  align-self:start;
   display:flex;
   flex-direction:column;
-  gap:12px;
+  gap:8px;
   min-width:0;
+  max-height:calc(100vh - 24px);
+  overflow:auto;
 }
 .maze-agent-side .maze-agent-info{
   gap:8px;
@@ -5726,35 +5752,39 @@ body[data-theme="dark"] .shared-maze-summary :is(thead th,h2,h3){color:#fff}
 .maze-agent-info .maze-agent-status,
 .maze-agent-info .maze-agent-live,
 .maze-agent-info .maze-reachable-results{
-  font-size:clamp(13px,.95vw,15px);
-  line-height:1.45;
+  font-size:clamp(12px,.68vw,14px);
+  line-height:1.35;
 }
 .maze-agent-info .maze-agent-description,
 .maze-agent-info .maze-training-indicator{
   color:var(--dim);
 }
 .maze-agent-info .maze-training-curve{
-  margin-top:2px;
-  font-size:clamp(11px,.76vw,13px);
+  margin-top:0;
+  gap:5px;
+  font-size:clamp(11px,.72vw,13px);
 }
 .maze-agent-info .maze-training-curve canvas{
+  display:block;
   width:100%;
   max-width:100%;
-  height:auto;
+  height:90px;
 }
 .maze-agent-info .maze-reachable-results{
   margin:0;
   color:var(--dim);
 }
 .maze-agent-grid .shared-maze-board{
-  width:min(100%,40vh);
-  max-width:min(100%,40vh);
+  width:100%;
+  max-width:none;
+  padding:4px;
   box-sizing:border-box;
   aspect-ratio:1;
 }
 .maze-agent-grid .shared-maze-board canvas{
   width:100%;
-  height:100%;
+  height:auto;
+  aspect-ratio:1;
 }
 .maze-assessment-note{
   margin-top:16px;
@@ -5785,9 +5815,18 @@ body[data-theme="dark"] .shared-maze-summary :is(thead th,h2,h3){color:#fff}
   .maze-metrics-table thead th,
   .maze-metrics-table tbody th,
   .maze-metrics-table tbody td{
-    padding:7px 5px;
+    padding-right:3px;
+    padding-left:3px;
   }
-  .maze-metrics-table .maze-value-column{width:22%}
-  .maze-metrics-table .maze-metric-column{width:34%}
-  .maze-metrics-table .maze-assessment-column{width:44%}
+}
+@media(min-width:1500px) and (min-height:900px){
+  .maze-scenario-overview{margin-bottom:8px}
+  .maze-scenario-panel>.shared-maze-setup-shell{margin-bottom:4px}
+  .maze-scenario-panel .shared-maze-controls{padding-top:6px;padding-bottom:6px}
+  .maze-scenario-panel .maze-status-message{margin-top:3px;margin-bottom:3px}
+  .maze-scenario-panel .maze-disclaimer{margin-top:4px;margin-bottom:4px;padding-top:5px;padding-bottom:5px}
+  .maze-scenario-panel .shared-maze-legend{margin-top:6px;margin-bottom:6px}
+  .maze-agent-status-line{flex-wrap:nowrap;gap:4px}
+  .maze-agent-info .maze-agent-status{font-size:10.5px;white-space:nowrap}
+  .maze-agent-info .maze-loop-status{font-size:8.5px;white-space:nowrap}
 }

@@ -282,8 +282,8 @@
     if (state.training) return 'Training... ' + state.trainingProgress + ' / ' + EPISODES + ' episodes';
     if (state.loading) return 'Loading trained policy...';
     if (!state.models) return state.loadError ? 'Policy unavailable' : 'Trained policy pending';
-    return 'Trained: ' + state.policyMetadata.episodes.toLocaleString('en-US') + ' episodes, seed ' + state.policyMetadata.seed +
-      ', ' + state.policyMetadata.trainedAt;
+    return 'Trained · ' + state.policyMetadata.episodes.toLocaleString('en-US') +
+      ' episodes · seed ' + state.policyMetadata.seed;
   }
   function renderTrainingProgress(state) {
     var panel = panelFor(state);
@@ -313,7 +313,7 @@
       '<h4>Comparative Performance Results</h4></header><div class="maze-metrics-table-scroll">' +
       '<table class="maze-metrics-table" aria-label="' + escapeHtml(title) + ' results">' +
       '<colgroup><col class="maze-metric-column"><col class="maze-value-column"><col class="maze-assessment-column"></colgroup>' +
-      '<thead><tr><th scope="col">Metric</th><th scope="col">' + escapeHtml(title) +
+      '<thead><tr><th scope="col">Metric</th><th scope="col">Result' +
       '</th><th scope="col">Metric-by-metric assessment</th></tr></thead><tbody>' +
       METRICS.map(function (metric) {
         return '<tr data-metric="' + metric.key + '" data-assessment-row="' + metric.key + '">' +
@@ -488,6 +488,7 @@
         valueNode.textContent = sideStarted
           ? formatMetric(metric, records[id], state, id)
           : 'Not run yet';
+        valueNode.title = valueNode.textContent;
         valueNode.classList.toggle('is-placeholder', !sideStarted);
         valueNode.classList.toggle('is-live', sideStarted);
       });
@@ -500,6 +501,7 @@
       assessment.textContent = started
         ? comparisonText(metric, records.standard, records.modql)
         : 'Not run yet';
+      assessment.title = assessment.textContent;
       assessment.classList.toggle('is-placeholder', !started);
       assessment.classList.toggle('is-live', started);
     });
