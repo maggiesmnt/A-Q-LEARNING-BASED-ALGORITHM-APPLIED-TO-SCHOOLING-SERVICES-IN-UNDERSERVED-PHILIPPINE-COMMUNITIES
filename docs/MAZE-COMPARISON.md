@@ -41,9 +41,11 @@ non-target cells for both policies. The interactive demo still starts at
 evaluation. **Retrain from scratch** runs both policies in a Web Worker using
 typed-array Q tables and no rendering during training, with episode progress
 shown in the page. Reset clears only the displayed run and preserves the
-loaded policy. Advance One Step and the speed and travel-time-unit selectors
-operate on the active scenario. Shared-tick and obstacle-update counts appear
-only for dynamic-obstacle scenarios.
+loaded policy. Advance One Step and the simulation-speed selector operate on
+the active scenario. The removed travel-time-unit selector has no effect on
+simulation calculations; travel time is always displayed in minutes and
+movement steps are reported separately. Shared-tick and obstacle-update
+counts appear only for dynamic-obstacle scenarios.
 
 The Tab 2 batch keeps the map, target, demand, service budget, policy
 parameters, and paired Standard/MODQL conditions fixed. It cycles the start
@@ -281,11 +283,12 @@ service leg. Standard receives one scalar travel-time reward. The reward
 scales are different and are not compared as performance scores.
 
 Every evaluation result is computed from its actual rollout: learners served
-and coverage, Jain fairness, travel minutes, movement steps, destinations
-served, deferred communities, completion state, and Q diagnostics. Before a
-run starts, results display “Not run yet.” The assessment describes metric
-differences and trade-offs; it does not produce an overall score or claims
-beyond the selected simulated scenario.
+and coverage, Jain fairness, travel time (minutes), movement steps,
+destinations served, deferred communities, completion state, and Q diagnostics.
+Before a run starts, results display “Not run yet.” The assessment describes
+metric differences and trade-offs; travel time is reported in minutes and
+movement steps are a separate metric. It does not produce an overall score or
+claims beyond the selected simulated scenario.
 
 The separate batch panel evaluates both frozen policies over 200 paired
 scenarios and calculates a mean and population standard deviation for each

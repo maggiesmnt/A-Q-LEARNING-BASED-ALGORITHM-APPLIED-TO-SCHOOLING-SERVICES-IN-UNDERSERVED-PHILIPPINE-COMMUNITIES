@@ -7,8 +7,8 @@
     {key: 'learners', label: 'Learners served', better: 'higher'},
     {key: 'coveragePercent', label: 'Learner coverage', better: 'higher', percent: true},
     {key: 'fairness', label: "Jain's Fairness Index", better: 'higher', decimals: 4},
-    {key: 'travelMinutes', label: 'Travel time', better: 'lower', time: true},
-    {key: 'movementSteps', label: 'Movement steps', better: 'lower'},
+    {key: 'travelMinutes', label: 'Travel time (minutes)', better: 'lower', time: true},
+    {key: 'movementSteps', label: 'Movement steps', better: 'lower', unit: 'steps'},
     {key: 'destinationsServed', label: 'Destinations served', better: 'higher', destinations: true},
     {key: 'deferredCommunities', label: 'Deferred communities', better: 'lower'},
     {key: 'completionStatus', label: 'Completion status', status: true},
@@ -24,7 +24,7 @@
     {key: 'coveragePercent', label: 'Learner coverage (%)', decimals: 2},
     {key: 'fairness', label: "Jain's Fairness Index", decimals: 4},
     {key: 'travelMinutes', label: 'Travel time (minutes)', decimals: 2},
-    {key: 'movementSteps', label: 'Movement steps', decimals: 2},
+    {key: 'movementSteps', label: 'Movement steps', decimals: 2, unit: 'steps'},
     {key: 'destinationsServed', label: 'Destinations served', decimals: 2},
     {key: 'reachableDestinationsServed', label: 'Reachable sitios served', decimals: 2},
     {key: 'reachableDestinationTotal', label: 'Reachable sitio denominator', decimals: 2},
@@ -32,7 +32,7 @@
     {key: 'completed', label: 'Completion rate (%)', decimals: 2, percent: true},
     {key: 'loopDetected', label: 'Loop rate (%)', decimals: 2, percent: true}
   ];
-  var root, scenarioSelector, states = [], activeIndex = 0, selectedTravelUnit = 'minutes';
+  var root, scenarioSelector, states = [], activeIndex = 0;
   var timer = null, speed = 200, batchSequence = 0;
 
   function byId(id) { return document.getElementById(id); }
@@ -227,9 +227,7 @@
     return Number.isFinite(value) ? value.toFixed(digits === undefined ? 1 : digits) : '—';
   }
   function formatTime(minutes) {
-    return selectedTravelUnit === 'hours'
-      ? number(minutes / 60, 2) + ' hr'
-      : number(minutes, 1).replace(/\.0$/, '') + ' min';
+    return number(minutes, 1).replace(/\.0$/, '') + ' min';
   }
   function formatMetric(metric, record, state, id) {
     if (!record) return 'Not run yet';
@@ -251,6 +249,7 @@
     if (metric.time) return formatTime(value);
     if (metric.percent) return number(value, 1) + '%';
     if (metric.destinations) return value + ' / ' + state.config.sites.length;
+    if (metric.unit) return number(value, metric.decimals) + ' ' + metric.unit;
     return metric.decimals !== undefined ? number(value, metric.decimals) : String(value);
   }
   function comparisonText(metric, standard, modql) {
@@ -378,8 +377,6 @@
       '<button type="button" class="btn g" data-action="train">Retrain from scratch</button></div>' +
       '<label class="maze-control-item maze-control-speed"><span class="maze-control-label">Simulation speed</span>' +
       '<select data-action="speed"><option value="800">0.25×</option><option value="400">0.5×</option><option value="200" selected>1×</option><option value="100">2×</option><option value="50">4×</option></select></label>' +
-      '<label class="maze-control-item maze-control-unit"><span class="maze-control-label">Travel time units</span>' +
-      '<select data-action="unit"><option value="minutes" selected>Minutes</option><option value="hours">Hours</option></select></label>' +
       '</div>' +
       '<progress class="maze-training-progress" data-training-progress max="' + EPISODES + '" value="0" hidden></progress>' +
       '<div class="maze-run-status"><p class="maze-status-message" role="status">Results are not available until a run starts.</p>' +
@@ -460,9 +457,9 @@
     var completed = allDone(state);
     summary.textContent = completed
       ? (state.config.id === 'tab-4'
-        ? 'Completion means all 4 reachable (open) sitios were served. The five sitios on closed roads are unreachable under the saved 38 mm/24h conditions and are not expected to be served. Results remain simulated.'
-        : 'Metric-by-metric comparison for this simulated scenario only. No overall score or result beyond this scenario is claimed.')
-      : 'Run in progress. Metric differences are descriptive only; no overall score is calculated.';
+        ? 'Completion means all 4 reachable (open) sitios were served. The five sitios on closed roads are unreachable under the saved 38 mm/24h conditions and are not expected to be served. Travel time is reported in minutes; movement steps are separate. Results remain simulated.'
+        : 'Travel time is reported in minutes and movement steps are separate. Metric-by-metric comparison is for this simulated scenario only; no overall score or result beyond this scenario is claimed.')
+      : 'Travel time is reported in minutes and movement steps are separate. Run in progress; metric differences are descriptive only.';
   }
 
   function renderResults(state, panel) {
@@ -500,7 +497,8 @@
       var served = metric.destinationsServed + ' / ' + metric.destinationTotal + ' destinations';
       status.textContent = run.done ? run.status : 'Running';
       live.textContent = metric.learners + ' learners (' + number(metric.coveragePercent, 1) +
-        '%) · ' + served + ' · ' + number(metric.travelMinutes, 1) + ' travel minutes' +
+        '%) · ' + served + ' · ' + number(metric.travelMinutes, 1) + ' travel minutes · ' +
+        metric.movementSteps + ' steps' +
         (state.config.id === 'tab-4'
           ? ' · served ' + metric.destinationsServed + ' of 9 sitios; served ' +
             metric.reachableDestinationsServed + ' of ' + metric.reachableDestinationTotal + ' reachable (open) sitios'
@@ -699,19 +697,21 @@
       return state.config.id === 'tab-4' ||
         (metric.key !== 'reachableDestinationsServed' && metric.key !== 'reachableDestinationTotal');
     });
-    resultContainer.innerHTML = (state.config.id === 'tab-4'
-      ? '<p>Mean service is reported against both all 9 sitios and the 4 reachable (open) sitios; the five closed sitios are not expected targets.</p>'
-      : '') + '<div class="shared-maze-table-scroll"><table><thead><tr><th>Metric</th>' +
+    resultContainer.innerHTML = '<p>Travel time is reported in minutes; movement steps are reported separately.</p>' +
+      (state.config.id === 'tab-4'
+        ? '<p>Mean service is reported against both all 9 sitios and the 4 reachable (open) sitios; the five closed sitios are not expected targets.</p>'
+        : '') + '<div class="shared-maze-table-scroll"><table><thead><tr><th>Metric</th>' +
       '<th>Standard mean</th><th>Standard SD</th><th>MODQL mean</th><th>MODQL SD</th></tr></thead><tbody>' +
       batchMetrics.map(function (metric) {
         var a = summary.standard[metric.key], b = summary.modql[metric.key];
         var scale = metric.percent ? 100 : 1;
         var label = state.config.id === 'tab-4' && metric.key === 'completed'
           ? 'Reachable-site completion rate (%)' : metric.label;
+        var unit = metric.unit ? ' ' + metric.unit : '';
         return '<tr><th scope="row">' + escapeHtml(label) + '</th><td>' +
-          number(a.mean * scale, metric.decimals) + '</td><td>' + number(a.sd * scale, metric.decimals) +
-          '</td><td>' + number(b.mean * scale, metric.decimals) + '</td><td>' +
-          number(b.sd * scale, metric.decimals) + '</td></tr>';
+          number(a.mean * scale, metric.decimals) + unit + '</td><td>' + number(a.sd * scale, metric.decimals) +
+          unit + '</td><td>' + number(b.mean * scale, metric.decimals) + unit + '</td><td>' +
+          number(b.sd * scale, metric.decimals) + unit + '</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
 
@@ -739,11 +739,9 @@
     var tick = panel.querySelector('[data-dynamic="tick"]');
     var updates = panel.querySelector('[data-dynamic="updates"]');
     var speedControl = panel.querySelector('[data-action="speed"]');
-    var unitControl = panel.querySelector('[data-action="unit"]');
     if (tick) tick.textContent = String(state.env.tick);
     if (updates) updates.textContent = String(state.env.obstacleUpdates);
     if (speedControl) speedControl.value = String(speed);
-    if (unitControl) unitControl.value = selectedTravelUnit;
     var runButton = panel.querySelector('[data-action="run"]');
     if (runButton) {
       runButton.textContent = timer !== null && state === activeState() ? 'Pause Comparison' :
@@ -885,10 +883,6 @@
           stopTimer();
           speed = Number(control.value);
           if (wasRunning) startTimer();
-        });
-        else if (action === 'unit') control.addEventListener('change', function () {
-          selectedTravelUnit = control.value;
-          states.forEach(renderState);
         });
       });
       panel.querySelectorAll('[data-sop]').forEach(function (button) {

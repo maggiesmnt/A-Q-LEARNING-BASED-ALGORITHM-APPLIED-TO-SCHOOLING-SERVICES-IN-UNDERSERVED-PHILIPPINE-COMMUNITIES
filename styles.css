@@ -5493,7 +5493,6 @@ body[data-theme="dark"] .shared-maze-summary :is(thead th,h2,h3){color:#fff}
   border:1px solid var(--line);
 }
 .maze-scenario-panel .maze-control-speed>select{min-width:122px}
-.maze-scenario-panel .maze-control-unit>select{min-width:116px}
 @media(max-width:999px){
   .maze-scenario-panel .shared-maze-controls{
     display:grid;

@@ -563,7 +563,14 @@ test('UI exposes four fixed tabs, per-tab SOP selection, live results and separa
   assert.match(demoSource, /class="maze-control-item maze-control-run"/);
   assert.match(demoSource, /class="maze-control-label" aria-hidden="true"/);
   assert.match(demoSource, /class="maze-control-item maze-control-speed"><span class="maze-control-label">Simulation speed<\/span>/);
-  assert.match(demoSource, /class="maze-control-item maze-control-unit"><span class="maze-control-label">Travel time units<\/span>/);
+  assert.doesNotMatch(demoSource, /Travel time units|data-action="unit"/);
+  assert.match(demoSource, /label: 'Travel time \(minutes\)'/);
+  assert.match(demoSource, /label: 'Movement steps'.*unit: 'steps'/);
+  assert.match(demoSource, /label: 'Movement steps', decimals: 2, unit: 'steps'/);
+  assert.match(demoSource, /Travel time is reported in minutes; movement steps are reported separately\./);
+  assert.match(demoSource, /number\(metric\.travelMinutes, 1\) \+ ' travel minutes · ' \+\s*metric\.movementSteps \+ ' steps'/);
+  assert.match(demoSource, /function formatTime\(minutes\) \{\s*return number\(minutes, 1\)\.replace\(\/\\\.0\$\/, ''\) \+ ' min';/);
+  assert.match(demoSource, /label: 'Travel time \(minutes\)', decimals: 2/);
   assert.match(demoSource, /data-action="reset"/);
   assert.match(demoSource, /data-dynamic="tick"/);
   assert.match(styleSource, /\.maze-scenario-panel \.shared-maze-controls\{\s*display:flex;\s*align-items:flex-end;\s*flex-wrap:nowrap/);
@@ -572,6 +579,9 @@ test('UI exposes four fixed tabs, per-tab SOP selection, live results and separa
   assert.match(styleSource, /grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
   assert.match(styleSource, /\.maze-control-run>\.btn\{width:166px\}/);
   assert.match(styleSource, /\.maze-control-speed>select\{min-width:122px\}/);
+  var comparisonDocs = fs.readFileSync(path.join(root, 'docs', 'MAZE-COMPARISON.md'), 'utf8');
+  assert.match(comparisonDocs, /travel time is always displayed in minutes and\s+movement steps are reported separately/);
+  assert.match(comparisonDocs, /travel time \(minutes\), movement steps/);
   assert.match(demoSource, /Environment-only values; not part of Standard state or Q updates/);
   assert.doesNotMatch(demoSource, /Scenario seed\s*<input|Load Scenario|Episodes per algorithm/);
   var scenarios = harness().MazeComparisonData.scenarios();
