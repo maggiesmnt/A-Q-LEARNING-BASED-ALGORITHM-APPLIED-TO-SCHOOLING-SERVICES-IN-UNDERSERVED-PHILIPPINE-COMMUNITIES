@@ -50,7 +50,13 @@ test('four fixed scenarios use the saved Laiban values and requested shared budg
   assert.equal(scenarios[0].obstacleRatio, 0);
   assert.equal(scenarios[0].dynamicFrequency, 0);
   assert.equal(scenarios[1].sites.length, 1);
-  assert.ok(scenarios[1].obstacleRatio > 0);
+  assert.equal(scenarios[1].obstacleRatio, 0);
+  assert.equal(scenarios[1].obstacles.length, 24);
+  var obstacleMaps = [202, 1202, 100202].map(function (seed) {
+    return Array.from(makeWorld(context.MazeRouting, scenarios[1], seed).obstacles).sort().join(';');
+  });
+  assert.equal(new Set(obstacleMaps).size, 1, 'Tab 2 keeps its same fixed map for training and evaluation');
+  assert.ok(makeWorld(context.MazeRouting, scenarios[1]).pathExists(scenarios[1].start, scenarios[1].sites[0].position));
   assert.equal(scenarios[1].dynamicFrequency, 0);
   assert.ok(scenarios[2].sites.length > 1);
   assert.equal(scenarios[2].dynamicFrequency, 20);
@@ -122,6 +128,59 @@ test('pretrained policy files load Q tables and training logs without retraining
   });
 });
 
+test('fixed-map Tab 2 policy training succeeds and frozen evaluation does not update Q tables', function () {
+  var context = harness(), api = context.MazeRouting, config = context.MazeComparisonData.scenarios()[1];
+  var policy = JSON.parse(fs.readFileSync(path.join(root, 'policies', 'tab-2.json'), 'utf8'));
+  ['standard', 'modql'].forEach(function (id) {
+    var successes = policy.trainingLog[id + 'Reward'].slice(-500).filter(function (reward) { return reward > 0; }).length;
+    assert.equal(successes, 500, id + ' reached the target in all final 500 training episodes');
+  });
+  var models = api.modelsFromPolicy(policy, config.id, config.seed);
+  var before = snapshot(models);
+  var world = makeWorld(api, config), pair = new api.Pair(world, models, false);
+  driveToEnd(pair, 190);
+  assert.equal(pair.runs.standard.success, true);
+  assert.equal(pair.runs.modql.success, true);
+  assert.equal(api.metrics(pair.runs.standard, world).loopDetected, false);
+  assert.equal(api.metrics(pair.runs.modql, world).loopDetected, false);
+  assert.equal(snapshot(models), before, 'frozen evaluation must not update either policy');
+});
+
+test('Tab 2 held-out batch varies only paired starts on its fixed map and counts loops', function () {
+  var context = harness(), api = context.MazeRouting, config = context.MazeComparisonData.scenarios()[1];
+  var policy = JSON.parse(fs.readFileSync(path.join(root, 'policies', 'tab-2.json'), 'utf8'));
+  var models = api.modelsFromPolicy(policy, config.id, config.seed);
+  var blocked = new Set(config.obstacles.map(api.key));
+  var target = api.key(config.sites[0].position), starts = [];
+  for (var row = 0; row < config.size; row++) {
+    for (var col = 0; col < config.size; col++) {
+      var cell = row + ',' + col;
+      if (!blocked.has(cell) && cell !== target) starts.push([row, col]);
+    }
+  }
+  assert.equal(starts.length, 75);
+  var outcomes = {standard: [], modql: []}, distinctStarts = new Set();
+  for (var index = 0; index < 200; index++) {
+    var batchConfig = JSON.parse(JSON.stringify(config));
+    batchConfig.start = starts[index % starts.length];
+    distinctStarts.add(batchConfig.start.join(','));
+    var world = makeWorld(api, batchConfig, config.seed + index);
+    var pair = new api.Pair(world, models, false);
+    driveToEnd(pair, 190);
+    assert.deepEqual(Array.from(world.start), Array.from(pair.world.start));
+    ['standard', 'modql'].forEach(function (id) {
+      outcomes[id].push(api.metrics(pair.runs[id], world));
+    });
+  }
+  assert.equal(distinctStarts.size, 75);
+  assert.equal(outcomes.standard.filter(function (result) { return result.completed; }).length, 191);
+  assert.equal(outcomes.modql.filter(function (result) { return result.completed; }).length, 153);
+  assert.equal(outcomes.standard.filter(function (result) { return result.loopDetected; }).length, 6);
+  assert.equal(outcomes.modql.filter(function (result) { return result.loopDetected; }).length, 50);
+  assert.equal(outcomes.standard.filter(function (result) { return !result.completed && !result.loopDetected; }).length, 3);
+  assert.equal(outcomes.modql.filter(function (result) { return !result.completed && !result.loopDetected; }).length, 3);
+});
+
 test('Q rows use typed arrays and background training does not render grids', function () {
   var api = harness().MazeRouting;
   var table = new api.QTable();
@@ -132,6 +191,25 @@ test('Q rows use typed arrays and background training does not render grids', fu
   assert.match(worker, /importScripts\('maze-routing\.js'\)/);
   assert.match(worker, /postMessage\(\{type: 'progress'/);
   assert.doesNotMatch(worker, /canvas|renderState|draw\(/);
+});
+
+test('frozen greedy ties use the first legal action for both unseen policies', function () {
+  var api = harness().MazeRouting;
+  ['standard', 'modql'].forEach(function (kind) {
+    var model = new api.Model(kind, function () { throw new Error('frozen tie-breaking must not use randomness'); });
+    var values = model.values('unseen-location');
+    assert.deepEqual(Array.from(values), [0, 0, 0, 0]);
+    assert.equal(model.choose('unseen-location', [0, 1, 2, 3], false), 0);
+    assert.equal(model.choose('another-unseen-location', [1, 3], false), 1);
+  });
+});
+
+test('display-only loop detector requires four two-cell cycles without service', function () {
+  var api = harness().MazeRouting;
+  var loop = [[2, 1], [2, 2], [2, 1], [2, 2], [2, 1], [2, 2], [2, 1], [2, 2], [2, 1]];
+  assert.equal(api.hasRepeatedTwoCellLoop(loop, []), true);
+  assert.equal(api.hasRepeatedTwoCellLoop(loop.slice(0, 8), []), false);
+  assert.equal(api.hasRepeatedTwoCellLoop(loop, [5]), false);
 });
 
 test('movement constraints are shared and both agents use four-direction actions', function () {
@@ -273,6 +351,12 @@ test('UI exposes four fixed tabs, per-tab SOP selection, live results and separa
   assert.match(demoSource, /Basic Grid fairness is trivial because there is only one destination/);
   assert.match(demoSource, /not comparable to Chapter 4 results/);
   assert.match(demoSource, /two-level road accessibility/);
+  assert.match(demoSource, /Loop rate \(%\)/);
+  assert.match(demoSource, /Loop detected: learned policy repeats the same moves/);
+  assert.match(fs.readFileSync(path.join(root, 'styles.css'), 'utf8'), /\.maze-loop-status\[hidden\]\s*\{\s*display:none;/);
+  assert.match(demoSource, /batchConfig\.start = starts\[index % starts\.length\]/);
+  assert.match(demoSource, /Obstacles batch protocol: same fixed obstacle layout/);
+  assert.match(routingSource, /serviceSteps/);
   assert.match(demoSource, /5,000 training episodes each, equal budget/);
   assert.match(demoSource, /Not run yet/);
   assert.match(demoSource, /200 Held-Out/);

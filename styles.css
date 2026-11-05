@@ -2448,6 +2448,16 @@ body[data-theme="dark"] #routeLegend span b{color:#FCF9EA}
   font-size:12px;
   line-height:1.5;
 }
+.maze-loop-status{
+  display:inline-block;
+  margin:8px 0 0;
+  color:var(--warn);
+  font-size:11px;
+  line-height:1.4;
+}
+.maze-loop-status[hidden]{
+  display:none;
+}
 .original-algorithm-split .maze-demo-card .maze-layout>div:last-child{
   min-width:0;
 }

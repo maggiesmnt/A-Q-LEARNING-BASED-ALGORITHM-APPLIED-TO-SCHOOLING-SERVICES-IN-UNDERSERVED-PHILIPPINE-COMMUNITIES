@@ -23,7 +23,15 @@ const api = context.MazeRouting;
 const outputDirectory = path.join(root, 'policies');
 fs.mkdirSync(outputDirectory, {recursive: true});
 
-for (const config of context.MazeComparisonData.scenarios()) {
+const requestedScenarios = process.argv.slice(2);
+const configs = context.MazeComparisonData.scenarios().filter(config =>
+  !requestedScenarios.length || requestedScenarios.includes(config.id)
+);
+if (requestedScenarios.length && configs.length !== new Set(requestedScenarios).size) {
+  throw new Error('Unknown or duplicate scenario id: ' + requestedScenarios.join(', '));
+}
+
+for (const config of configs) {
   const models = api.modelsFor(config.seed);
   const trainingLog = {
     standardSteps: [],

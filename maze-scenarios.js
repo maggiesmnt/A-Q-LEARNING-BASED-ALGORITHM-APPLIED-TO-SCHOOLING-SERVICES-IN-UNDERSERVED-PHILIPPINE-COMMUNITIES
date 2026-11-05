@@ -62,6 +62,13 @@ var MazeComparisonData = (function () {
       description: obstacles ? 'Static obstacles; one service target.' : 'Plain grid; one service target.'
     };
   }
+  function fixedTabTwoObstacles() {
+    return [
+      [0, 8], [1, 0], [1, 1], [1, 3], [1, 9], [2, 0], [2, 3], [2, 7],
+      [2, 8], [3, 0], [3, 6], [3, 7], [3, 8], [4, 7], [4, 9], [5, 0],
+      [5, 2], [5, 3], [6, 4], [6, 9], [7, 1], [7, 9], [9, 3], [9, 5]
+    ];
+  }
   function laiban() {
     if (typeof N === 'undefined' || typeof EDGES === 'undefined' ||
         typeof FIXED_MAZE_NODES === 'undefined' || typeof FIXED_MAZE_EDGES === 'undefined' ||
@@ -146,9 +153,12 @@ var MazeComparisonData = (function () {
       basic('tab-1', 101, 'Basic Grid', false, [
         site('goal', 'Target', 'T', [9, 9], 40, 0, 30)
       ]),
-      basic('tab-2', 202, 'Obstacles', true, [
+      Object.assign(basic('tab-2', 202, 'Obstacles', false, [
         site('goal', 'Target', 'T', [9, 9], 40, 0, 30)
-      ]),
+      ]), {
+        obstacles: fixedTabTwoObstacles(),
+        description: 'One fixed 24-obstacle layout shared by training and evaluation.'
+      }),
       Object.assign(basic('tab-3', 303, 'Multi-Target', true, [
         site('a', 'Community A', 'A', [1, 8], 18, 0, 30),
         site('b', 'Community B', 'B', [3, 2], 30, 1, 21),

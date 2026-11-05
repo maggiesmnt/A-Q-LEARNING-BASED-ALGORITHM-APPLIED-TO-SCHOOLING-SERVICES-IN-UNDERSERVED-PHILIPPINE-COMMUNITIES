@@ -77,6 +77,27 @@ var MazeRouting = (function () {
     values.forEach(function (value) { sum += value; squares += value * value; });
     return squares ? sum * sum / (values.length * squares) : 1;
   }
+  function hasRepeatedTwoCellLoop(trail, serviceSteps) {
+    if (!Array.isArray(trail) || trail.length < 9) return false;
+    for (var start = 0; start + 8 < trail.length; start++) {
+      var first = trail[start], second = trail[start + 1];
+      if (!first || !second || (first[0] === second[0] && first[1] === second[1])) continue;
+      var matches = true;
+      for (var offset = 0; offset <= 8; offset++) {
+        var expected = offset % 2 ? second : first, actual = trail[start + offset];
+        if (!actual || actual[0] !== expected[0] || actual[1] !== expected[1]) {
+          matches = false;
+          break;
+        }
+      }
+      if (!matches) continue;
+      var servedDuringLoop = serviceSteps && serviceSteps.some(function (step) {
+        return step > start && step <= start + 8;
+      });
+      if (!servedDuringLoop) return true;
+    }
+    return false;
+  }
   function demandBucket(value, maximum) {
     return value / Math.max(maximum, 1) < 0.65 ? 1 : 2;
   }
@@ -469,6 +490,7 @@ var MazeRouting = (function () {
       steps: 0, attempts: 0, minutes: 0, remainingMinutes: world.budgetMinutes,
       serviceMinutes: 0, segmentMinutes: 0, learners: 0, served: {},
       servedMask: 0, stateCache: new Map(),
+      serviceSteps: [],
       visits: world.sites.map(function (site) { return site.initialVisits; }),
       historyDays: world.sites.map(function (site) { return site.lastVisitDays; }),
       fairness: null, reward: 0, latestReward: null, currentState: null,
@@ -562,6 +584,7 @@ var MazeRouting = (function () {
             run.served[site.id] = true;
             run.servedMask |= 1 << siteIndex;
             run.visits[siteIndex]++;
+            run.serviceSteps.push(run.steps);
             run.historyDays[siteIndex] = 0;
             run.learners += site.demand;
             run.fairness = fairness(run.visits);
@@ -635,6 +658,7 @@ var MazeRouting = (function () {
       deferredCommunities: run.done ? run.deferred.length : world.sites.length - served,
       completionStatus: run.done ? run.status : 'In progress',
       completed: run.done && run.success,
+      loopDetected: hasRepeatedTwoCellLoop(run.trail, run.serviceSteps),
       qEstimate: run.didRun ? run.q : null,
       q1Estimate: run.didRun ? run.q1 : null,
       q2Estimate: run.didRun ? run.q2 : null,
@@ -660,6 +684,7 @@ var MazeRouting = (function () {
     state: state,
     metrics: metrics,
     fairness: fairness,
+    hasRepeatedTwoCellLoop: hasRepeatedTwoCellLoop,
     trainEpisode: trainEpisode
   };
 })();

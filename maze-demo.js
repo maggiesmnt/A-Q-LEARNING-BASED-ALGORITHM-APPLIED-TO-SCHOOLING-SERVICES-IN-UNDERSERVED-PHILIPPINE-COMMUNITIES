@@ -27,7 +27,8 @@
     {key: 'movementSteps', label: 'Movement steps', decimals: 2},
     {key: 'destinationsServed', label: 'Destinations served', decimals: 2},
     {key: 'deferredCommunities', label: 'Deferred communities', decimals: 2},
-    {key: 'completed', label: 'Completion rate (%)', decimals: 2, percent: true}
+    {key: 'completed', label: 'Completion rate (%)', decimals: 2, percent: true},
+    {key: 'loopDetected', label: 'Loop rate (%)', decimals: 2, percent: true}
   ];
   var root, scenarioSelector, states = [], activeIndex = 0, selectedTravelUnit = 'minutes';
   var timer = null, speed = 200, batchSequence = 0;
@@ -321,6 +322,9 @@
     var roadDisclaimer = config.simulated
       ? '<p class="maze-disclaimer">Simulated, not verified field data. Rainfall, allocated sitio demand and visit history are scenario inputs; the temporary-obstacle overlay is simulated and does not change saved road closures.</p>'
       : '';
+    var batchProtocolNote = config.id === 'tab-2'
+      ? '<p>Obstacles batch protocol: same fixed obstacle layout; start cycles row-major through the 75 open non-target cells. Both policies share each start.</p>'
+      : '';
     var closed = config.closedRoads && config.closedRoads.length
       ? '<details class="maze-closed-roads"><summary>Saved closed roads (' + config.closedRoads.length + ')</summary><ul>' +
         config.closedRoads.map(function (road) { return '<li>' + escapeHtml(road.name) + ': ' + escapeHtml(road.reason) + '</li>'; }).join('') +
@@ -365,6 +369,7 @@
           trainingLabel(state, id) + '</div>' +
           (id === 'standard' ? '<p class="maze-agent-description">Standard Q-Learning explores randomly during training; evaluation follows the learned policy (epsilon = 0).</p>' : '') +
           '<div class="maze-agent-status" data-status="' + id + '">Not run yet</div>' +
+          '<span class="maze-loop-status" data-loop-status="' + id + '" hidden>Loop detected: learned policy repeats the same moves.</span>' +
           '<div class="shared-maze-board"><canvas width="500" height="500" data-canvas="' + id +
           '" role="img" aria-label="' + title + ' route in the ' + escapeHtml(config.name) + ' scenario"></canvas></div>' +
           '<details class="maze-policy-inputs"><summary>Policy inputs</summary><div data-environment="' + id +
@@ -386,6 +391,7 @@
       sopButtons + '</div></div><div data-sop-content></div></section>' +
       '<details class="maze-batch-panel"><summary>Batch evaluation · ' + escapeHtml(config.name) + ' · 200 held-out scenarios</summary>' +
       '<p>Paired scenarios are separate from the single-run view. Policies stay frozen; mean and population standard deviation are computed live for each metric. Batch numbers use this prototype&rsquo;s held-out protocol and are not comparable to Chapter 4 results.</p>' +
+      batchProtocolNote +
       '<p>Basic Grid fairness is trivial because there is only one destination.</p>' +
       '<button type="button" class="btn g" data-action="batch">Run 200 Held-Out ' + escapeHtml(config.name) + ' Scenarios</button>' +
       '<p class="maze-batch-status" role="status" data-batch-status>Batch evaluation has not run.</p>' +
@@ -450,11 +456,15 @@
       var live = panel.querySelector('[data-live="' + id + '"]');
       var status = panel.querySelector('[data-status="' + id + '"]');
       if (!run || !run.didRun) {
+        var loopStatus = panel.querySelector('[data-loop-status="' + id + '"]');
+        if (loopStatus) loopStatus.hidden = true;
         live.textContent = 'Results: Not run yet';
         status.textContent = state.training ? 'Training...' : 'Not run yet';
         return;
       }
       var metric = MazeRouting.metrics(run, state.env);
+      var loopStatus = panel.querySelector('[data-loop-status="' + id + '"]');
+      if (loopStatus) loopStatus.hidden = !metric.loopDetected;
       var served = metric.destinationsServed + ' / ' + metric.destinationTotal + ' destinations';
       status.textContent = run.done ? run.status : 'Running';
       live.textContent = metric.learners + ' learners (' + number(metric.coveragePercent, 1) +
@@ -672,7 +682,10 @@
   function summarizeBatch(records) {
     var output = {};
     BATCH_METRICS.forEach(function (metric) {
-      var values = records.map(function (record) { return metric.key === 'completed' ? (record.completed ? 1 : 0) : record[metric.key]; });
+      var values = records.map(function (record) {
+        return metric.key === 'completed' ? (record.completed ? 1 : 0) :
+          metric.key === 'loopDetected' ? (record.loopDetected ? 1 : 0) : record[metric.key];
+      });
       var mean = values.reduce(function (sum, value) { return sum + value; }, 0) / values.length;
       var variance = values.reduce(function (sum, value) { return sum + Math.pow(value - mean, 2); }, 0) / values.length;
       output[metric.key] = {mean: mean, sd: Math.sqrt(variance)};
@@ -693,7 +706,21 @@
         var batchCount = 0;
         while (batchCount++ < 1 && state.batch.progress < BATCH_SIZE) {
           var index = state.batch.progress;
-          var world = new MazeRouting.World(state.config, seedFor(state.config, 100000 + index * 7919));
+          var batchConfig = cloneConfig(state.config);
+          if (batchConfig.id === 'tab-2') {
+            var blocked = new Set(batchConfig.obstacles.map(MazeRouting.key));
+            var target = MazeRouting.key(batchConfig.sites[0].position);
+            var starts = [];
+            for (var rowIndex = 0; rowIndex < batchConfig.size; rowIndex++) {
+              for (var colIndex = 0; colIndex < batchConfig.size; colIndex++) {
+                var cellKey = rowIndex + ',' + colIndex;
+                if (!blocked.has(cellKey) && cellKey !== target) starts.push([rowIndex, colIndex]);
+              }
+            }
+            if (!starts.length) throw new Error('No open start positions are available for the Tab 2 batch.');
+            batchConfig.start = starts[index % starts.length];
+          }
+          var world = new MazeRouting.World(batchConfig, seedFor(state.config, 100000 + index * 7919));
           var pair = new MazeRouting.Pair(world, state.models, false);
           var guard = 0;
           while (!pair.done() && guard++ < world.maxSteps + 2) pair.step();
