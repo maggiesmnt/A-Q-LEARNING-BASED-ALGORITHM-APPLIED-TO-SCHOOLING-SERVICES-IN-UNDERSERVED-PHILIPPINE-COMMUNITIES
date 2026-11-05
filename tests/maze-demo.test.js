@@ -174,31 +174,39 @@ test('Laiban tile presentation reflects the saved passability rules without chan
   'at saved rainfall, seed-based overlays can select traversable Restricted or Open road cells');
   assert.equal(config.dynamicFrequency, 20);
 
-  var reachableWithOpenBandsOnly = new Set(['hub']);
+  var reachableIfOnlyOpenBandsRemain = new Set(['hub']);
   var queue = ['hub'];
   for (var index = 0; index < queue.length; index++) {
     context.EDGES.forEach(function (edge) {
       if (context.band(context.accA(edge)).k !== 'open') return;
       var next = edge.a === queue[index] ? edge.b : edge.b === queue[index] ? edge.a : null;
-      if (next && !reachableWithOpenBandsOnly.has(next)) {
-        reachableWithOpenBandsOnly.add(next);
+      if (next && !reachableIfOnlyOpenBandsRemain.has(next)) {
+        reachableIfOnlyOpenBandsRemain.add(next);
         queue.push(next);
       }
     });
   }
   assert.deepEqual(Array.from(config.sites.filter(function (site) {
-    return reachableWithOpenBandsOnly.has(site.id);
+    return reachableIfOnlyOpenBandsRemain.has(site.id);
   }).map(function (site) { return site.letter; })), ['G'],
-  'the report-only all-non-Open-blocked scenario leaves only Old Laiban reachable');
+  'if Hazard, Restricted and Caution tiles are blocked, only Old Laiban remains reachable');
   assert.match(demoSource, /var isLaiban = state\.config\.id === 'tab-4'/);
-  assert.match(demoSource, /open: '#d8ead8',\s*caut: '#f4e3ad',\s*rest: '#efb27b',\s*cls: '#e8a09a'/);
+  assert.match(demoSource, /open: '#d8ead8',\s*caut: '#f4e3ad',\s*rest: '#f6d2b2',\s*cls: '#f2c8c4'/);
+  assert.match(demoSource, /ctx\.fillStyle = isHazard \? '#efb27b'/);
+  assert.match(demoSource, /ctx\.roundRect\(tileX \+ 0\.5, tileY \+ 0\.5, cell - 1, cell - 1/);
+  assert.match(demoSource, /if \(isLaiban\) \{\s*ctx\.fillStyle = '#dad5c8';\s*ctx\.fillRect\(0, 0, canvas\.width, canvas\.height\);/);
+  assert.match(demoSource, /ctx\.setLineDash\(road && road\.status === 'rest' \? \[4, 3\] : \[\]\)/);
+  assert.match(demoSource, /ctx\.strokeStyle = '#b54b43'/);
   assert.match(demoSource, /if \(isLaiban\) \{\s*ctx\.strokeStyle = '#24352d'/);
-  assert.match(demoSource, /title="Passable with a higher travel-time cost/);
+  assert.match(demoSource, /Restricted cells remain passable in the unchanged simulator/);
+  assert.match(demoSource, /Caution roads remain passable in the unchanged simulator/);
   var styleSource = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
-  assert.match(styleSource, /\.maze-laiban-legend \.legend-road\{background:#f5f2e8;border-color:#c9c4b4\}/);
-  assert.match(styleSource, /\.maze-laiban-legend \.legend-hazard\{background:#f5dfad;border:1px dashed #b56c25\}/);
-  assert.match(styleSource, /\.maze-laiban-legend \.legend-restricted\{background:#efb27b/);
-  assert.match(styleSource, /\.maze-laiban-legend \.legend-closed\{background:#e8a09a/);
+  assert.match(styleSource, /\.maze-laiban-legend \.legend-road\{background:#f5f2e8;border-color:#dad5c8\}/);
+  assert.match(styleSource, /\.maze-laiban-legend \.legend-hazard\{background:#efb27b;border:0\}/);
+  assert.match(styleSource, /\.maze-laiban-legend \.legend-restricted\{background:#f6d2b2;border:1px dashed #b56c25\}/);
+  assert.match(styleSource, /\.maze-laiban-legend \.legend-closed::after/);
+  assert.match(styleSource, /linear-gradient\(45deg,transparent 44%,#b54b43 46%,#b54b43 54%,transparent 56%\)/);
+  assert.match(styleSource, /\.maze-laiban-legend \.legend-closed\{[\s\S]*?background:#f2c8c4/);
   assert.match(styleSource, /\.maze-laiban-legend \.legend-open\{background:#d8ead8/);
   assert.match(styleSource, /\.maze-laiban-legend \.legend-caution\{background:#f4e3ad/);
 });
