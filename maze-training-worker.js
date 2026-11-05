@@ -1,6 +1,7 @@
 'use strict';
 
 importScripts('maze-routing.js');
+importScripts('maze-scenarios.js');
 
 self.onmessage = function (event) {
   var config = event.data.config;
@@ -18,7 +19,10 @@ self.onmessage = function (event) {
       var end = Math.min(episode + 50, MazeRouting.parameters.episodes);
       while (episode < end) {
         var trainingSeed = (config.seed + 1000 + episode * 7919) >>> 0;
-        var pair = MazeRouting.trainEpisode(new MazeRouting.World(config, trainingSeed), models);
+        var trainingConfig = Object.assign({}, config, {
+          start: MazeComparisonData.trainingStart(config, models.scenarioRandom)
+        });
+        var pair = MazeRouting.trainEpisode(new MazeRouting.World(trainingConfig, trainingSeed), models);
         trainingLog.standardSteps.push(pair.runs.standard.steps);
         trainingLog.modqlSteps.push(pair.runs.modql.steps);
         trainingLog.standardReward.push(pair.runs.standard.reward);

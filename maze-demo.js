@@ -323,7 +323,7 @@
       ? '<p class="maze-disclaimer">Simulated, not verified field data. Rainfall, allocated sitio demand and visit history are scenario inputs; the temporary-obstacle overlay is simulated and does not change saved road closures.</p>'
       : '';
     var batchProtocolNote = config.id === 'tab-2'
-      ? '<p>Obstacles batch protocol: same fixed obstacle layout; start cycles row-major through the 75 open non-target cells. Both policies share each start.</p>'
+      ? '<p>Tab 2 training starts are seeded random choices from the 75 open non-target cells; the batch evaluates 200 starts cycling through those 75 cells on the fixed obstacle map.</p>'
       : '';
     var closed = config.closedRoads && config.closedRoads.length
       ? '<details class="maze-closed-roads"><summary>Saved closed roads (' + config.closedRoads.length + ')</summary><ul>' +
@@ -708,15 +708,7 @@
           var index = state.batch.progress;
           var batchConfig = cloneConfig(state.config);
           if (batchConfig.id === 'tab-2') {
-            var blocked = new Set(batchConfig.obstacles.map(MazeRouting.key));
-            var target = MazeRouting.key(batchConfig.sites[0].position);
-            var starts = [];
-            for (var rowIndex = 0; rowIndex < batchConfig.size; rowIndex++) {
-              for (var colIndex = 0; colIndex < batchConfig.size; colIndex++) {
-                var cellKey = rowIndex + ',' + colIndex;
-                if (!blocked.has(cellKey) && cellKey !== target) starts.push([rowIndex, colIndex]);
-              }
-            }
+            var starts = MazeComparisonData.tabTwoStartCells(batchConfig);
             if (!starts.length) throw new Error('No open start positions are available for the Tab 2 batch.');
             batchConfig.start = starts[index % starts.length];
           }

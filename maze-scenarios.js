@@ -69,6 +69,24 @@ var MazeComparisonData = (function () {
       [5, 2], [5, 3], [6, 4], [6, 9], [7, 1], [7, 9], [9, 3], [9, 5]
     ];
   }
+  function tabTwoStartCells(config) {
+    var blocked = new Set((config.obstacles || []).map(function (point) { return point.join(','); }));
+    var targets = new Set(config.sites.map(function (target) { return target.position.join(','); }));
+    var cells = [];
+    for (var row = 0; row < config.size; row++) {
+      for (var column = 0; column < config.size; column++) {
+        var cell = row + ',' + column;
+        if (!blocked.has(cell) && !targets.has(cell)) cells.push([row, column]);
+      }
+    }
+    return cells;
+  }
+  function trainingStart(config, random) {
+    if (config.id !== 'tab-2') return config.start.slice();
+    var cells = tabTwoStartCells(config);
+    if (!cells.length) throw new Error('No open non-target Tab 2 training starts are available.');
+    return cells[Math.floor(random() * cells.length)].slice();
+  }
   function laiban() {
     if (typeof N === 'undefined' || typeof EDGES === 'undefined' ||
         typeof FIXED_MAZE_NODES === 'undefined' || typeof FIXED_MAZE_EDGES === 'undefined' ||
@@ -172,6 +190,8 @@ var MazeComparisonData = (function () {
   }
   return {
     sops: SOP,
-    scenarios: getScenarios
+    scenarios: getScenarios,
+    tabTwoStartCells: tabTwoStartCells,
+    trainingStart: trainingStart
   };
 })();

@@ -42,7 +42,10 @@ for (const config of configs) {
   const startedAt = Date.now();
   for (let episode = 0; episode < api.parameters.episodes; episode++) {
     const seed = (config.seed + 1000 + episode * 7919) >>> 0;
-    const pair = api.trainEpisode(new api.World(config, seed), models);
+    const trainingConfig = Object.assign({}, config, {
+      start: context.MazeComparisonData.trainingStart(config, models.scenarioRandom)
+    });
+    const pair = api.trainEpisode(new api.World(trainingConfig, seed), models);
     trainingLog.standardSteps.push(pair.runs.standard.steps);
     trainingLog.modqlSteps.push(pair.runs.modql.steps);
     trainingLog.standardReward.push(pair.runs.standard.reward);

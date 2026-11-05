@@ -49,6 +49,36 @@ row-major order; those 75 locations are used repeatedly to make 200 runs.
 Both agents share each sampled start. No obstacle layout or policy tie-break
 is randomized in this batch.
 
+Tab 2 training now samples a start independently for every episode from those
+same 75 cells. The sampler uses the scenario-seeded random stream and each
+episode's paired Standard/MODQL run uses the same start. The default interactive
+run still starts at `(0,0)`. Offline policy generation and browser-worker
+retraining use the same start-selection helper and training seed sequence.
+
+The prior single-start policy provides a comparison baseline. Its batch
+completed 191/200 runs for Standard and 153/200 for MODQL; loop detections were
+6 and 50, respectively, with three other failures per policy. Standard had 72
+trained location states and MODQL had 144 encoded states in each Q table. Of
+MODQL's 72 unique `T=0` state rows, 38 (52.8%) received at least one
+non-zero Q update.
+
+With random-start training, the generated policy has 74 Standard location
+states and 148 MODQL encoded states in each Q table. In the repeated 200-start
+batch, Standard and MODQL both completed 191 runs, each had 6 loop detections,
+and each had 3 other failures. In MODQL, 4 of 74 unique `T=0` state rows (5.4%)
+received at least one non-zero Q update. The 5,000-episode training logs show
+4,649 Standard successes and 4,705 MODQL successes; in the final 500 episodes,
+both succeeded 478 times. These rollout and training numbers are simulated
+results, not a tuned or guaranteed ranking.
+
+The reduction in MODQL loop detections coincided with fewer `T=0` rows receiving
+non-zero updates, so these results do not support the simple explanation that
+more `T=0` Q updates alone prevent loops. Randomizing starts also changes the
+distribution of learned routes and states; this comparison does not isolate a
+causal effect of `T=0` row coverage. MODQL's visit-history field can remain
+unchanged during a loop, and remaining time changes only when it crosses the
+half-budget bucket boundary.
+
 The former browser loop trained only five episodes per task and redrew both
 grids and their details after every chunk. Training also repeated weighted
 shortest-path searches and rebuilt the same MODQL state strings. Training now
@@ -117,11 +147,10 @@ fixed Up, Down, Left, Right order. Unseen state rows have all-zero values for
 both algorithms, so they use the same tie rule.
 
 For the fixed Tab 2 map, the default start-to-target route succeeds for both
-policies. In the 200-start-position batch, Standard completed 191 runs (95.5%)
-and MODQL completed 153 (76.5%). Their loop rates were 6/200 (3.0%) and
-50/200 (25.0%); each had three other failures. These are computed simulation
-outcomes, not a tuned or guaranteed ranking. In the final 500 training
-episodes, both policies reached the target in 500/500 episodes.
+policies. In the current random-start policy's 200-start batch, both algorithms
+completed 191 runs (95.5%) and each had 6 loop detections (3.0%) and 3 other
+failures. These are computed simulation outcomes, not a tuned or guaranteed
+ranking.
 
 ## SOP selector
 
