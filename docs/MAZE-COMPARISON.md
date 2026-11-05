@@ -331,3 +331,73 @@ single-agent, single-target Standard-Q baseline conditions in the browser, but
 the exact Python program could not be executed or verified against this
 simulation. The separate `maze-legacy.js` browser baseline is not substituted
 for those missing Python sources.
+
+## Map sensitivity (offline analysis)
+
+This offline experiment measures sensitivity to additional fixed obstacle
+maps; it is not part of the live comparison, and it does not change the
+default maps, UI, or saved policies. Reproduce it with
+`node scripts/run-maze-map-sensitivity.js`. Each map trains fresh Standard and
+MODQL policies for 5,000 paired episodes using the unchanged alpha 0.10,
+gamma 0.90, epsilon 1.00→0.05, and 0.995 decay. Standard and MODQL share each
+episode's environment and (for Tab 2) the same seeded training-start sequence.
+Each trained pair is evaluated in a separate frozen 200-run batch.
+
+Maps are generated in memory by the existing seeded `World.generateObstacles`
+rule, sampling without replacement from cells other than the start and target
+sites. Tab 2 samples exactly 32 cells (32% density); a map is accepted only if
+all 67 open non-target cells can reach the target. Tab 3 samples exactly 24
+cells (24% density); a map is accepted only if all six targets are reachable
+from `(0,0)` and no connectivity repair changes the density. Candidate seeds
+are scanned from 2203 for Tab 2 and 3304 for Tab 3; the first five distinct
+maps satisfying those structural conditions are used. The accepted Tab 2
+seeds are 2261, 2265, 2313, 2323, and 2350; the accepted Tab 3 seeds are 3305
+through 3309. Acceptance depends only on density and reachability, not policy
+outcomes.
+
+Tab 2 preserves the existing seeded random-start training over its 67 open
+non-target cells; the 200 evaluation runs cycle those same cells in row-major
+order. Tab 3 preserves its existing fixed `(0,0)` start for both training and
+evaluation. No dynamic obstacles are used. Per-map completion and loop values
+are percentages of 200 runs; loop counts use the current trailing two-cell
+cycle detector. Targets served, coverage, Jain fairness, and travel time are
+means across the 200 runs. Overall means and population SDs below are computed
+across the five per-map means, giving each map equal weight. Tab 2's Jain
+fairness is 1.000 on every map and is not informative for a one-destination
+task.
+
+Each map cell is ordered as completion %, loop runs/200, mean targets served,
+mean coverage %, mean Jain fairness, and mean travel minutes:
+
+| Tab 2 map seed | Standard | MODQL |
+|---:|---|---|
+| 2261 | 100% / 0 / 1.00 / 100% / 1.000 / 13.195 | 100% / 0 / 1.00 / 100% / 1.000 / 13.345 |
+| 2265 | 100% / 0 / 1.00 / 100% / 1.000 / 14.650 | 100% / 0 / 1.00 / 100% / 1.000 / 14.590 |
+| 2313 | 100% / 0 / 1.00 / 100% / 1.000 / 15.175 | 100% / 0 / 1.00 / 100% / 1.000 / 15.955 |
+| 2323 | 100% / 0 / 1.00 / 100% / 1.000 / 14.325 | 100% / 0 / 1.00 / 100% / 1.000 / 14.145 |
+| 2350 | 28% / 144 / 0.28 / 28% / 1.000 / 87.810 | 100% / 0 / 1.00 / 100% / 1.000 / 10.450 |
+
+| Tab 3 map seed | Standard | MODQL |
+|---:|---|---|
+| 3305 | 0% / 200 / 0.00 / 0.00% / 0.333 / 120.000 | 100% / 0 / 6.00 / 100% / 0.889 / 32.000 |
+| 3306 | 0% / 200 / 2.00 / 30.43% / 0.667 / 100.000 | 100% / 0 / 6.00 / 100% / 0.889 / 40.000 |
+| 3307 | 0% / 200 / 0.00 / 0.00% / 0.333 / 120.000 | 100% / 0 / 6.00 / 100% / 0.889 / 36.000 |
+| 3308 | 0% / 200 / 4.00 / 57.97% / 1.000 / 80.000 | 100% / 0 / 6.00 / 100% / 0.889 / 35.000 |
+| 3309 | 0% / 200 / 1.00 / 21.74% / 0.300 / 110.000 | 100% / 0 / 6.00 / 100% / 0.889 / 42.000 |
+
+Across-map mean ± population SD:
+
+| Tab | Policy | Completion % | Loops % | Targets served | Coverage % | Jain fairness | Travel minutes |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 2 | Standard | 85.60 ± 28.80 | 14.40 ± 28.80 | 0.856 ± 0.288 | 85.60 ± 28.80 | 1.000 ± 0.000 | 29.031 ± 29.397 |
+| 2 | MODQL | 100.00 ± 0.00 | 0.00 ± 0.00 | 1.000 ± 0.000 | 100.00 ± 0.00 | 1.000 ± 0.000 | 13.697 ± 1.831 |
+| 3 | Standard | 0.00 ± 0.00 | 100.00 ± 0.00 | 1.400 ± 1.497 | 22.03 ± 21.60 | 0.527 ± 0.272 | 106.000 ± 14.967 |
+| 3 | MODQL | 100.00 ± 0.00 | 0.00 ± 0.00 | 6.000 ± 0.000 | 100.00 ± 0.00 | 0.889 ± 0.000 | 37.000 ± 3.578 |
+
+Standard performed poorly on Tab 2 seed 2350 (28% completion, 144 looped runs);
+it completed all runs on the other four maps. On all five Tab 3 maps, Standard
+completed none of the 200 runs and all 200 ended in a detected loop. MODQL
+completed all 200 runs with no loop detections on every map in both tabs. These
+are small, structurally filtered offline samples, not a general performance
+claim; the unmodified live comparison still uses its original default maps and
+policies.
