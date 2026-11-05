@@ -5100,9 +5100,11 @@ body[data-theme="dark"] .shared-maze-summary :is(thead th,h2,h3){color:#fff}
 .maze-scenario-panel .shared-maze-board{width:100%;max-width:640px;margin:auto;padding:12px}
 .maze-scenario-panel .shared-maze-board canvas{display:block;width:100%;height:auto;aspect-ratio:1;border:1px solid var(--line);border-radius:6px}
 .maze-scenario-panel .shared-maze-summary{margin-top:16px;padding:16px}
-.maze-scenario-panel .shared-maze-summary table{min-width:720px}
+.maze-scenario-panel .shared-maze-summary table{min-width:0}
 .maze-scenario-panel .shared-maze-summary th,.maze-scenario-panel .shared-maze-summary td{padding:10px 12px;font-size:12px}
 .maze-scenario-panel .shared-maze-direction{display:block;margin-top:3px;color:var(--dim);font-size:9px;font-weight:400}
+.maze-scenario-panel .shared-maze-summary th:first-child{width:45%}
+.maze-scenario-panel .shared-maze-summary td{text-align:left}
 .maze-scenario-panel .maze-sop-section,.maze-batch-panel{margin-top:16px;padding:16px;border:1px solid var(--line);border-radius:10px;background:var(--bg-panel)}
 .maze-sop-buttons{display:flex;gap:6px;flex-wrap:wrap}
 .maze-sop-buttons .btn{min-height:34px;padding:7px 12px}
@@ -5348,8 +5350,81 @@ body[data-theme="dark"] .shared-maze-summary :is(thead th,h2,h3){color:#fff}
   overflow:hidden;
 }
 .maze-agent-info .maze-training-curve canvas{
+  display:block;
   width:100%;
   max-width:100%;
+  height:72px;
+}
+.maze-agent-results{
+  display:grid;
+  gap:6px;
+  min-width:0;
+  margin-top:2px;
+}
+.maze-agent-results>.maze-agent-live{
+  margin:0;
+  color:var(--txt);
+  font-size:12px;
+  font-weight:650;
+}
+.maze-result-list{
+  display:grid;
+  min-width:0;
+}
+.maze-result-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+  padding:5px 0;
+  border-bottom:1px solid var(--line);
+}
+.maze-result-description{
+  display:grid;
+  min-width:0;
+  gap:1px;
+}
+.maze-result-name{
+  min-width:0;
+  color:var(--txt);
+  font-size:10px;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+.maze-result-row .shared-maze-direction{
+  margin:0;
+  font-size:9px;
+  line-height:1.25;
+}
+.maze-result-value{
+  max-width:52%;
+  color:var(--txt);
+  font-size:10px;
+  line-height:1.35;
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+  overflow-wrap:anywhere;
+}
+.shared-maze-panel[data-agent="standard"] .maze-result-value{
+  color:color-mix(in srgb,var(--accent) 78%,var(--txt));
+}
+.shared-maze-panel[data-agent="modql"] .maze-result-value{
+  color:color-mix(in srgb,var(--road-open) 78%,var(--txt));
+}
+.maze-result-row.maze-sop-highlight{
+  background:color-mix(in srgb,var(--accent) 10%,var(--bg-panel));
+}
+.maze-agent-info .maze-policy-inputs.maze-metric-diagnostics{
+  width:100%;
+  margin:2px 0 0;
+  padding:7px 8px;
+}
+.maze-metric-diagnostics .maze-result-row:last-child{
+  border-bottom:0;
+}
+.maze-scenario-panel .maze-assessment{
+  margin-top:8px;
 }
 .maze-agent-grid{
   display:flex;

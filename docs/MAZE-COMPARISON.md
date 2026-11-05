@@ -6,6 +6,15 @@ computed from simulation runs; the page does not preload comparison metrics.
 The simulation is not field evidence and does not establish an overall winning
 algorithm.
 
+Each algorithm card displays its own live evaluation metrics beside its grid.
+The seven preferred-direction primary metrics (learners served through
+deferred communities) are visible by default; completion status and the other
+Report-only diagnostics are collapsible. Both use the same per-policy values
+produced by the live evaluation renderer. A slim assessment-only table below
+the cards compares the two policies metric by metric; no cross-policy values
+are placed inside either algorithm card. Before a run (and after reset), each
+card metric reads “Not run yet.”
+
 ## Scenarios and controls
 
 The page has four fixed-seed scenarios, selected in the global header:
@@ -285,10 +294,12 @@ scales are different and are not compared as performance scores.
 Every evaluation result is computed from its actual rollout: learners served
 and coverage, Jain fairness, travel time (minutes), movement steps,
 destinations served, deferred communities, completion state, and Q diagnostics.
-Before a run starts, results display “Not run yet.” The assessment describes
-metric differences and trade-offs; travel time is reported in minutes and
-movement steps are a separate metric. It does not produce an overall score or
-claims beyond the selected simulated scenario.
+Those values appear within their respective cards; the separate table below
+contains the metric name and assessment only. Before a run starts, each card
+metric and assessment reads “Not run yet.” The assessment describes metric
+differences and trade-offs; travel time is reported in minutes and movement
+steps are a separate metric. It does not produce an overall score or claims
+beyond the selected simulated scenario.
 
 The separate batch panel evaluates both frozen policies over 200 paired
 scenarios and calculates a mean and population standard deviation for each

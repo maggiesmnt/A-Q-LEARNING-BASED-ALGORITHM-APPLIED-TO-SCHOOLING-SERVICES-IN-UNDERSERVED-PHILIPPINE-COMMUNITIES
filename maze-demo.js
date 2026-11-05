@@ -305,13 +305,25 @@
     panel.querySelector('[data-action="train"]').disabled = true;
     setStatus(state, 'Retraining both policies in a background worker; no evaluation is running.', false);
   }
-  function buildMetricRows() {
+  function metricHint(metric) {
+    return metric.better ? 'Prefer ' + metric.better : 'Report only';
+  }
+  function buildCardMetricRows(id, reportOnly) {
+    return METRICS.filter(function (metric) {
+      return reportOnly ? !metric.better : !!metric.better;
+    }).map(function (metric) {
+      return '<div class="maze-result-row" data-metric="' + metric.key + '">' +
+        '<div class="maze-result-description"><span class="maze-result-name">' +
+        escapeHtml(metric.label) + '</span><span class="shared-maze-direction">' +
+        escapeHtml(metricHint(metric)) + '</span></div><span class="maze-result-value" data-result="' +
+        id + '" data-key="' + metric.key + '">Not run yet</span></div>';
+    }).join('');
+  }
+  function buildAssessmentRows() {
     return METRICS.map(function (metric) {
-      return '<tr data-metric="' + metric.key + '"><th scope="row">' + escapeHtml(metric.label) +
-        '<span class="shared-maze-direction">' + (metric.better ? 'Prefer ' + metric.better : 'Report only') +
-        '</span></th><td data-result="standard" data-key="' + metric.key + '">Not run yet</td>' +
-        '<td data-result="modql" data-key="' + metric.key + '">Not run yet</td>' +
-        '<td data-assessment="' + metric.key + '">Not run yet</td></tr>';
+      return '<tr data-metric="' + metric.key + '" data-assessment-row="' + metric.key + '">' +
+        '<th scope="row">' + escapeHtml(metric.label) + '</th><td data-assessment="' +
+        metric.key + '">Not run yet</td></tr>';
     }).join('');
   }
   function buildTab(state) {
@@ -399,7 +411,12 @@
           '<div class="maze-training-curve"><span>Training log · steps per episode</span>' +
           '<canvas width="320" height="72" data-curve="' + id + '" role="img" aria-label="' + title +
           ' training log, steps per episode"></canvas></div>' +
-          '<p class="maze-agent-live" data-live="' + id + '">Results: Not run yet</p></div>' +
+          '<section class="maze-agent-results" aria-label="' + title + ' results">' +
+          '<h4 class="maze-agent-live" data-live="' + id + '">Results</h4>' +
+          '<div class="maze-result-list">' + buildCardMetricRows(id, false) + '</div>' +
+          '<details class="maze-policy-inputs maze-metric-diagnostics"><summary>Report-only diagnostics</summary>' +
+          '<div class="maze-result-list">' + buildCardMetricRows(id, true) + '</div></details>' +
+          '<p class="maze-agent-live maze-reachable-results" data-reachable-results="' + id + '" hidden></p></section></div>' +
           '<div class="maze-agent-grid"><div class="shared-maze-board"><canvas width="500" height="500" data-canvas="' + id +
           '" role="img" aria-label="' + title + ' route in the ' + escapeHtml(config.name) + ' scenario"></canvas></div>' +
           '</div></div><details class="maze-policy-inputs"><summary>Policy inputs</summary><div data-environment="' + id +
@@ -409,9 +426,9 @@
           '</p></details></section>';
       }).join('') + '</div>' + laibanTable + closed +
       '<section class="shared-maze-summary"><header><div><span class="shared-maze-eyebrow">Computed from this run</span>' +
-      '<h2>Comparative Performance Results</h2></div><span class="shared-maze-summary-note">No pre-filled results</span></header>' +
-      '<div class="shared-maze-table-scroll"><table><thead><tr><th>Metric</th><th>Standard Q-Learning</th>' +
-      '<th>Enhanced MODQL</th><th>Metric-by-metric assessment</th></tr></thead><tbody>' + buildMetricRows() +
+      '<h2>Metric-by-metric assessment</h2></div><span class="shared-maze-summary-note">Live evaluation only</span></header>' +
+      '<div class="shared-maze-table-scroll"><table><thead><tr><th>Metric</th>' +
+      '<th>Assessment</th></tr></thead><tbody>' + buildAssessmentRows() +
       '</tbody></table></div><div class="maze-assessment" data-assessment-summary>Not run yet</div></section>' +
       '<section class="maze-sop-section"><div class="maze-sop-header"><div><span class="shared-maze-eyebrow">Research objective alignment</span>' +
       '<h2>Statement of the Problem</h2></div><div class="maze-sop-buttons" role="group" aria-label="Select SOP">' +
@@ -463,46 +480,61 @@
   }
 
   function renderResults(state, panel) {
-    var standard = readMetrics(state, 'standard'), modql = readMetrics(state, 'modql');
-    var started = !!state.pair && ['standard', 'modql'].some(function (id) {
-      return state.pair.runs[id].didRun;
+    var records = {
+      standard: readMetrics(state, 'standard'),
+      modql: readMetrics(state, 'modql')
+    };
+    var started = ['standard', 'modql'].some(function (id) {
+      return state.pair && state.pair.runs[id].didRun;
     });
-    panel.querySelectorAll('tbody tr[data-metric]').forEach(function (row) {
+    ['standard', 'modql'].forEach(function (id) {
+      var run = state.pair && state.pair.runs[id];
+      var sideStarted = !!run && run.didRun;
+      panel.querySelectorAll('[data-result="' + id + '"]').forEach(function (valueNode) {
+        var metric = METRICS.filter(function (candidate) {
+          return candidate.key === valueNode.getAttribute('data-key');
+        })[0];
+        valueNode.textContent = sideStarted
+          ? formatMetric(metric, records[id], state, id)
+          : 'Not run yet';
+      });
+    });
+    panel.querySelectorAll('tr[data-assessment-row]').forEach(function (row) {
       var metric = METRICS.filter(function (candidate) {
         return candidate.key === row.getAttribute('data-metric');
       })[0];
-      var left = row.querySelector('[data-result="standard"]');
-      var right = row.querySelector('[data-result="modql"]');
       var assessment = row.querySelector('[data-assessment]');
-      left.textContent = started ? formatMetric(metric, standard, state, 'standard') : 'Not run yet';
-      right.textContent = started ? formatMetric(metric, modql, state, 'modql') : 'Not run yet';
-      assessment.textContent = started ? comparisonText(metric, standard, modql) : 'Not run yet';
-      row.classList.toggle('has-difference', started && left.textContent !== right.textContent);
+      assessment.textContent = started
+        ? comparisonText(metric, records.standard, records.modql)
+        : 'Not run yet';
     });
-    renderAssessment(state, panel, started ? standard : null, started ? modql : null);
+    renderAssessment(state, panel, started ? records.standard : null, started ? records.modql : null);
     ['standard', 'modql'].forEach(function (id) {
       var run = state.pair && state.pair.runs[id];
-      var live = panel.querySelector('[data-live="' + id + '"]');
       var status = panel.querySelector('[data-status="' + id + '"]');
+      var reachableResults = panel.querySelector('[data-reachable-results="' + id + '"]');
       if (!run || !run.didRun) {
         var loopStatus = panel.querySelector('[data-loop-status="' + id + '"]');
         if (loopStatus) loopStatus.hidden = true;
-        live.textContent = 'Results: Not run yet';
+        if (reachableResults) {
+          reachableResults.hidden = true;
+          reachableResults.textContent = '';
+        }
         status.textContent = state.training ? 'Training...' : 'Not run yet';
         return;
       }
-      var metric = MazeRouting.metrics(run, state.env);
+      var metric = records[id];
       var loopStatus = panel.querySelector('[data-loop-status="' + id + '"]');
       if (loopStatus) loopStatus.hidden = !metric.loopDetected;
-      var served = metric.destinationsServed + ' / ' + metric.destinationTotal + ' destinations';
+      if (reachableResults) {
+        reachableResults.hidden = state.config.id !== 'tab-4';
+        reachableResults.textContent = state.config.id === 'tab-4'
+          ? 'Served ' + metric.destinationsServed + ' of ' + metric.destinationTotal +
+            ' sitios; served ' + metric.reachableDestinationsServed + ' of ' +
+            metric.reachableDestinationTotal + ' reachable (open) sitios'
+          : '';
+      }
       status.textContent = run.done ? run.status : 'Running';
-      live.textContent = metric.learners + ' learners (' + number(metric.coveragePercent, 1) +
-        '%) · ' + served + ' · ' + number(metric.travelMinutes, 1) + ' travel minutes · ' +
-        metric.movementSteps + ' steps' +
-        (state.config.id === 'tab-4'
-          ? ' · served ' + metric.destinationsServed + ' of 9 sitios; served ' +
-            metric.reachableDestinationsServed + ' of ' + metric.reachableDestinationTotal + ' reachable (open) sitios'
-          : '');
     });
     renderLaibanSiteStatuses(state, panel);
   }
